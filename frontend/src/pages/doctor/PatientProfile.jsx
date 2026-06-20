@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { updateDoctorStatus } from '../../api/doctors';
+import { callPatient } from '../../api/triage';
 import client from '../../api/client';
 
 export default function PatientProfile() {
@@ -10,6 +11,21 @@ export default function PatientProfile() {
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [calling, setCalling] = useState(false);
+  const [called, setCalled] = useState(false);
+
+  // Call the patient straight from the case file — no need to go back to the queue.
+  const handleCall = async () => {
+    setCalling(true);
+    try {
+      await callPatient({ appointment_id: id, doctor_id: doctor.id });
+      setCalled(true);
+    } catch {
+      alert('Could not notify the patient. Please try again.');
+    } finally {
+      setCalling(false);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -60,13 +76,33 @@ export default function PatientProfile() {
           <div className="header__logo">CivCare</div>
           <div className="header__sub">Patient Profile</div>
         </div>
-        <button
-          className="btn btn--outline btn--sm"
-          style={{ width: 'auto' }}
-          onClick={() => navigate('/doctor/dashboard')}
-        >
-          ← Queue
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className="btn btn--sm"
+            style={{
+              width: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              background: called ? 'var(--green, #16a34a)' : 'var(--blue)',
+              color: 'white',
+            }}
+            disabled={calling || called}
+            onClick={handleCall}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+            {calling ? 'Calling…' : called ? 'Patient Called ✓' : 'Call Patient'}
+          </button>
+          <button
+            className="btn btn--outline btn--sm"
+            style={{ width: 'auto' }}
+            onClick={() => navigate('/doctor/dashboard')}
+          >
+            ← Queue
+          </button>
+        </div>
       </div>
 
       <div className="container--wide" style={{ paddingTop: 20 }}>
@@ -276,6 +312,24 @@ export default function PatientProfile() {
             }}
           >
             Submit Diagnosis & Prescriptions
+          </button>
+          <button
+            className="btn"
+            style={{
+              width: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              background: called ? 'var(--green, #16a34a)' : 'var(--blue)',
+              color: 'white',
+            }}
+            disabled={calling || called}
+            onClick={handleCall}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+            {calling ? 'Calling…' : called ? 'Patient Called ✓' : 'Call Patient'}
           </button>
           <button
             className="btn btn--outline"
