@@ -32,32 +32,49 @@ def _diagnosis_for_prescription(db, prescription) -> str:
     return "their condition"
 
 
-async def generate_checkin_question(medication: str, diagnosis: str) -> str:
+async def generate_checkin_question(medication: str, diagnosis: str, patient_name: str | None = None) -> str:
     """
     Build a warm, specific question that maps the medication to the diagnosis,
-    so the check-in feels like a real carer rather than a generic survey.
-    e.g. amoxicillin for a throat infection -> "Is swallowing any easier, and
-    has the fever come down since you started?"
+    so the evening check-in feels like a real person who cares is reaching out —
+    not a generic survey. Where we know it, we greet the patient by their first
+    name so it lands like a message from someone who remembers them.
+    e.g. "Evening, Amina. You've taken your dose for the day — is swallowing any
+    easier tonight, and has the fever settled at all?"
     """
+    first_name = (patient_name or "").strip().split(" ")[0] if patient_name else ""
+    greeting_rule = (
+        f'Open warmly by name, e.g. "Evening, {first_name}." '
+        if first_name else
+        "Open warmly, e.g. \"Evening.\" "
+    )
     prompt = f"""
-You are a caring community health nurse checking in on a patient by text, right after
-they have taken a dose of their medication.
+You are CivCare's caring community health companion, sending a patient a gentle text
+message in the evening, after they have taken the last dose of their day.
 
+Patient's first name: {first_name or "(unknown — do not invent one)"}
 Medication just taken: {medication}
 What the doctor is treating: {diagnosis}
 
-Write ONE short, warm check-in question (max 25 words) asking how they feel right now.
-Make it specific to their condition where natural (e.g. for a throat infection ask about
-swallowing and fever). Do NOT diagnose. Do NOT claim the medicine is working. Do NOT give
-medical advice. Just ask, kindly, how they are feeling.
+Write ONE short, warm, human check-in message (max 35 words) that makes the patient feel
+genuinely cared for and not alone in this.
+- {greeting_rule}
+- Acknowledge their effort kindly (e.g. "well done for staying on track today").
+- Then gently ask how they are feeling tonight, specific to their condition where natural
+  (e.g. for a throat infection, ask about swallowing and fever).
+- Warm and reassuring in tone — like a kind nurse or a caring friend, never clinical or robotic.
+- Do NOT diagnose. Do NOT claim the medicine is working. Do NOT give medical advice.
 
-Return only the question text, nothing else.
+Return only the message text, nothing else.
 """
+    fallback = (
+        f"Evening{', ' + first_name if first_name else ''} — well done for staying on track today. "
+        "How are you feeling tonight after your dose?"
+    )
     try:
         q = (await ask_gemini(prompt, model="llama-3.1-8b-instant")).strip()
-        return q.strip('"') or "How are you feeling right now after taking your medication?"
+        return q.strip('"') or fallback
     except Exception:
-        return "How are you feeling right now after taking your medication?"
+        return fallback
 
 
 async def analyze_checkin(answer: str, diagnosis: str, medication: str) -> dict:

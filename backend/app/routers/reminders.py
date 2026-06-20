@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models.prescription import Prescription, Reminder
 from app.models.medication_outcome import DoseCheckin, CourseOutcome
+from app.models.patient import Patient
 from app.services.africastalking import send_medication_reminder
 from app.services.carer import (
     generate_checkin_question,
@@ -306,7 +307,12 @@ async def due_dose(patient_id: str, db: Session = Depends(get_db)):
 
     question = None
     if is_evening:
-        question = await generate_checkin_question(prescription.medication_name, diagnosis)
+        patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        question = await generate_checkin_question(
+            prescription.medication_name,
+            diagnosis,
+            patient_name=patient.full_name if patient else None,
+        )
 
     return {
         "due": True,
@@ -460,8 +466,9 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
 
     if outcome["still_unwell"]:
         return {
-            "message": "You've finished this course but you're still not feeling right. "
-                       "Let's get a doctor to take another look.",
+            "message": "You did everything right and finished your full course — that takes real "
+                       "discipline, and I'm proud of you. You're still not quite yourself, though, "
+                       "and that's okay. Let's get a doctor to take another caring look at you.",
             "course_complete": True,
             "still_unwell": True,
             "offer_followup": True,
@@ -469,7 +476,9 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
         }
 
     return {
-        "message": "You've completed your full course and you're feeling better. Wonderful — take care!",
+        "message": "You've completed your full course and you're feeling better — wonderful news! "
+                   "Thank you for looking after yourself and trusting us along the way. "
+                   "Take good care, and we're always here if you ever need us again.",
         "course_complete": True,
         "still_unwell": False,
         "offer_followup": False,
