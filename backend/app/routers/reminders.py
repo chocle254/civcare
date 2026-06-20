@@ -12,7 +12,10 @@ from app.services.carer import (
     build_course_outcome,
     _diagnosis_for_prescription,
 )
-from app.services.rlhf import record_medication_outcome_lesson
+from app.services.rlhf import (
+    record_medication_outcome_lesson,
+    record_evening_checkin_lesson,
+)
 import math
 
 router = APIRouter()
@@ -385,6 +388,18 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
             reminder.is_responded = True
 
     db.commit()
+
+    # An evening check-in (the once-a-day "how do you feel" reply) is a real
+    # mid-treatment observation — feed every one into the RLHF learning loop.
+    is_evening_answer = bool(data.taken and data.answer)
+    if is_evening_answer:
+        await record_evening_checkin_lesson(
+            diagnosis=diagnosis,
+            medication=prescription.medication_name,
+            sentiment=reading["sentiment"],
+            improved_areas=reading["improved_areas"],
+            persisting_areas=reading["persisting_areas"],
+        )
 
     # Side-effect report escalates immediately — never wait for course end
     if reading["sentiment"] == "side_effect" or data.skip_reason == "side_effects":
