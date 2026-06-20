@@ -170,7 +170,7 @@ export default function Chat() {
             <span style={s.verdictDot} />
             <span style={s.verdictText}>{verdict}</span>
           </div>
-          <p style={s.headerName}>CivTech Care Assistant</p>
+          <p style={s.headerName}>CivCare</p>
         </div>
         <div style={s.headerInfo}>ℹ</div>
       </div>
