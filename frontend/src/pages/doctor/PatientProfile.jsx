@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { updateDoctorStatus } from '../../api/doctors';
+import { callPatient } from '../../api/triage';
 import client from '../../api/client';
 
 export default function PatientProfile() {
@@ -10,6 +11,36 @@ export default function PatientProfile() {
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [calling, setCalling] = useState(false);
+  const [called, setCalled] = useState(false);
+  // Referral controls (guardrail UI): the AI routes the case to whichever doctor
+  // is available — not necessarily the matching specialty. If the assigned doctor
+  // isn't the right fit, they can hand the case off here.
+  const [referMenu, setReferMenu] = useState(null); // 'specialist' | 'hospital' | null
+
+  const SPECIALTIES = [
+    'Cardiologist', 'Dermatologist', 'Pediatrician', 'Gynecologist',
+    'Neurologist', 'Orthopedic Surgeon', 'Psychiatrist', 'ENT Specialist',
+    'Ophthalmologist', 'General Surgeon',
+  ];
+  const REFERRAL_HOSPITALS = [
+    'Kenyatta National Hospital', 'Aga Khan University Hospital',
+    'Nairobi Hospital', 'Moi Teaching & Referral Hospital',
+    'Coast General Hospital', 'Mater Misericordiae Hospital',
+  ];
+
+  // Call the patient straight from the case file — no need to go back to the queue.
+  const handleCall = async () => {
+    setCalling(true);
+    try {
+      await callPatient({ appointment_id: id, doctor_id: doctor.id });
+      setCalled(true);
+    } catch {
+      alert('Could not notify the patient. Please try again.');
+    } finally {
+      setCalling(false);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -60,13 +91,33 @@ export default function PatientProfile() {
           <div className="header__logo">CivCare</div>
           <div className="header__sub">Patient Profile</div>
         </div>
-        <button
-          className="btn btn--outline btn--sm"
-          style={{ width: 'auto' }}
-          onClick={() => navigate('/doctor/dashboard')}
-        >
-          ← Queue
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className="btn btn--sm"
+            style={{
+              width: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              background: called ? 'var(--green, #16a34a)' : 'var(--blue)',
+              color: 'white',
+            }}
+            disabled={calling || called}
+            onClick={handleCall}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+            {calling ? 'Calling…' : called ? 'Patient Called ✓' : 'Call Patient'}
+          </button>
+          <button
+            className="btn btn--outline btn--sm"
+            style={{ width: 'auto' }}
+            onClick={() => navigate('/doctor/dashboard')}
+          >
+            ← Queue
+          </button>
+        </div>
       </div>
 
       <div className="container--wide" style={{ paddingTop: 20 }}>
@@ -261,6 +312,83 @@ export default function PatientProfile() {
           </div>
         </div>
 
+        {/* ── Referral (AI routing guardrail) ── */}
+        <div className="card">
+          <p className="card__title">Not the right fit for this case?</p>
+          <p style={{ fontSize: 13, color: 'var(--gray-600)', marginBottom: 14, lineHeight: 1.5 }}>
+            CivCare&apos;s AI routes each case to the next available doctor — it never
+            picks the specialty itself. If this patient needs different expertise, hand
+            the case off below and it returns to the queue for the right provider.
+          </p>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              className="btn btn--outline btn--sm"
+              style={{
+                width: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7,
+                borderColor: referMenu === 'specialist' ? 'var(--blue)' : undefined,
+                color: referMenu === 'specialist' ? 'var(--blue)' : undefined,
+              }}
+              onClick={() => setReferMenu(referMenu === 'specialist' ? null : 'specialist')}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                <path d="M22 11l-3 3-2-2" />
+              </svg>
+              Refer to Specialist
+            </button>
+
+            <button
+              className="btn btn--outline btn--sm"
+              style={{
+                width: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7,
+                borderColor: referMenu === 'hospital' ? 'var(--blue)' : undefined,
+                color: referMenu === 'hospital' ? 'var(--blue)' : undefined,
+              }}
+              onClick={() => setReferMenu(referMenu === 'hospital' ? null : 'hospital')}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 12v.01M9 15v.01" />
+              </svg>
+              Refer to Hospital
+            </button>
+          </div>
+
+          {/* Specialist dropdown */}
+          {referMenu === 'specialist' && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 6 }}>SELECT SPECIALTY</p>
+              <select
+                className="input"
+                defaultValue=""
+                style={{ maxWidth: 360 }}
+              >
+                <option value="" disabled>Choose a specialist…</option>
+                {SPECIALTIES.map((sp) => (
+                  <option key={sp} value={sp}>{sp}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Hospital dropdown */}
+          {referMenu === 'hospital' && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 6 }}>SELECT REFERRAL HOSPITAL</p>
+              <select
+                className="input"
+                defaultValue=""
+                style={{ maxWidth: 360 }}
+              >
+                <option value="" disabled>Choose a hospital…</option>
+                {REFERRAL_HOSPITALS.map((h) => (
+                  <option key={h} value={h}>{h}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
         {/* ── Actions ── */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
           <button
@@ -276,6 +404,24 @@ export default function PatientProfile() {
             }}
           >
             Submit Diagnosis & Prescriptions
+          </button>
+          <button
+            className="btn"
+            style={{
+              width: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              background: called ? 'var(--green, #16a34a)' : 'var(--blue)',
+              color: 'white',
+            }}
+            disabled={calling || called}
+            onClick={handleCall}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+            {calling ? 'Calling…' : called ? 'Patient Called ✓' : 'Call Patient'}
           </button>
           <button
             className="btn btn--outline"

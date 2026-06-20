@@ -50,12 +50,15 @@ civtech/
 
 ---
 
-## Step 3 — Get Gemini API Key (Free)
+## Step 3 — Get Groq API Key (Free)
 
-1. Go to **aistudio.google.com** on your phone
-2. Sign in with Google
-3. Tap **Get API Key → Create API Key in new project**
-4. Copy the key → save it as `GEMINI_API_KEY`
+1. Go to **console.groq.com** on your phone
+2. Sign in with Google or GitHub
+3. Open **API Keys → Create API Key**
+4. Copy the key → save it as `GROQ_API_KEY`
+
+> CivCare runs on Groq-hosted **Llama 3.3 70B** (clinical reasoning) and
+> **Llama 3.1 8B Instant** (fast extraction + the RLHF self-critique loop).
 
 ---
 
@@ -74,8 +77,8 @@ DATABASE_URL              = postgresql://postgres:...  (from Supabase)
 SUPABASE_URL              = https://xxx.supabase.co
 SUPABASE_ANON_KEY         = eyJ...
 SUPABASE_SERVICE_ROLE_KEY = eyJ...
-GEMINI_API_KEY            = AIza...
-GEMINI_MODEL              = gemini-1.5-flash
+GROQ_API_KEY              = gsk_...
+GROQ_MODEL                = llama-3.3-70b-versatile
 SECRET_KEY                = any-long-random-string-here
 ALGORITHM                 = HS256
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -193,7 +196,7 @@ pytest tests/ -v
 | Key | Where to get it |
 |-----|----------------|
 | `DATABASE_URL` | Supabase → Settings → Database |
-| `GEMINI_API_KEY` | aistudio.google.com |
+| `GROQ_API_KEY` | console.groq.com |
 | `SECRET_KEY` | Any random string |
 | `SUPABASE_URL` | Supabase → Settings → API |
 | `SUPABASE_ANON_KEY` | Supabase → Settings → API |

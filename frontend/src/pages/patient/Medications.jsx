@@ -357,14 +357,19 @@ export default function Medications() {
 
             {step === 'feel' && (
               <>
-                <p style={modalStyles.kicker}>Evening check-in</p>
+                <p style={modalStyles.kicker}>Your evening check-in</p>
                 <h3 style={modalStyles.title}>
-                  {dose.checkin_question || 'How are you feeling this evening?'}
+                  {dose.checkin_question ||
+                    "Evening — well done for staying on track today. How are you feeling tonight?"}
                 </h3>
+                <p style={modalStyles.body}>
+                  Take your time. There&apos;s no right or wrong answer — I just want to know
+                  how you&apos;re really doing tonight.
+                </p>
                 <textarea
                   className="input"
                   rows={4}
-                  placeholder="Tell me in your own words…"
+                  placeholder="Tell me in your own words how you feel…"
                   value={answer}
                   onChange={(e) => setAnswer(e.target.value)}
                   style={{

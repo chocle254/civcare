@@ -52,7 +52,7 @@ KNH_OVERRIDE = {
 
 
 @router.get("/nearby")
-async def get_nearby_hospitals(lat: float, lon: float, radius_km: int = 50):
+async def get_nearby_hospitals(lat: float, lon: float, radius_km: int = 30):
     """
     Queries OpenStreetMap Overpass API for hospitals near the patient.
     Returns a sorted list by distance with name, distance, and travel time.

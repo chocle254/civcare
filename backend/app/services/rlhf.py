@@ -230,6 +230,84 @@ Return ONLY this JSON:
         db.close()
 
 
+async def record_evening_checkin_lesson(
+    diagnosis: str,
+    medication: str,
+    sentiment: str,
+    improved_areas: str,
+    persisting_areas: str,
+):
+    """
+    The DAILY arm of the medication-outcome RLHF stream.
+
+    The evening check-in is the one moment each day we ask the patient how they
+    actually feel. Each reading is a small, real-world observation of how a
+    condition is trending mid-treatment — too valuable to throw away until the
+    course ends. We distil it into a generalised, OBSERVATIONAL triage lesson
+    and store it next to the doctor-feedback and course-outcome lessons, so the
+    next patient's triage benefits — with no GPU fine-tuning.
+
+    Same safety contract as the course-outcome stream: strictly correlational,
+    it must NEVER claim a drug cured, healed, or treated anything.
+    """
+    # "worse" / "side_effect" are the rare, high-signal readings we most want
+    # the triage prompt to learn from, so they rank as mismatches.
+    high_signal = sentiment in ("worse", "side_effect")
+
+    prompt = f"""
+You are refining a clinical triage AI from a single mid-treatment check-in.
+
+What the patient reported tonight (patient-reported only — not verified causation):
+- Being treated for: {diagnosis}
+- Medication on: {medication}
+- How they are trending: {sentiment}
+- Reports BETTER: {improved_areas or 'none clearly reported'}
+- Reports STILL PRESENT: {persisting_areas or 'none reported'}
+
+Write ONE short, generalised, reusable triage lesson (max 25 words).
+
+STRICT RULES:
+- Be observational/correlational only. NEVER claim a medication cures, heals, or treats anything.
+  (Forbidden: "amoxicillin cures sore throat." Allowed: "patients treated for throat infection
+  still reporting fever mid-course often warrant closer follow-up.")
+- It must generalise to future patients and never name this specific patient.
+- Keep it clinically safe and humble.
+
+Return ONLY this JSON:
+{{ "learned_lesson": "<one short generalised, observational rule>" }}
+"""
+    db = SessionLocal()
+    try:
+        lesson = ""
+        try:
+            raw = (await ask_gemini(prompt, model="llama-3.1-8b-instant")).strip()
+            clean = raw.replace("```json", "").replace("```", "").strip()
+            lesson = json.loads(clean).get("learned_lesson", "")[:500]
+        except Exception as e:
+            print(f"evening check-in lesson parse failed: {e}")
+
+        feedback = AIFeedback(
+            appointment_id=None,
+            rating=2 if high_signal else 5,   # worsening/side-effect = high learning signal
+            ai_assessment=f"Evening check-in for {diagnosis}",
+            ai_risk_score="mid-treatment",
+            actual_diagnosis=diagnosis,
+            doctor_notes=None,
+            comment=f"Trend: {sentiment} | Better: {improved_areas or 'n/a'} | Persisting: {persisting_areas or 'n/a'}",
+            mismatch=high_signal,
+            mismatch_analysis=f"Patient on {medication} for {diagnosis}; trending '{sentiment}' mid-course.",
+            learned_lesson=lesson,
+            is_active=True,
+        )
+        db.add(feedback)
+        db.commit()
+        print(f"── Evening check-in lesson stored ── [{sentiment}] {lesson}")
+    except Exception as e:
+        print(f"Error saving evening check-in lesson: {e}")
+    finally:
+        db.close()
+
+
 def get_learned_lessons(limit: int = 12) -> list[str]:
     """
     Returns the most relevant distilled lessons to inject into the triage prompt.

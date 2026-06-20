@@ -17,7 +17,7 @@ export default function Chat() {
   const [isTyping, setIsTyping] = useState(false);
   const [disabled, setDisabled] = useState(false);
   const [coords, setCoords] = useState(null);
-  const [verdict, setVerdict] = useState('CivCare AI'); // Title above chat
+  const verdict = 'CivCare AI'; // Neutral label — patient risk score is never surfaced here
 
   // ── Get GPS silently ──
   useEffect(() => {
@@ -84,15 +84,10 @@ export default function Chat() {
       setSessionId(data.session_id);
       localStorage.setItem('civtech_session_id', data.session_id);
 
-      // Update verdict title when triage score arrives
-      if (data.triage_score) {
-        const label = {
-          critical: '🔴 Critical Risk',
-          moderate: '🟡 Moderate Risk',
-          low: '🟢 Low Risk',
-        }[data.triage_score] || 'CivTech AI';
-        setVerdict(label);
-      }
+      // NOTE: The triage risk score is intentionally NEVER shown to the patient.
+      // Risk is a clinical signal for routing and for the doctor only — surfacing
+      // it to the patient could cause panic or false reassurance. The header stays
+      // a neutral assistant label regardless of the computed risk.
 
       await new Promise((r) => setTimeout(r, 700));
       setIsTyping(false);

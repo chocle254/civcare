@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models.prescription import Prescription, Reminder
 from app.models.medication_outcome import DoseCheckin, CourseOutcome
+from app.models.patient import Patient
 from app.services.africastalking import send_medication_reminder
 from app.services.carer import (
     generate_checkin_question,
@@ -12,7 +13,10 @@ from app.services.carer import (
     build_course_outcome,
     _diagnosis_for_prescription,
 )
-from app.services.rlhf import record_medication_outcome_lesson
+from app.services.rlhf import (
+    record_medication_outcome_lesson,
+    record_evening_checkin_lesson,
+)
 import math
 
 router = APIRouter()
@@ -303,7 +307,12 @@ async def due_dose(patient_id: str, db: Session = Depends(get_db)):
 
     question = None
     if is_evening:
-        question = await generate_checkin_question(prescription.medication_name, diagnosis)
+        patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        question = await generate_checkin_question(
+            prescription.medication_name,
+            diagnosis,
+            patient_name=patient.full_name if patient else None,
+        )
 
     return {
         "due": True,
@@ -386,6 +395,18 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
 
     db.commit()
 
+    # An evening check-in (the once-a-day "how do you feel" reply) is a real
+    # mid-treatment observation — feed every one into the RLHF learning loop.
+    is_evening_answer = bool(data.taken and data.answer)
+    if is_evening_answer:
+        await record_evening_checkin_lesson(
+            diagnosis=diagnosis,
+            medication=prescription.medication_name,
+            sentiment=reading["sentiment"],
+            improved_areas=reading["improved_areas"],
+            persisting_areas=reading["persisting_areas"],
+        )
+
     # Side-effect report escalates immediately — never wait for course end
     if reading["sentiment"] == "side_effect" or data.skip_reason == "side_effects":
         return {
@@ -445,8 +466,9 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
 
     if outcome["still_unwell"]:
         return {
-            "message": "You've finished this course but you're still not feeling right. "
-                       "Let's get a doctor to take another look.",
+            "message": "You did everything right and finished your full course — that takes real "
+                       "discipline, and I'm proud of you. You're still not quite yourself, though, "
+                       "and that's okay. Let's get a doctor to take another caring look at you.",
             "course_complete": True,
             "still_unwell": True,
             "offer_followup": True,
@@ -454,7 +476,9 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
         }
 
     return {
-        "message": "You've completed your full course and you're feeling better. Wonderful — take care!",
+        "message": "You've completed your full course and you're feeling better — wonderful news! "
+                   "Thank you for looking after yourself and trusting us along the way. "
+                   "Take good care, and we're always here if you ever need us again.",
         "course_complete": True,
         "still_unwell": False,
         "offer_followup": False,
