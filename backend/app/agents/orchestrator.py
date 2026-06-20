@@ -97,7 +97,7 @@ A headache ALONE is NOT a red flag. A mild fever ALONE is NOT a red flag. Use cl
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STRICT PROHIBITIONS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━���━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 NEVER say:
   - "I am going to route you" / "I will connect you to a doctor" / "I'm sending you somewhere"
   - "That sounds mild" / "You probably just need rest" / "It is likely nothing serious"
@@ -717,6 +717,7 @@ async def process_message(
     print(f"[DEBUG] can_travel={result['updated_summary'].get('can_travel')}")
 
     if ready_to_route:
+        # First assess risk before deciding routing
         triage_result = await run_triage_agent(
             conversation_summary=result["updated_summary"],
             patient_data=patient_data,
@@ -726,6 +727,23 @@ async def process_message(
         result["risk_numeric"] = triage_result.get("risk_numeric", 50)
         result["confidence_percent"] = triage_result.get("confidence_percent", 60)
         result["preliminary_assessment"] = triage_result.get("preliminary_assessment", "")
+
+        # If risk is LOW and travel question hasn't been asked, ask it first before routing
+        risk_score = triage_result.get("risk_score", "moderate")
+        can_travel = result["updated_summary"].get("can_travel")
+        
+        # Only route if either:
+        # 1. Travel question has been answered, OR
+        # 2. Risk is high/critical (for emergencies, don't wait for travel answer)
+        if can_travel is None and risk_score not in ("critical", "high"):
+            # Low/moderate risk and travel not asked yet — ask the travel question first
+            result["action"] = "continue"
+            result["response"] = (
+                "Thank you for sharing all of that with me. "
+                "Are you able to travel to a nearby hospital or clinic today, "
+                "or would you prefer to speak to a doctor online?"
+            )
+            return result
 
         # Fast-track routing for pre-selected destination modes
         if mode == "pre_hospital":
@@ -737,8 +755,7 @@ async def process_message(
             result["response"] = "Thank you. Your file is ready. Connecting you to the doctor now..."
             return result
 
-        can_travel = result["updated_summary"].get("can_travel")
-
+        # Now route based on risk and travel capability
         if can_travel is True:
             result["action"] = "route_hospital"
             routing_prompt = f"""
@@ -762,13 +779,15 @@ Do NOT give a diagnosis. Be reassuring and caring.
 """
             result["response"] = await ask_gemini(routing_prompt, model="llama-3.1-8b-instant")
 
-        elif can_travel is None:
-            # Symptoms gathered but travel preference not asked yet
-            result["action"] = "continue"
-            result["response"] = (
-                "Thank you for sharing all of that with me. "
-                "Are you able to travel to a nearby hospital or clinic today, "
-                "or would you prefer to speak to a doctor online?"
-            )
+        elif can_travel is None and risk_score in ("critical", "high"):
+            # Emergency situation — route immediately to hospital, no travel question
+            result["action"] = "route_hospital"
+            routing_prompt = f"""
+This is a CRITICAL medical situation. Risk assessment indicates immediate hospital evaluation needed.
+The patient's travel capability is unknown, but this is too urgent to wait.
+Write a warm but urgent 2-sentence message from a senior nurse immediately recommending hospital care.
+Do NOT give a diagnosis.
+"""
+            result["response"] = await ask_gemini(routing_prompt, model="llama-3.1-8b-instant")
 
     return result
