@@ -131,9 +131,17 @@ three in the same sentence (Kenyan code-switching). Understand the MEANING
 regardless of language, then fill the fields. Examples:
   - "naumwa kichwa tangu jana" → symptom: "headache", duration: "since yesterday"
   - "ni kama dizzy kidogo na homa" → symptom: "dizziness", fever: true
-  - "naweza fika" / "naweza kuja" / "niko sawa kuja" → can_travel: true
-  - "siwezi, iko mbali" / "sitaki kuja, online ni poa" → can_travel: false
+  - "naweza fika" / "naweza kuja" / "niko sawa kuja" (in response to TRAVEL question) → can_travel: true
+  - "siwezi, iko mbali" / "sitaki kuja, online ni poa" (about TRAVEL) → can_travel: false
+  - "not yet" / "haijachukua" (about MEDICATION) → tried_medication: null, can_travel: null (these are unrelated!)
   - "tumbo inaniuma sana" → symptom: "stomach pain", location: "abdomen"
+
+CRITICAL: DO NOT confuse medication answers with travel answers:
+  - If nurse asked: "Have you taken any medication?" and patient says "not yet" / "no" / "haijachukua"
+    → Set tried_medication: null, but DO NOT set can_travel to false (they didn't answer the travel question!)
+  - If nurse asked: "Can you travel to hospital?" and patient says "no" / "siwezi"
+    → Set can_travel: false
+  - These are TWO SEPARATE QUESTIONS. Never conflate them.
 
 Only fill a field if the patient clearly stated it (in any language). Use null for unknown fields.
 STRICT RULE: Translate the meaning into short ENGLISH values for every field. Never invent details the patient did not say. If unsure, use null.
@@ -150,7 +158,7 @@ Respond ONLY in this exact JSON format with no extra text or markdown:
     "character": "<how patient described it: sharp/dull/burning/throbbing/etc, or null>",
     "associated": "<ONLY symptoms the patient explicitly said, in English, comma separated, or null>",
     "fever": <true if patient mentioned fever or high temperature in any language, else false>,
-    "can_travel": <true if the nurse asked about travelling AND the patient agreed in ANY language (yes/naweza/niko sawa/now/okay). false if they declined or preferred online (no/siwezi/online). null if not asked yet>,
+    "can_travel": <true if the nurse explicitly asked about TRAVEL/HOSPITAL and the patient said yes (naweza/niko sawa/ndiyo/yes/okay/can). false if they said no/siwezi/sitaki/online/prefer-doctor. null if travel question has NOT been explicitly asked yet. IMPORTANT: "not yet" or "haven't taken" about medication does NOT mean they won't travel — that's a different question>,
     "recent_activity": "<relevant food or activity mentioned, or null>",
     "pregnancy_status": "<pregnant, not pregnant, or null>",
     "vital_signs": "<any explicitly mentioned temp, bp, hr, spo2, or null>",
