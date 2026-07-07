@@ -16,6 +16,7 @@ import RateAI         from './pages/doctor/RateAI';
 import ActiveConsult  from './pages/doctor/ActiveConsult';
 import './index.css';
 import SessionDashboard from './pages/patient/SessionDashboard';
+import Profile from './pages/patient/Profile';
 import ConsultationWaiting from './pages/patient/ConsultationWaiting';
 import DiagnosisHistory from './pages/patient/DiagnosisHistory';
 import Analytics from './pages/analytics/Analytics';
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/payment"             element={<Payment />} />
         <Route path="/rate"                element={<RateExperience />} />
         <Route path="/dashboard"           element={<SessionDashboard />} />
+        <Route path="/profile"             element={<Profile />} />
         <Route path="/consultation/waiting" element={<ConsultationWaiting />} />
         <Route path="/diagnosis-history"   element={<DiagnosisHistory />} />
         <Route path="/analytics"           element={<Analytics />} />
