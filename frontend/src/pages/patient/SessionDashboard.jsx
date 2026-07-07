@@ -1,30 +1,137 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { theme } from '../../styles/theme';
 
 const API = process.env.REACT_APP_API_URL;
+const { color, font, radius } = theme;
 
+// ── Icons — small inline SVGs, no icon library dependency ─────────────────
+const Icon = {
+  Home: (p) => (
+    <svg viewBox="0 0 24 24" width={p.size || 20} height={p.size || 20} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 11 12 4l8 7" />
+      <path d="M6.5 9.5V20h5v-6h1v6h5V9.5" />
+    </svg>
+  ),
+  Pulse: (p) => (
+    <svg viewBox="0 0 24 24" width={p.size || 20} height={p.size || 20} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12h4l2 7 4-16 2 9h8" />
+    </svg>
+  ),
+  Doctor: (p) => (
+    <svg viewBox="0 0 24 24" width={p.size || 20} height={p.size || 20} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="3" />
+      <path d="M5 20c0-4.2 3.1-7 7-7s7 2.8 7 7" />
+    </svg>
+  ),
+  Hospital: (p) => (
+    <svg viewBox="0 0 24 24" width={p.size || 20} height={p.size || 20} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 21V8l8-4 8 4v13" />
+      <path d="M9 21v-5h6v5" />
+      <path d="M12 9v4M10 11h4" />
+    </svg>
+  ),
+  Pill: (p) => (
+    <svg viewBox="0 0 24 24" width={p.size || 20} height={p.size || 20} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <g transform="rotate(45 12 12)">
+        <rect x="5" y="9" width="14" height="6" rx="3" />
+        <line x1="12" y1="9" x2="12" y2="15" />
+      </g>
+    </svg>
+  ),
+  History: (p) => (
+    <svg viewBox="0 0 24 24" width={p.size || 20} height={p.size || 20} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  ),
+  Chevron: (p) => (
+    <svg viewBox="0 0 24 24" width={p.size || 16} height={p.size || 16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  ),
+};
 
-// ── Live Medication Countdown Widget ─────────────────────────────────────────
-function MedCountdown({ prescriptions }) {
+// ── Helpers ─────────────────────────────────────────────────────────────
+const isUrlLike = (str) => /^https?:\/\//i.test((str || '').trim());
+
+const cardTitle = (session) => {
+  const raw = session.symptoms_summary || session.ai_assessment || '';
+  if (!raw || isUrlLike(raw)) return 'Health consultation';
+  return raw.length > 60 ? raw.slice(0, 60) + '…' : raw;
+};
+
+const fmtClock = (ms) => {
+  const tot = Math.max(0, Math.floor(ms / 1000));
+  const h = String(Math.floor(tot / 3600)).padStart(2, '0');
+  const m = String(Math.floor((tot % 3600) / 60)).padStart(2, '0');
+  const sec = String(tot % 60).padStart(2, '0');
+  return `${h}:${m}:${sec}`;
+};
+
+// ── Dose ring — replaces the plain digital countdown with a radial visual ──
+function DoseRing({ label, dose, remaining, intervalMs, isAlert }) {
+  const R = 22;
+  const C = 2 * Math.PI * R;
+  const pct = intervalMs > 0 ? Math.max(0, Math.min(1, 1 - remaining / intervalMs)) : 0;
+  const ringColor = isAlert ? color.coral : color.teal;
+
+  return (
+    <div style={s.doseRow}>
+      <div style={s.doseRingWrap}>
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle cx="28" cy="28" r={R} fill="none" stroke={color.hairline} strokeWidth="4" />
+          <circle
+            cx="28" cy="28" r={R} fill="none" stroke={ringColor} strokeWidth="4"
+            strokeDasharray={C} strokeDashoffset={C * (1 - pct)} strokeLinecap="round"
+            transform="rotate(-90 28 28)" style={{ transition: 'stroke-dashoffset 1s linear' }}
+          />
+        </svg>
+        <span style={{ ...s.doseRingLabel, color: ringColor }}>{isAlert ? 'NOW' : ''}</span>
+      </div>
+      <div style={s.doseInfo}>
+        <p style={s.doseName}>{label}</p>
+        <p style={s.doseMeta}>{dose}</p>
+      </div>
+      <div style={{ ...s.doseTime, color: isAlert ? color.coral : color.inkDim }}>
+        {isAlert ? 'Take now' : fmtClock(remaining)}
+      </div>
+    </div>
+  );
+}
+
+function DoseProgress({ dayIndex, totalDays }) {
+  if (!totalDays) return null;
+  const pct = Math.min(1, dayIndex / totalDays);
+  return (
+    <div style={s.courseWrap}>
+      <div style={s.courseTrack}>
+        <div style={{ ...s.courseFill, width: `${pct * 100}%` }} />
+      </div>
+      <span style={s.courseLabel}>Day {Math.min(dayIndex, totalDays)} of {totalDays}</span>
+    </div>
+  );
+}
+
+function MedCard({ prescriptions }) {
   const [timers, setTimers] = useState([]);
   const [alertIdx, setAlertIdx] = useState(null);
 
   useEffect(() => {
     if (!prescriptions?.length) return;
 
-    const calcTimers = () => {
-      return prescriptions.map((p) => {
+    const calc = () =>
+      prescriptions.map((p) => {
         const timesPerDay = parseInt((p.dosage_notation || '1x1').split('x')[1]) || 1;
         const intervalMs = (24 / timesPerDay) * 60 * 60 * 1000;
         const startMs = p.reminders_start_at ? new Date(p.reminders_start_at).getTime() : Date.now();
         const elapsed = (Date.now() - startMs) % intervalMs;
-        const remaining = intervalMs - elapsed;
-        return { ...p, remaining, intervalMs };
+        return { ...p, remaining: intervalMs - elapsed, intervalMs };
       });
-    };
 
-    setTimers(calcTimers());
+    setTimers(calc());
     const iv = setInterval(() => {
       setTimers((prev) =>
         prev.map((t, i) => {
@@ -38,34 +145,27 @@ function MedCountdown({ prescriptions }) {
         })
       );
     }, 1000);
-
     return () => clearInterval(iv);
   }, [prescriptions]);
 
   if (!timers.length) return null;
 
-  const fmt = (ms) => {
-    const tot = Math.max(0, Math.floor(ms / 1000));
-    const h = String(Math.floor(tot / 3600)).padStart(2, '0');
-    const m = String(Math.floor((tot % 3600) / 60)).padStart(2, '0');
-    const s = String(tot % 60).padStart(2, '0');
-    return `${h}:${m}:${s}`;
-  };
-
   return (
-    <div style={sw.wrap}>
-      <p style={sw.label}>💊 MEDICATION REMINDERS</p>
+    <div style={s.medCard}>
+      <p style={s.eyebrow}>Medication reminders</p>
       {timers.map((t, i) => {
-        const isAlert = alertIdx === i;
+        const startMs = t.reminders_start_at ? new Date(t.reminders_start_at).getTime() : Date.now();
+        const dayIndex = Math.floor((Date.now() - startMs) / 86400000) + 1;
         return (
-          <div key={t.id} style={{ ...sw.row, ...(isAlert ? sw.rowAlert : {}) }}>
-            <div>
-              <p style={sw.medName}>{t.medication_name}</p>
-              <p style={sw.dose}>{t.dosage_notation || '—'} · {t.duration_days ? `${t.duration_days} days` : ''}</p>
-            </div>
-            <div style={{ ...sw.timer, color: isAlert ? '#ff4d6d' : '#06d6a0' }}>
-              {isAlert ? '🔔 TAKE NOW!' : fmt(t.remaining)}
-            </div>
+          <div key={t.id}>
+            <DoseRing
+              label={t.medication_name}
+              dose={t.dosage_notation || '—'}
+              remaining={t.remaining}
+              intervalMs={t.intervalMs}
+              isAlert={alertIdx === i}
+            />
+            <DoseProgress dayIndex={dayIndex} totalDays={t.duration_days} />
           </div>
         );
       })}
@@ -73,34 +173,16 @@ function MedCountdown({ prescriptions }) {
   );
 }
 
-const sw = {
-  wrap: {
-    margin: '0 20px 4px',
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 18,
-    padding: '14px 16px',
-    backdropFilter: 'blur(20px)',
-  },
-  label: {
-    fontSize: 10, fontWeight: 700, letterSpacing: 2.5,
-    color: 'rgba(255,255,255,0.35)', margin: '0 0 10px',
-  },
-  row: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 8, padding: '8px 10px', borderRadius: 12,
-    background: 'rgba(255,255,255,0.03)', transition: 'all 0.3s',
-  },
-  rowAlert: {
-    background: 'rgba(255,77,109,0.15)', border: '1px solid rgba(255,77,109,0.4)',
-    animation: 'alertPulse 0.5s ease infinite alternate',
-  },
-  medName: { fontSize: 13, fontWeight: 600, color: '#fff', margin: 0 },
-  dose: { fontSize: 11, color: 'rgba(255,255,255,0.35)', margin: '2px 0 0' },
-  timer: { fontSize: 18, fontWeight: 700, fontFamily: "'DM Mono', monospace", letterSpacing: 2 },
-};
+// ── Nav config — single source of truth for both sidebar and tab bar ──────
+const navItems = (prescriptionsLen, doctorsAvailable) => [
+  { id: 'home', label: 'Home', Icon: Icon.Home },
+  { id: 'doctors', label: 'Doctors', Icon: Icon.Doctor, path: '/consultation', badge: doctorsAvailable > 0 ? doctorsAvailable : null },
+  { id: 'hospitals', label: 'Hospitals', Icon: Icon.Hospital, path: '/hospitals' },
+  ...(prescriptionsLen > 0 ? [{ id: 'medications', label: 'Medications', Icon: Icon.Pill, path: '/medications' }] : []),
+  { id: 'history', label: 'History', Icon: Icon.History, path: '/diagnosis-history' },
+];
 
-// ── Main Dashboard ─────────────────────────────────────────────────────────
+// ── Main dashboard ─────────────────────────────────────────────────────────
 export default function SessionDashboard() {
   const navigate = useNavigate();
   const patient = (() => { try { return JSON.parse(localStorage.getItem('civtech_patient') || '{}'); } catch { return {}; } })();
@@ -108,21 +190,26 @@ export default function SessionDashboard() {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [resumeSheet, setResumeSheet] = useState(null);
-  const [activeTab, setActiveTab] = useState('home');
+  const [doctorsAvailable, setDoctorsAvailable] = useState(0);
+  const [pendingConsult, setPendingConsult] = useState(null);
 
   const firstName = (patient.name || 'there').split(' ')[0];
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   const fetchData = useCallback(async () => {
     if (!patient.id) return;
     try {
-      const [sessRes, presRes] = await Promise.allSettled([
+      const [sessRes, presRes, docRes, pendRes] = await Promise.allSettled([
         axios.get(`${API}/triage/sessions/${patient.id}`),
         axios.get(`${API}/prescriptions/active/${patient.id}`),
+        axios.get(`${API}/doctors/available`),
+        axios.get(`${API}/consultation/pending`, { params: { patient_id: patient.id } }),
       ]);
       if (sessRes.status === 'fulfilled') setSessions(sessRes.value.data || []);
       if (presRes.status === 'fulfilled') setPrescriptions(presRes.value.data || []);
+      if (docRes.status === 'fulfilled') setDoctorsAvailable((docRes.value.data || []).length);
+      if (pendRes.status === 'fulfilled') setPendingConsult(pendRes.value.data || null);
     } catch (e) {
       console.error(e);
     } finally {
@@ -135,10 +222,7 @@ export default function SessionDashboard() {
     fetchData();
   }, [fetchData, navigate, patient.id]);
 
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate('/login');
-  };
+  const handleLogout = () => { localStorage.clear(); navigate('/login'); };
 
   const handleCardTap = (session) => {
     if (session.status === 'active') setResumeSheet(session);
@@ -161,116 +245,118 @@ export default function SessionDashboard() {
     return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
   };
 
+  const nav = navItems(prescriptions.length, doctorsAvailable);
+
+  const NavButton = ({ item, onSidebar }) => (
+    <button
+      style={{ ...s.navBtn, ...(onSidebar ? s.navBtnSidebar : {}), position: 'relative' }}
+      onClick={() => (item.path ? navigate(item.path) : window.scrollTo({ top: 0, behavior: 'smooth' }))}
+    >
+      <span style={{ position: 'relative' }}>
+        <item.Icon size={onSidebar ? 19 : 21} />
+        {item.badge && <span style={s.navBadge}>{item.badge}</span>}
+      </span>
+      <span style={onSidebar ? s.navLabelSidebar : s.navLabel}>{item.label}</span>
+    </button>
+  );
+
   return (
     <div style={s.page}>
-      {/* ── Animated BG Orbs ── */}
-      <div style={s.orb1} /><div style={s.orb2} /><div style={s.orb3} />
-
-      {/* ── HEADER ── */}
-      <div style={s.header}>
-        <div style={s.brandMark}>C</div>
-        <div style={s.headerMid}>
-          <p style={s.greetingText}>{greeting},</p>
-          <p style={s.greetingName}>{firstName} 👋</p>
+      {/* ── SIDEBAR (desktop) ── */}
+      <aside className="cc-sidebar" style={s.sidebar}>
+        <div style={s.sidebarBrand}>
+          <div style={s.brandMark}>C</div>
+          <span style={s.brandName}>CivCare</span>
         </div>
-        <button style={s.avatarBtn} onClick={handleLogout}>
-          {(patient.name || 'U')[0].toUpperCase()}
-        </button>
-      </div>
+        <nav style={s.sidebarNav}>
+          {nav.map((item) => <NavButton key={item.id} item={item} onSidebar />)}
+        </nav>
+        <button style={s.sidebarLogout} onClick={handleLogout}>Sign out</button>
+      </aside>
 
-      {/* ── MEDICATION WIDGET ── */}
-      <MedCountdown prescriptions={prescriptions} />
-
-      {/* ── QUICK ACTION CHIPS ── */}
-      <div style={s.chipsRow}>
-        <button style={s.chipPrimary} onClick={() => { localStorage.removeItem('civtech_session_id'); navigate('/chat'); }}>
-          <span style={s.chipIcon}>🧠</span>
-          <span>AI Triage</span>
-        </button>
-        <button style={s.chipSecondary} onClick={() => { localStorage.removeItem('civtech_session_id'); navigate('/hospitals'); }}>
-          <span style={s.chipIcon}>🏥</span>
-          <span>Hospital</span>
-        </button>
-        <button style={s.chipSecondary} onClick={() => { localStorage.removeItem('civtech_session_id'); navigate('/consultation'); }}>
-          <span style={s.chipIcon}>👨‍⚕️</span>
-          <span>Doctor</span>
-        </button>
-      </div>
-
-      {/* ── SESSION HISTORY ── */}
-      <div style={s.section}>
-        <div style={s.sectionHeader}>
-          <p style={s.sectionTitle}>HEALTH HISTORY</p>
-          <span style={s.sessionCount}>{sessions.length} sessions</span>
-        </div>
-
-        {loading && (
-          <div style={s.loadingRow}>
-            {[1, 2, 3].map(i => <div key={i} style={s.skeleton} />)}
+      {/* ── MAIN COLUMN ── */}
+      <div className="cc-main" style={s.main}>
+        <div style={s.header}>
+          <div>
+            <p style={s.greetingText}>{greeting},</p>
+            <p style={s.greetingName}>{firstName}</p>
           </div>
-        )}
-
-        {!loading && sessions.length === 0 && (
-          <div style={s.empty}>
-            <p style={{ fontSize: 40, marginBottom: 8 }}>🩺</p>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14 }}>No consultations yet.</p>
-            <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13 }}>Start your first one above.</p>
-          </div>
-        )}
-
-        {!loading && [...sessions]
-          .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
-          .map((session, i) => {
-            const isActive = session.status === 'active';
-            return (
-              <div key={session.id} style={{ ...s.card, animationDelay: `${i * 0.06}s` }}
-                onClick={() => handleCardTap(session)}>
-                {/* Risk glow dot */}
-                <div style={{ ...s.riskDot, background: 'rgba(255,255,255,0.25)' }} />
-                <div style={s.cardBody}>
-                  <div style={s.cardTop}>
-                    <p style={s.cardTitle}>
-                      {session.symptoms_summary || session.ai_assessment?.slice(0, 50) || 'Health Consultation'}
-                      {(session.ai_assessment || '').length > 50 ? '…' : ''}
-                    </p>
-                    {isActive && <span style={s.activePill}>ACTIVE</span>}
-                  </div>
-                  <div style={s.cardMeta}>
-                      <span style={s.cardDate}>{formatDate(session.started_at)}</span>
-                  </div>
-                </div>
-                <div style={s.cardChevron}>›</div>
-              </div>
-            );
-          })}
-      </div>
-
-      {/* ── BOTTOM NAV ── */}
-      <div style={s.navBar}>
-        {[
-          { id: 'home', icon: '⊞', label: 'Home', action: () => setActiveTab('home') },
-          { id: 'doctors', icon: '👨‍⚕️', label: 'Doctors', action: () => navigate('/consultation') },
-          { id: 'hospitals', icon: '🏥', label: 'Nearby', action: () => navigate('/hospitals') },
-          ...(prescriptions.length > 0 ? [
-            { id: 'meds', icon: '💊', label: 'Medications', action: () => navigate('/medications') }
-          ] : [])
-        ].map(tab => (
-          <button key={tab.id} style={s.navBtn} onClick={tab.action}>
-            <span style={{ ...s.navIcon, ...(activeTab === tab.id ? s.navIconActive : {}) }}>
-              {tab.icon}
-            </span>
-            <span style={{ ...s.navLabel, ...(activeTab === tab.id ? s.navLabelActive : {}) }}>
-              {tab.label}
-            </span>
-            {activeTab === tab.id && <div style={s.navActiveDot} />}
+          <button className="cc-avatar" style={s.avatarBtn} onClick={() => navigate('/profile')}>
+            {(patient.name || 'U')[0].toUpperCase()}
           </button>
-        ))}
-        <button
-          style={{ ...s.navBtn, marginTop: 12 }}
-          onClick={() => navigate('/diagnosis-history')}
-        >
-          📋 Diagnosis History
+        </div>
+
+        <MedCard prescriptions={prescriptions} />
+
+        {/* ── PENDING CONSULTATION — takes priority over the triage CTA when live ── */}
+        {pendingConsult && (
+          <div style={s.pendingBanner} onClick={() => navigate('/consultation/waiting')}>
+            <div style={s.pendingDot} />
+            <div style={{ flex: 1 }}>
+              <p style={s.pendingTitle}>
+                {pendingConsult.doctor_name ? `Waiting for Dr. ${pendingConsult.doctor_name}` : 'Consultation in progress'}
+              </p>
+              <p style={s.pendingSub}>Tap to view status</p>
+            </div>
+            <Icon.Chevron size={18} />
+          </div>
+        )}
+
+        {/* ── PRIMARY ACTION — the one CTA, not three duplicate buttons ── */}
+        <button style={s.heroCta} onClick={() => { localStorage.removeItem('civtech_session_id'); navigate('/chat'); }}>
+          <div style={s.heroCtaIcon}><Icon.Pulse size={22} /></div>
+          <div style={{ flex: 1, textAlign: 'left' }}>
+            <p style={s.heroCtaTitle}>Not feeling well?</p>
+            <p style={s.heroCtaSub}>Start with AI triage — takes about 2 minutes</p>
+          </div>
+          <Icon.Chevron size={18} />
         </button>
+
+        {/* ── HEALTH HISTORY ── */}
+        <div style={s.section}>
+          <div style={s.sectionHeader}>
+            <p style={s.eyebrow}>Health history</p>
+            <span style={s.sessionCount}>{sessions.length} session{sessions.length === 1 ? '' : 's'}</span>
+          </div>
+
+          {loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[1, 2, 3].map((i) => <div key={i} style={s.skeleton} />)}
+            </div>
+          )}
+
+          {!loading && sessions.length === 0 && (
+            <div style={s.empty}>
+              <p style={{ fontSize: 15, color: color.inkDim, margin: 0 }}>No consultations yet.</p>
+              <p style={{ fontSize: 13, color: color.inkFaint, marginTop: 4 }}>Start your first one above.</p>
+            </div>
+          )}
+
+          {!loading && [...sessions]
+            .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
+            .map((session, i) => {
+              const isActive = session.status === 'active';
+              return (
+                <div key={session.id} style={{ ...s.card, animationDelay: `${i * 0.05}s` }} onClick={() => handleCardTap(session)}>
+                  <div style={s.cardBody}>
+                    <div style={s.cardTop}>
+                      <p style={s.cardTitle}>{cardTitle(session)}</p>
+                      {isActive && <span style={s.activePill}>Active</span>}
+                    </div>
+                    <span style={s.cardDate}>{formatDate(session.started_at)}</span>
+                  </div>
+                  <Icon.Chevron />
+                </div>
+              );
+            })}
+        </div>
+
+        <div style={{ height: 90 }} />
+      </div>
+
+      {/* ── BOTTOM TAB BAR (mobile) ── */}
+      <div className="cc-bottomnav" style={s.bottomNav}>
+        {nav.map((item) => <NavButton key={item.id} item={item} />)}
       </div>
 
       {/* ── RESUME SHEET ── */}
@@ -279,189 +365,186 @@ export default function SessionDashboard() {
           <div style={s.overlay} onClick={() => setResumeSheet(null)} />
           <div style={s.sheet}>
             <div style={s.sheetPill} />
-            <p style={s.sheetEye}>CONTINUING SESSION</p>
-            <h2 style={s.sheetTitle}>
-              {resumeSheet.ai_assessment?.slice(0, 55) || 'Active Consultation'}
-              {(resumeSheet.ai_assessment || '').length > 55 ? '…' : ''}
-            </h2>
+            <p style={s.eyebrow}>Continuing session</p>
+            <h2 style={s.sheetTitle}>{cardTitle(resumeSheet)}</h2>
             <p style={s.sheetSub}>The AI has full context and will continue from where you left off.</p>
-            {resumeSheet.last_message && (
+            {resumeSheet.last_message && !isUrlLike(resumeSheet.last_message) && (
               <div style={s.sheetPreview}>
-                <p style={s.sheetPreviewLabel}>LAST MESSAGE</p>
-                <p style={s.sheetPreviewText}>"{resumeSheet.last_message}"</p>
+                <p style={s.eyebrow}>Last message</p>
+                <p style={s.sheetPreviewText}>&ldquo;{resumeSheet.last_message}&rdquo;</p>
               </div>
             )}
-            <button style={s.sheetBtn} onClick={handleResume}>Resume Conversation →</button>
+            <button style={s.sheetBtn} onClick={handleResume}>Resume conversation</button>
             <button style={s.sheetCancel} onClick={() => setResumeSheet(null)}>Not now</button>
           </div>
         </>
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@500&display=swap');
-        @keyframes orb { 0%,100%{transform:scale(1) translate(-50%,-50%);opacity:0.6} 50%{transform:scale(1.12) translate(-50%,-50%);opacity:0.9} }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes shimmer { from{background-position:-400px 0} to{background-position:400px 0} }
-        @keyframes alertPulse { from{box-shadow:0 0 0 rgba(255,77,109,0)} to{box-shadow:0 0 18px rgba(255,77,109,0.5)} }
-        @keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        ${theme.fontImport}
         * { box-sizing: border-box; }
+        button { font-family: inherit; }
+        button:focus-visible, .cc-avatar:focus-visible { outline: 2px solid ${color.gold}; outline-offset: 2px; }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes shimmer { from{background-position:-400px 0} to{background-position:400px 0} }
+        @keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+
+        .cc-sidebar { display: none; }
+        .cc-bottomnav { display: flex; }
+        .cc-main { padding-bottom: 100px; }
+
+        @media (min-width: 900px) {
+          .cc-sidebar { display: flex !important; }
+          .cc-bottomnav { display: none !important; }
+          .cc-main { padding-bottom: 48px !important; margin-left: 240px; max-width: 720px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          * { animation: none !important; transition: none !important; }
+        }
       `}</style>
     </div>
   );
 }
 
+// ── Styles ──────────────────────────────────────────────────────────────
 const s = {
   page: {
-    minHeight: '100vh', backgroundColor: '#080810',
-    fontFamily: "'Outfit', sans-serif", color: '#fff',
-    position: 'relative', overflowX: 'hidden', paddingBottom: 90,
-  },
-  orb1: {
-    position: 'absolute', top: -100, left: '20%', width: 350, height: 350,
-    borderRadius: '50%', background: 'radial-gradient(circle,#4f46e5 0%,transparent 70%)',
-    filter: 'blur(60px)', opacity: 0.5, animation: 'orb 7s ease-in-out infinite',
-    pointerEvents: 'none', zIndex: 0, transform: 'translate(-50%,-50%)',
-  },
-  orb2: {
-    position: 'absolute', top: 50, right: -50, width: 280, height: 280,
-    borderRadius: '50%', background: 'radial-gradient(circle,#06d6a0 0%,transparent 70%)',
-    filter: 'blur(60px)', opacity: 0.3, animation: 'orb 9s ease-in-out 2s infinite',
-    pointerEvents: 'none', zIndex: 0, transform: 'translate(-50%,-50%)',
-  },
-  orb3: {
-    position: 'absolute', top: 200, left: '60%', width: 220, height: 220,
-    borderRadius: '50%', background: 'radial-gradient(circle,#f72585 0%,transparent 70%)',
-    filter: 'blur(50px)', opacity: 0.2, animation: 'orb 11s ease-in-out 4s infinite',
-    pointerEvents: 'none', zIndex: 0,
-  },
-  header: {
-    position: 'relative', zIndex: 10,
-    display: 'flex', alignItems: 'center', gap: 12,
-    padding: '52px 20px 16px',
-  },
-  brandMark: {
-    width: 38, height: 38, borderRadius: 12, flexShrink: 0,
-    background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontWeight: 800, fontSize: 18, color: '#fff',
-    boxShadow: '0 4px 20px rgba(79,70,229,0.5)',
-  },
-  headerMid: { flex: 1 },
-  greetingText: { fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0, letterSpacing: 0.5 },
-  greetingName: { fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 },
-  avatarBtn: {
-    width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-    background: 'linear-gradient(135deg,#4f46e5,#06d6a0)',
-    border: 'none', color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer',
-    boxShadow: '0 4px 16px rgba(79,70,229,0.4)',
-  },
-  chipsRow: {
-    position: 'relative', zIndex: 10,
-    display: 'flex', gap: 10, padding: '4px 20px 16px',
-  },
-  chipPrimary: {
-    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-    padding: '12px 8px', border: 'none', borderRadius: 16, cursor: 'pointer',
-    background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
-    color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: "'Outfit',sans-serif",
-    boxShadow: '0 6px 24px rgba(79,70,229,0.45)',
-    animation: 'fadeUp 0.5s ease 0.1s both',
-  },
-  chipSecondary: {
-    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-    padding: '12px 8px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif",
-    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 16, color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600,
-    backdropFilter: 'blur(12px)', animation: 'fadeUp 0.5s ease 0.15s both',
-  },
-  chipIcon: { fontSize: 16 },
-  section: {
-    position: 'relative', zIndex: 10,
-    padding: '8px 20px 0', animation: 'fadeUp 0.5s ease 0.2s both',
-  },
-  sectionHeader: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 10, fontWeight: 700, letterSpacing: 3,
-    color: 'rgba(255,255,255,0.3)', margin: 0,
-  },
-  sessionCount: {
-    fontSize: 11, color: 'rgba(255,255,255,0.25)',
-    background: 'rgba(255,255,255,0.06)', borderRadius: 20, padding: '2px 10px',
-  },
-  card: {
-    display: 'flex', alignItems: 'center', gap: 14,
-    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-    backdropFilter: 'blur(16px)', borderRadius: 18, padding: '14px 14px',
-    marginBottom: 10, cursor: 'pointer', animation: 'fadeUp 0.5s ease both',
-    transition: 'background 0.2s, transform 0.15s',
-  },
-  riskDot: { width: 10, height: 10, borderRadius: '50%', flexShrink: 0 },
-  cardBody: { flex: 1, overflow: 'hidden' },
-  cardTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 },
-  cardTitle: {
-    fontSize: 14, fontWeight: 600, color: '#fff', margin: 0,
-    flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-  },
-  activePill: {
-    fontSize: 9, fontWeight: 700, letterSpacing: 1.5,
-    color: '#06d6a0', background: 'rgba(6,214,160,0.15)',
-    border: '1px solid rgba(6,214,160,0.3)', borderRadius: 20, padding: '2px 7px', flexShrink: 0,
-  },
-  cardMeta: { display: 'flex', alignItems: 'center', gap: 8 },
-  riskBadge: { fontSize: 10, fontWeight: 700, letterSpacing: 1 },
-  cardDate: { fontSize: 11, color: 'rgba(255,255,255,0.3)' },
-  cardChevron: { fontSize: 22, color: 'rgba(255,255,255,0.2)', flexShrink: 0 },
-  empty: { textAlign: 'center', padding: '60px 0' },
-  loadingRow: { display: 'flex', flexDirection: 'column', gap: 10 },
-  skeleton: {
-    height: 66, borderRadius: 18,
-    background: 'linear-gradient(90deg,#111118 25%,#1a1a28 50%,#111118 75%)',
-    backgroundSize: '400px 100%', animation: 'shimmer 1.6s infinite',
-  },
-  navBar: {
-    position: 'fixed', bottom: 16, left: 16, right: 16,
-    height: 62, background: 'rgba(10,10,20,0.85)',
-    backdropFilter: 'blur(30px)', borderRadius: 22,
-    border: '1px solid rgba(255,255,255,0.09)',
-    display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-    zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-  },
-  navBtn: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 16px',
+    minHeight: '100vh', backgroundColor: color.bg,
+    fontFamily: font.ui, color: color.ink,
     position: 'relative',
   },
-  navIcon: { fontSize: 20, transition: 'transform 0.2s' },
-  navIconActive: { transform: 'scale(1.2)' },
-  navLabel: { fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: "'Outfit',sans-serif" },
-  navLabelActive: { color: '#4f46e5', fontWeight: 600 },
-  navActiveDot: {
-    position: 'absolute', top: -6, width: 4, height: 4,
-    borderRadius: '50%', background: '#4f46e5',
+  sidebar: {
+    position: 'fixed', top: 0, left: 0, bottom: 0, width: 240,
+    background: color.bgElevated, borderRight: `1px solid ${color.hairline}`,
+    flexDirection: 'column', padding: '28px 16px', zIndex: 20,
   },
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, backdropFilter: 'blur(6px)' },
+  sidebarBrand: { display: 'flex', alignItems: 'center', gap: 10, padding: '0 8px', marginBottom: 32 },
+  brandMark: {
+    width: 34, height: 34, borderRadius: radius.sm, flexShrink: 0,
+    background: color.gold, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontFamily: font.display, fontWeight: 600, fontSize: 17, color: color.bg,
+  },
+  brandName: { fontFamily: font.display, fontWeight: 600, fontSize: 17, color: color.ink },
+  sidebarNav: { display: 'flex', flexDirection: 'column', gap: 4, flex: 1 },
+  sidebarLogout: {
+    background: 'none', border: 'none', color: color.inkFaint, fontSize: 13,
+    textAlign: 'left', padding: '10px 12px', cursor: 'pointer', fontFamily: font.ui,
+  },
+  main: { position: 'relative', zIndex: 10, maxWidth: 560, margin: '0 auto', padding: '44px 20px 0' },
+  header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 },
+  greetingText: { fontSize: 13, color: color.inkFaint, margin: 0, fontFamily: font.ui },
+  greetingName: { fontSize: 26, fontWeight: 600, color: color.ink, margin: '2px 0 0', fontFamily: font.display },
+  avatarBtn: {
+    width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+    background: color.surfaceRaised, border: `1px solid ${color.hairlineStrong}`,
+    color: color.ink, fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: font.ui,
+  },
+
+  eyebrow: { fontSize: 11, fontWeight: 600, letterSpacing: 1.6, textTransform: 'uppercase', color: color.inkFaint, margin: '0 0 12px' },
+
+  medCard: {
+    background: color.surface, border: `1px solid ${color.hairline}`, borderRadius: radius.lg,
+    padding: '18px 18px 6px', marginBottom: 16, animation: 'fadeUp 0.5s ease both',
+  },
+  doseRow: { display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 14px' },
+  doseRingWrap: { position: 'relative', width: 56, height: 56, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  doseRingLabel: { position: 'absolute', fontSize: 9, fontWeight: 700, letterSpacing: 0.5 },
+  doseInfo: { flex: 1, minWidth: 0 },
+  doseName: { fontSize: 14.5, fontWeight: 600, color: color.ink, margin: 0 },
+  doseMeta: { fontSize: 12, color: color.inkFaint, margin: '2px 0 0' },
+  doseTime: { fontSize: 14, fontWeight: 600, fontFamily: font.mono, flexShrink: 0 },
+
+  courseWrap: { display: 'flex', alignItems: 'center', gap: 10, padding: '0 0 12px 70px', marginTop: -8 },
+  courseTrack: { flex: 1, height: 4, borderRadius: 2, background: color.hairlineStrong, overflow: 'hidden' },
+  courseFill: { height: '100%', background: color.teal, borderRadius: 2, transition: 'width 0.6s ease' },
+  courseLabel: { fontSize: 11, color: color.inkFaint, flexShrink: 0, fontFamily: font.mono },
+
+  navBadge: {
+    position: 'absolute', top: -5, right: -8, minWidth: 15, height: 15, borderRadius: radius.pill,
+    background: color.teal, color: color.bg, fontSize: 9.5, fontWeight: 700,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px',
+  },
+
+  pendingBanner: {
+    display: 'flex', alignItems: 'center', gap: 12, background: color.tealDim,
+    border: `1px solid rgba(52,184,166,0.3)`, borderRadius: radius.lg, padding: '14px 16px',
+    marginBottom: 16, cursor: 'pointer', animation: 'fadeUp 0.5s ease both',
+  },
+  pendingDot: { width: 9, height: 9, borderRadius: '50%', background: color.teal, flexShrink: 0 },
+  pendingTitle: { fontSize: 14, fontWeight: 600, color: color.ink, margin: 0 },
+  pendingSub: { fontSize: 12, color: color.inkDim, margin: '2px 0 0' },
+
+  heroCta: {
+    width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+    background: color.goldDim, border: `1px solid rgba(224,164,88,0.3)`, borderRadius: radius.lg,
+    padding: '18px 18px', cursor: 'pointer', marginBottom: 28, textAlign: 'left',
+    animation: 'fadeUp 0.5s ease 0.05s both', color: color.ink,
+  },
+  heroCtaIcon: {
+    width: 42, height: 42, borderRadius: radius.md, flexShrink: 0,
+    background: color.gold, color: color.bg,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  heroCtaTitle: { fontSize: 16, fontWeight: 600, margin: 0, color: color.ink, fontFamily: font.display },
+  heroCtaSub: { fontSize: 12.5, color: color.inkDim, margin: '3px 0 0' },
+
+  section: { animation: 'fadeUp 0.5s ease 0.1s both' },
+  sectionHeader: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' },
+  sessionCount: { fontSize: 12, color: color.inkFaint },
+
+  card: {
+    display: 'flex', alignItems: 'center', gap: 12,
+    background: color.surface, border: `1px solid ${color.hairline}`, borderRadius: radius.md,
+    padding: '14px 16px', marginBottom: 8, cursor: 'pointer', animation: 'fadeUp 0.45s ease both',
+    color: color.inkFaint,
+  },
+  cardBody: { flex: 1, minWidth: 0 },
+  cardTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 },
+  cardTitle: { fontSize: 14, fontWeight: 500, color: color.ink, margin: 0, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
+  activePill: {
+    fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: color.teal,
+    background: color.tealDim, borderRadius: radius.pill, padding: '2px 8px', flexShrink: 0,
+  },
+  cardDate: { fontSize: 12, color: color.inkFaint },
+
+  empty: { textAlign: 'center', padding: '40px 0' },
+  skeleton: {
+    height: 58, borderRadius: radius.md,
+    background: `linear-gradient(90deg, ${color.surface} 25%, ${color.surfaceRaised} 50%, ${color.surface} 75%)`,
+    backgroundSize: '400px 100%', animation: 'shimmer 1.6s infinite',
+  },
+
+  bottomNav: {
+    position: 'fixed', bottom: 0, left: 0, right: 0,
+    background: color.bgElevated, borderTop: `1px solid ${color.hairline}`,
+    justifyContent: 'space-around', alignItems: 'center', padding: '10px 8px calc(10px + env(safe-area-inset-bottom))',
+    zIndex: 100,
+  },
+  navBtn: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px',
+    color: color.inkFaint, minWidth: 56,
+  },
+  navLabel: { fontSize: 10.5, fontWeight: 500 },
+  navBtnSidebar: { flexDirection: 'row', justifyContent: 'flex-start', width: '100%', padding: '10px 12px', borderRadius: radius.sm, gap: 12 },
+  navLabelSidebar: { fontSize: 13.5, fontWeight: 500 },
+
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200 },
   sheet: {
     position: 'fixed', bottom: 0, left: 0, right: 0,
-    background: 'rgba(12,12,22,0.97)', backdropFilter: 'blur(30px)',
-    borderTop: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '28px 28px 0 0', padding: '20px 24px 44px',
-    zIndex: 201, animation: 'sheetUp 0.35s cubic-bezier(0.34,1.56,0.64,1) both',
+    background: color.bgElevated, borderTop: `1px solid ${color.hairlineStrong}`,
+    borderRadius: '22px 22px 0 0', padding: '20px 24px 40px',
+    zIndex: 201, animation: 'sheetUp 0.3s ease both', maxWidth: 560, margin: '0 auto',
   },
-  sheetPill: { width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.15)', margin: '0 auto 20px' },
-  sheetEye: { fontSize: 10, fontWeight: 700, letterSpacing: 2.5, color: '#4f46e5', margin: '0 0 10px' },
-  sheetTitle: { fontFamily: "'Outfit',sans-serif", fontSize: 22, fontWeight: 800, color: '#fff', margin: '0 0 10px', lineHeight: 1.3 },
-  sheetSub: { fontSize: 13, color: 'rgba(255,255,255,0.4)', margin: '0 0 20px', lineHeight: 1.6 },
-  sheetPreview: { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '12px 14px', marginBottom: 20 },
-  sheetPreviewLabel: { fontSize: 9, fontWeight: 700, letterSpacing: 2, color: 'rgba(255,255,255,0.3)', margin: '0 0 6px' },
-  sheetPreviewText: { fontSize: 13, color: 'rgba(255,255,255,0.6)', margin: 0, fontStyle: 'italic', lineHeight: 1.5 },
+  sheetPill: { width: 36, height: 4, borderRadius: 2, background: color.hairlineStrong, margin: '0 auto 18px' },
+  sheetTitle: { fontFamily: font.display, fontSize: 20, fontWeight: 600, color: color.ink, margin: '0 0 8px' },
+  sheetSub: { fontSize: 13, color: color.inkDim, margin: '0 0 16px', lineHeight: 1.6 },
+  sheetPreview: { background: color.surface, border: `1px solid ${color.hairline}`, borderRadius: radius.sm, padding: '10px 14px', marginBottom: 18 },
+  sheetPreviewText: { fontSize: 13, color: color.inkDim, margin: 0, fontStyle: 'italic' },
   sheetBtn: {
-    width: '100%', padding: '16px 0',
-    background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
-    border: 'none', borderRadius: 16, color: '#fff', fontSize: 15, fontWeight: 600,
-    fontFamily: "'Outfit',sans-serif", cursor: 'pointer', marginBottom: 10,
-    boxShadow: '0 8px 24px rgba(79,70,229,0.4)',
+    width: '100%', padding: '15px 0', background: color.gold, border: 'none', borderRadius: radius.md,
+    color: color.bg, fontSize: 14.5, fontWeight: 600, fontFamily: font.ui, cursor: 'pointer', marginBottom: 8,
   },
-  sheetCancel: { width: '100%', padding: '14px 0', background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: 14, fontFamily: "'Outfit',sans-serif", cursor: 'pointer' },
+  sheetCancel: { width: '100%', padding: '12px 0', background: 'none', border: 'none', color: color.inkFaint, fontSize: 13.5, cursor: 'pointer', fontFamily: font.ui },
 };
