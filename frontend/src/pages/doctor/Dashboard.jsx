@@ -1,49 +1,22 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { updateDoctorStatus, redirectPatients, pingDoctor, updateSettings } from "../../api/doctors";
 import { callPatient } from "../../api/triage";
 import useWebSocket from "../../hooks/useWebSocket";
 import client from "../../api/client";
 
-// ─── Theme ───────────────────────────────────────────────
-const T = {
-  bg: "#0b0b0e",
-  surface: "#111116",
-  card: "#15151c",
-  cardHi: "#1c1c26",
-  border: "rgba(255,255,255,0.07)",
-  borderHi: "rgba(255,255,255,0.13)",
-  text: "#dcdcee",
-  muted: "#6c6c9a",
-  dim: "#383858",
-  accent: "#00d4aa",
-  accentBg: "rgba(0,212,170,0.1)",
-  accentBd: "rgba(0,212,170,0.25)",
-  red: "#ff3d5a",
-  redBg: "rgba(255,61,90,0.1)",
-  redBd: "rgba(255,61,90,0.25)",
-  amber: "#ffaa22",
-  amberBg: "rgba(255,170,34,0.1)",
-  amberBd: "rgba(255,170,34,0.25)",
-  green: "#00cc88",
-  greenBg: "rgba(0,204,136,0.1)",
-  greenBd: "rgba(0,204,136,0.25)",
-  blue: "#4d8fff",
-  blueBg: "rgba(77,143,255,0.1)",
-  blueBd: "rgba(77,143,255,0.25)",
-};
-
+/* ── Risk / status configs (token-based, light theme) ── */
 const RISK = {
-  critical: { color: T.red, bg: T.redBg, bd: T.redBd, label: "Critical" },
-  moderate: { color: T.amber, bg: T.amberBg, bd: T.amberBd, label: "Moderate" },
-  low: { color: T.green, bg: T.greenBg, bd: T.greenBd, label: "Low" },
+  critical: { color: "#dc2626", bg: "rgba(220,38,38,0.09)", label: "Critical" },
+  moderate: { color: "#d97706", bg: "rgba(217,119,6,0.1)", label: "Moderate" },
+  low: { color: "#059669", bg: "rgba(5,150,105,0.1)", label: "Low" },
 };
 
 const STATUS_CFG = {
-  available: { color: T.green, bg: T.greenBg, bd: T.greenBd, label: "Available" },
-  on_break: { color: T.amber, bg: T.amberBg, bd: T.amberBd, label: "On Break" },
-  offline: { color: T.red, bg: T.redBg, bd: T.redBd, label: "Offline" },
-  with_patient: { color: T.blue, bg: T.blueBg, bd: T.blueBd, label: "With Patient" },
+  available: { color: "#059669", bg: "rgba(5,150,105,0.1)", label: "Available" },
+  on_break: { color: "#d97706", bg: "rgba(217,119,6,0.1)", label: "On Break" },
+  offline: { color: "#dc2626", bg: "rgba(220,38,38,0.09)", label: "Offline" },
+  with_patient: { color: "#2563eb", bg: "rgba(37,99,235,0.09)", label: "With Patient" },
 };
 
 function timeSince(date) {
@@ -54,195 +27,175 @@ function timeSince(date) {
   return h < 24 ? `${h}h ${m % 60}m` : `${Math.floor(h / 24)}d`;
 }
 
-// ─── CSS (injected once) ──────────────────────────────────
-const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Manrope:wght@400;500;600;700&display=swap');
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  ::-webkit-scrollbar        { width: 4px; height: 4px; }
-  ::-webkit-scrollbar-track  { background: transparent; }
-  ::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.1); border-radius: 2px; }
+/* ── Inline SVG icons ── */
+const Ic = {
+  grid: (p) => (
+    <svg width={p.size || 18} height={p.size || 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  ),
+  users: (p) => (
+    <svg width={p.size || 18} height={p.size || 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+  video: (p) => (
+    <svg width={p.size || 18} height={p.size || 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
+  ),
+  settings: (p) => (
+    <svg width={p.size || 18} height={p.size || 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  ),
+  logout: (p) => (
+    <svg width={p.size || 18} height={p.size || 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  ),
+  phone: (p) => (
+    <svg width={p.size || 14} height={p.size || 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  ),
+  check: (p) => (
+    <svg width={p.size || 14} height={p.size || 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  ),
+  eye: (p) => (
+    <svg width={p.size || 14} height={p.size || 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+  arrowRight: (p) => (
+    <svg width={p.size || 14} height={p.size || 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
+    </svg>
+  ),
+  x: (p) => (
+    <svg width={p.size || 14} height={p.size || 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+    </svg>
+  ),
+  plus: (p) => (
+    <svg width={p.size || 14} height={p.size || 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14" /><path d="M12 5v14" />
+    </svg>
+  ),
+};
 
-  .civtech-root {
-    display: flex; height: 100vh; overflow: hidden;
-    background: ${T.bg}; font-family: 'Manrope', sans-serif; color: ${T.text};
-    position: relative;
-  }
-  .civtech-root::before {
-    content: '';
-    position: fixed; top: -200px; left: -100px; width: 600px; height: 600px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(0,212,170,0.08) 0%, transparent 70%);
-    filter: blur(60px); pointer-events: none; z-index: 0;
-  }
-  .civtech-root::after {
-    content: '';
-    position: fixed; bottom: -100px; right: -100px; width: 500px; height: 500px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(77,143,255,0.06) 0%, transparent 70%);
-    filter: blur(60px); pointer-events: none; z-index: 0;
-  }
+/* ── Donut chart — risk distribution (inline SVG, animated) ── */
+function RiskDonut({ queue }) {
+  const counts = {
+    critical: queue.filter((a) => a.risk_score === "critical").length,
+    moderate: queue.filter((a) => a.risk_score === "moderate").length,
+    low: queue.filter((a) => a.risk_score === "low").length,
+  };
+  const total = counts.critical + counts.moderate + counts.low;
+  const R = 52;
+  const CIRC = 2 * Math.PI * R;
 
-  .ct-sidebar {
-    width: 216px; flex-shrink: 0; position: relative; z-index: 10;
-    background: rgba(255,255,255,0.03);
-    border-right: 1px solid rgba(255,255,255,0.07);
-    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-    display: flex; flex-direction: column; padding: 22px 14px 18px;
-  }
-  .ct-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 17px; color: ${T.accent}; letter-spacing: -0.5px; text-shadow: 0 0 20px rgba(0,212,170,0.4); }
-  .ct-logo-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: ${T.muted}; margin-top: 3px; }
+  let offset = 0;
+  const segments = total > 0
+    ? ["critical", "moderate", "low"].map((k) => {
+        const frac = counts[k] / total;
+        const seg = { key: k, color: RISK[k].color, dash: frac * CIRC, offset };
+        offset += frac * CIRC;
+        return seg;
+      })
+    : [];
 
-  .ct-section-label {
-    font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-    color: rgba(255,255,255,0.2); padding: 0 10px; margin: 0 0 6px;
-  }
-  .ct-nav-btn {
-    display: flex; align-items: center; gap: 9px;
-    padding: 10px 12px; border-radius: 10px; width: 100%; text-align: left;
-    border: none; background: none; cursor: pointer;
-    color: rgba(255,255,255,0.4); font-size: 13px; font-family: 'Manrope', sans-serif; font-weight: 500;
-    transition: all 0.15s;
-  }
-  .ct-nav-btn:hover  { background: rgba(255,255,255,0.06); color: ${T.text}; }
-  .ct-nav-btn.active { background: ${T.accentBg}; color: ${T.accent}; border: 1px solid ${T.accentBd}; }
-  .ct-nav-btn.danger:hover { color: ${T.red}; background: ${T.redBg}; }
+  return (
+    <div className="dd-panel dd-donut-card">
+      <div className="dd-panel-head">
+        <h3 className="dd-panel-title">Risk distribution</h3>
+        <span className="dd-panel-sub">today&apos;s queue</span>
+      </div>
+      <div className="dd-donut-body">
+        <div className="dd-donut-wrap">
+          <svg width="132" height="132" viewBox="0 0 132 132" role="img" aria-label={`Risk distribution: ${counts.critical} critical, ${counts.moderate} moderate, ${counts.low} low`}>
+            <circle cx="66" cy="66" r={R} fill="none" stroke="#eef1f7" strokeWidth="14" />
+            {segments.map((s) => (
+              <circle
+                key={s.key}
+                cx="66" cy="66" r={R} fill="none"
+                stroke={s.color} strokeWidth="14"
+                strokeDasharray={`${s.dash} ${CIRC - s.dash}`}
+                strokeDashoffset={-s.offset}
+                transform="rotate(-90 66 66)"
+                style={{ transition: "stroke-dasharray 0.8s cubic-bezier(0.22,1,0.36,1), stroke-dashoffset 0.8s cubic-bezier(0.22,1,0.36,1)" }}
+              />
+            ))}
+          </svg>
+          <div className="dd-donut-center">
+            <span className="dd-donut-total">{total}</span>
+            <span className="dd-donut-total-label">in queue</span>
+          </div>
+        </div>
+        <div className="dd-donut-legend">
+          {["critical", "moderate", "low"].map((k) => (
+            <div key={k} className="dd-legend-row">
+              <span className="dd-legend-dot" style={{ background: RISK[k].color }} />
+              <span className="dd-legend-label">{RISK[k].label}</span>
+              <span className="dd-legend-value">{counts[k]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  .ct-badge {
-    margin-left: auto; border-radius: 10px; padding: 2px 7px;
-    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
-  }
-  .ct-avatar {
-    width: 40px; height: 40px; border-radius: 50%;
-    background: linear-gradient(135deg, rgba(0,212,170,0.3), rgba(77,143,255,0.2));
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px; font-weight: 700; color: ${T.accent}; flex-shrink: 0;
-    border: 1px solid ${T.accentBd};
-    box-shadow: 0 0 20px rgba(0,212,170,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
-  }
-  .ct-status-pill {
-    display: flex; align-items: center; gap: 7px;
-    border-radius: 10px; padding: 8px 12px; width: 100%;
-    border: 1px solid transparent; background: none; cursor: pointer;
-    font-family: 'Manrope', sans-serif; font-size: 12px; font-weight: 600;
-    transition: all 0.15s; margin-bottom: 6px;
-  }
-  .ct-status-pill .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+/* ── Bar chart — queue arrivals by hour (last 6 hours) ── */
+function ArrivalsBars({ queue }) {
+  const buckets = useMemo(() => {
+    const now = new Date();
+    const list = [];
+    for (let i = 5; i >= 0; i--) {
+      const h = new Date(now.getTime() - i * 3600000);
+      const label = h.toLocaleTimeString("en-KE", { hour: "numeric" });
+      const count = queue.filter((a) => {
+        if (!a.arrived_at) return false;
+        const diff = now - new Date(a.arrived_at);
+        return diff >= i * 3600000 && diff < (i + 1) * 3600000;
+      }).length;
+      list.push({ label, count });
+    }
+    return list;
+  }, [queue]);
 
-  .ct-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; z-index: 10; }
-  .ct-header {
-    padding: 14px 26px; border-bottom: 1px solid rgba(255,255,255,0.07);
-    background: rgba(11,11,14,0.7); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
-  }
-  .ct-header-crumb { font-family: 'DM Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.3); }
-  .ct-header-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 20px; color: ${T.text}; margin-top: 2px; }
-  .ct-content { flex: 1; overflow-y: auto; padding: 22px 26px; }
+  const max = Math.max(1, ...buckets.map((b) => b.count));
 
-  .ct-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-  .ct-stat-card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-radius: 18px; padding: 20px 20px;
-    border-top-width: 2px;
-    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-    animation: fadeUp 0.4s ease both;
-    position: relative; overflow: hidden;
-  }
-  .ct-stat-card::before {
-    content:''; position:absolute; inset:0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 60%);
-    pointer-events:none;
-  }
-  .ct-stat-card:hover { border-color: rgba(255,255,255,0.14); box-shadow: 0 12px 40px rgba(0,0,0,0.3); transform: translateY(-2px); }
-  .ct-stat-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: rgba(255,255,255,0.35); margin-bottom: 12px; text-transform: uppercase; }
-  .ct-stat-value { font-family: 'DM Mono', monospace; font-size: 36px; font-weight: 500; line-height: 1; }
-  .ct-stat-sub   { font-size: 11px; color: rgba(255,255,255,0.25); margin-top: 8px; }
-
-  .ct-grid { display: grid; grid-template-columns: 1fr 292px; gap: 16px; }
-
-  .ct-panel {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-radius: 18px; overflow: hidden;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    animation: fadeUp 0.45s ease both;
-    position: relative;
-  }
-  .ct-panel::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
-    pointer-events:none;
-  }
-  .ct-panel:hover { border-color: rgba(255,255,255,0.12); box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
-  .ct-panel-header {
-    padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.06);
-    display: flex; align-items: center; justify-content: space-between;
-    font-size: 13px; font-weight: 600; color: ${T.text};
-    background: rgba(255,255,255,0.02);
-  }
-  .ct-panel-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.25); }
-
-  .ct-table { width: 100%; border-collapse: collapse; }
-  .ct-table th { padding: 10px 18px; text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: rgba(255,255,255,0.25); border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); text-transform: uppercase; }
-  .ct-table tr.data-row { transition: background 0.12s; cursor: pointer; }
-  .ct-table tr.data-row:hover { background: rgba(255,255,255,0.04); }
-  .ct-table td { padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
-
-  .ct-risk-badge {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 4px 11px; border-radius: 20px;
-    font-size: 11px; font-weight: 700;
-    border: 1px solid transparent;
-    backdrop-filter: blur(8px);
-  }
-  .ct-risk-dot { width: 6px; height: 6px; border-radius: 50%; }
-
-  .ct-btn {
-    border: none; border-radius: 9px; padding: 6px 15px;
-    font-size: 12px; font-weight: 600; cursor: pointer;
-    font-family: 'Manrope', sans-serif;
-    transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
-    backdrop-filter: blur(8px);
-  }
-  .ct-btn:hover:not(:disabled) { opacity:0.9; transform:translateY(-1px); box-shadow:0 6px 20px rgba(0,0,0,0.3); }
-  .ct-btn:active:not(:disabled){ transform:translateY(0); }
-  .ct-btn:disabled { opacity:0.35; cursor:default; }
-
-  .ct-feed-item { padding: 13px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-  .ct-feed-item:last-child { border-bottom: none; }
-  .ct-tag { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 5px; }
-  .ct-activity-row { display:flex; align-items:center; gap:10px; padding:10px 20px; border-bottom:1px solid rgba(255,255,255,0.05); }
-  .ct-activity-row:last-child { border-bottom:none; }
-  .ct-activity-icon { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
-
-  .ct-live { display:inline-flex; align-items:center; gap:6px; }
-  .ct-live-dot {
-    width:8px; height:8px; border-radius:50%;
-    background:${T.accent}; animation:livePulse 2s infinite;
-    box-shadow:0 0 10px ${T.accent};
-  }
-  @keyframes livePulse {
-    0%,100% { opacity:1; box-shadow:0 0 10px ${T.accent}; }
-    50%      { opacity:0.3; box-shadow:0 0 3px ${T.accent}; }
-  }
-  .ct-consult-card {
-    background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
-    backdrop-filter:blur(20px); border-radius:18px;
-    padding:20px; transition:border-color 0.15s, box-shadow 0.2s, transform 0.2s;
-    animation:fadeUp 0.4s ease both; position:relative; overflow:hidden;
-  }
-  .ct-consult-card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,255,255,0.03),transparent 60%); pointer-events:none; }
-  .ct-consult-card:hover { border-color:rgba(255,255,255,0.14); box-shadow:0 12px 40px rgba(0,0,0,0.25); transform:translateY(-2px); }
-  .ct-status-chip {
-    display:flex; align-items:center; gap:6px;
-    padding:6px 14px; border-radius:20px;
-    font-size:12px; font-weight:600; border:1px solid;
-    backdrop-filter:blur(8px);
-  }
-  @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-`;
+  return (
+    <div className="dd-panel">
+      <div className="dd-panel-head">
+        <h3 className="dd-panel-title">Arrivals</h3>
+        <span className="dd-panel-sub">last 6 hours</span>
+      </div>
+      <div className="dd-bars">
+        {buckets.map((b, i) => (
+          <div key={i} className="dd-bar-col">
+            <span className="dd-bar-count">{b.count > 0 ? b.count : ""}</span>
+            <div
+              className="dd-bar"
+              style={{
+                height: `${Math.max(6, (b.count / max) * 72)}px`,
+                background: b.count > 0 ? "#2563eb" : "#e6eaf2",
+                animationDelay: `${i * 0.06}s`,
+              }}
+            />
+            <span className="dd-bar-label">{b.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -351,15 +304,13 @@ export default function Dashboard() {
       const newDoc = { ...doctor, ...settingsForm, breaks: JSON.stringify(settingsForm.breaks) };
       localStorage.setItem("civtech_doctor", JSON.stringify(newDoc));
       alert("Settings saved successfully.");
-      window.location.reload(); // Quick refresh to re-apply timers and state
+      window.location.reload();
     } catch {
       alert("Failed to save settings.");
     } finally {
       setSavingSettings(false);
     }
   };
-
-
 
   // ── Load queue ──
   const loadQueue = useCallback(async () => {
@@ -392,7 +343,6 @@ export default function Dashboard() {
   useEffect(() => {
     if (view === "consults") loadConsults();
   }, [view, loadConsults]);
-
 
   // ── WebSocket ──
   useWebSocket(doctor.hospital_id, (data) => {
@@ -432,7 +382,7 @@ export default function Dashboard() {
     setCalling(appt.id);
     try {
       await callPatient({ appointment_id: appt.id, doctor_id: doctor.id });
-      await loadQueue(); // ← refreshes queue AND triggers WebSocket broadcast to all doctors
+      await loadQueue();
     } catch {
       alert("Could not notify patient. Please try again.");
     } finally {
@@ -447,422 +397,643 @@ export default function Dashboard() {
 
   const critical = queue.filter((a) => a.risk_score === "critical").length;
   const moderate = queue.filter((a) => a.risk_score === "moderate").length;
+  const called = queue.filter((a) => a.status === "called").length;
   const sCfg = STATUS_CFG[status] || STATUS_CFG.available;
   const doctorName = doctor.full_name || doctor.name || "Doctor";
   const initials = doctorName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const firstName = doctorName.split(" ")[0];
+
+  const patientInitials = (name) =>
+    (name || "?").split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const navItems = [
+    { id: "queue", label: "Patient Queue", icon: <Ic.users size={19} />, badge: queue.length },
+    { id: "consults", label: "Consultations", icon: <Ic.video size={19} /> },
+    { id: "settings", label: "Settings", icon: <Ic.settings size={19} /> },
+  ];
 
   return (
-    <>
-      <style>{CSS}</style>
-      <div className="civtech-root">
+    <div className="theme-light dd-root">
+      <style>{DD_CSS}</style>
 
-        {/* ════════════════ SIDEBAR ════════════════ */}
-        <aside className="ct-sidebar">
+      {/* ════ Slim icon sidebar (desktop) / bottom nav (mobile) ════ */}
+      <aside className="dd-sidebar" aria-label="Navigation">
+        <div className="dd-sidebar-logo" aria-hidden="true">C</div>
+        <nav className="dd-sidebar-nav">
+          {navItems.map((n) => (
+            <button
+              key={n.id}
+              className={`dd-side-btn ${view === n.id ? "active" : ""}`}
+              onClick={() => setView(n.id)}
+              title={n.label}
+              aria-label={n.label}
+              aria-current={view === n.id ? "page" : undefined}
+            >
+              {n.icon}
+              {n.badge > 0 && <span className="dd-side-badge">{n.badge}</span>}
+            </button>
+          ))}
+        </nav>
+        <button
+          className="dd-side-btn dd-side-logout"
+          onClick={() => { localStorage.clear(); navigate("/doctor"); }}
+          title="Logout" aria-label="Logout"
+        >
+          <Ic.logout size={19} />
+        </button>
+      </aside>
 
-          {/* Logo */}
-          <div style={{ marginBottom: 28 }}>
-            <div className="ct-logo">CivCare</div>
-            <div className="ct-logo-sub">Doctor Portal</div>
+      {/* ════ Main ════ */}
+      <div className="dd-main">
+
+        {/* Header */}
+        <header className="dd-header">
+          <div className="dd-header-left">
+            <h1 className="dd-hello">Hello, Dr. {firstName}</h1>
+            <p className="dd-hello-sub">
+              {doctor.hospital_name || "Hospital"} · {new Date().toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "short" })}
+            </p>
           </div>
-
-          {/* Nav */}
-          <div style={{ flex: 1 }}>
-            <p className="ct-section-label">WORKSPACE</p>
-            <button className={`ct-nav-btn ${view === "queue" ? "active" : ""}`} onClick={() => setView("queue")}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              Patient Queue
-              {queue.length > 0 && (
-                <span className="ct-badge" style={{
-                  background: view === "queue" ? T.accent : T.dim,
-                  color: view === "queue" ? T.bg : T.muted,
-                }}>
-                  {queue.length}
-                </span>
-              )}
-            </button>
-            <button className={`ct-nav-btn ${view === "consults" ? "active" : ""}`} onClick={() => setView("consults")}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-              </svg>
-              Consultations
-            </button>
-            <button className={`ct-nav-btn ${view === "settings" ? "active" : ""}`} onClick={() => setView("settings")}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-              </svg>
-              Settings
-            </button>
-          </div>
-
-          {/* Doctor card */}
-          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <div className="ct-avatar">{initials}</div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  Dr. {doctorName}
-                </div>
-                <div style={{ fontSize: 11, color: T.muted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {doctor.specialisation || "General Practitioner"}
-                </div>
-              </div>
-            </div>
-
-            {/* Status switcher */}
-            <p className="ct-section-label" style={{ marginBottom: 8 }}>STATUS</p>
-            {[
-              { id: "available", color: T.green, bg: T.greenBg, bd: T.greenBd, label: "Available" },
-              { id: "on_break", color: T.amber, bg: T.amberBg, bd: T.amberBd, label: "On Break" },
-              { id: "offline", color: T.red, bg: T.redBg, bd: T.redBd, label: "Offline" },
-            ].map((s) => (
-              <button key={s.id} className="ct-status-pill" onClick={() => handleStatusChange(s.id)}
-                style={{
-                  background: status === s.id ? s.bg : "transparent",
-                  color: status === s.id ? s.color : T.dim,
-                  borderColor: status === s.id ? s.bd : T.border,
-                }}>
-                <span className="dot" style={{ background: s.color, opacity: status === s.id ? 1 : 0.35 }} />
-                {s.label}
-              </button>
-            ))}
-
-            <button className="ct-nav-btn danger" style={{ marginTop: 6 }}
-              onClick={() => { localStorage.clear(); navigate("/doctor"); }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-              Logout
-            </button>
-          </div>
-        </aside>
-
-        {/* ════════════════ MAIN ════════════════ */}
-        <main className="ct-main">
-
-          {/* Header */}
-          <header className="ct-header">
-            <div>
-              <div className="ct-header-crumb">
-                {doctor.hospital_name || "Hospital"} / {view === "queue" ? "Patient Queue" : view === "consults" ? "Consultations" : "Settings"}
-              </div>
-              <div className="ct-header-title">
-                {view === "queue" ? "Patient Queue" : view === "consults" ? "Online Consultations" : "Settings"}
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: T.muted }}>
-                {new Date().toLocaleDateString("en-KE", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
-              </div>
-              <div className="ct-status-chip" style={{
-                background: sCfg.bg,
-                color: sCfg.color,
-                borderColor: sCfg.bd,
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: sCfg.color }} />
-                {sCfg.label}
-              </div>
-            </div>
-          </header>
-
-          {/* Scrollable content */}
-          <div className="ct-content">
-
-            {/* ── Stat cards ── */}
-            <div className="ct-stats">
+          <div className="dd-header-right">
+            <div className="dd-status-group" role="group" aria-label="Set availability status">
               {[
-                { label: "IN QUEUE", value: queue.length, sub: "patients waiting", color: T.accent, bg: T.accentBg },
-                { label: "CRITICAL", value: critical, sub: "need attention now", color: T.red, bg: T.redBg },
-                { label: "MODERATE", value: moderate, sub: "monitoring needed", color: T.amber, bg: T.amberBg },
-                { label: "MY STATUS", value: sCfg.label, sub: countdown || "current availability", color: sCfg.color, bg: sCfg.bg },
-              ].map(({ label, value, sub, color, bg }) => (
-                <div key={label} className="ct-stat-card" style={{ borderTopColor: color }}>
-                  <div className="ct-stat-label">{label}</div>
-                  <div className="ct-stat-value" style={{ color }}>{value}</div>
-                  <div className="ct-stat-sub">{sub}</div>
+                { id: "available", label: "Available" },
+                { id: "on_break", label: "Break" },
+                { id: "offline", label: "Offline" },
+              ].map((s) => {
+                const cfg = STATUS_CFG[s.id];
+                const active = status === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    className={`dd-status-btn ${active ? "active" : ""}`}
+                    onClick={() => handleStatusChange(s.id)}
+                    style={active ? { background: cfg.bg, color: cfg.color, borderColor: cfg.color } : {}}
+                    aria-pressed={active}
+                  >
+                    <span className="dd-status-dot" style={{ background: cfg.color, opacity: active ? 1 : 0.3 }} />
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="dd-avatar" title={`Dr. ${doctorName} — ${doctor.specialisation || "General Practitioner"}`}>
+              {initials}
+            </div>
+          </div>
+        </header>
+
+        {/* Scrollable content */}
+        <div className="dd-content">
+
+          {/* ── Blue insights hero ── */}
+          <section className="dd-hero" aria-label="Daily insights">
+            <div className="dd-hero-glass" aria-hidden="true" />
+            <div className="dd-hero-top">
+              <div>
+                <h2 className="dd-hero-title">Insights and summary</h2>
+                <p className="dd-hero-sub">{countdown || "Your live workload overview"}</p>
+              </div>
+              <span className="dd-hero-chip">
+                <span className="dd-hero-chip-dot" style={{ background: sCfg.color === "#dc2626" ? "#fca5a5" : "#86efac" }} />
+                {sCfg.label}
+              </span>
+            </div>
+            <div className="dd-hero-stats">
+              {[
+                { label: "In queue", value: queue.length },
+                { label: "Critical", value: critical },
+                { label: "Moderate", value: moderate },
+                { label: "Called", value: called },
+              ].map((st) => (
+                <div key={st.label} className="dd-hero-stat">
+                  <span className="dd-hero-stat-value">{st.value}</span>
+                  <span className="dd-hero-stat-label">{st.label}</span>
                 </div>
               ))}
             </div>
+          </section>
 
-            {/* ── Queue view ── */}
-            {view === "queue" && (
-              <div className="ct-grid">
-
-                {/* Queue table */}
-                <div className="ct-panel">
-                  <div className="ct-panel-header">
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span className="ct-live"><span className="ct-live-dot" /></span>
-                      Live Queue
-                    </div>
-                    <span className="ct-panel-sub">sorted by risk · {queue.length} patient{queue.length !== 1 ? "s" : ""}</span>
+          {/* ── Queue view ── */}
+          {view === "queue" && (
+            <div className="dd-grid">
+              {/* Left: queue list */}
+              <div className="dd-panel dd-queue-panel">
+                <div className="dd-panel-head">
+                  <div className="dd-panel-title-wrap">
+                    <span className="dd-live-dot" aria-hidden="true" />
+                    <h3 className="dd-panel-title">Patient queue</h3>
                   </div>
-
-                  {loading ? (
-                    <div style={{ padding: 40, textAlign: "center", color: T.muted, fontSize: 13 }}>
-                      Loading queue...
-                    </div>
-                  ) : queue.length === 0 ? (
-                    <div style={{ padding: 40, textAlign: "center" }}>
-                      <div style={{ fontSize: 32, marginBottom: 10 }}>—</div>
-                      <div style={{ fontWeight: 600, color: T.text, marginBottom: 6 }}>Queue is clear</div>
-                      <div style={{ fontSize: 12, color: T.muted }}>No patients waiting right now.</div>
-                    </div>
-                  ) : (
-                    <table className="ct-table">
-                      <thead>
-                        <tr>
-                          {["#", "Patient", "Risk", "Symptoms", "Arrived", "Actions"].map((h) => (
-                            <th key={h}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedQueue.map((appt, idx) => {
-                          const r = RISK[appt.risk_score] || RISK.moderate;
-                          const isCalling = calling === appt.id;
-                          const called = appt.status === "called";
-                          return (
-                            <tr key={appt.id} className="data-row"
-                              style={{ borderLeft: `3px solid ${r.color}` }}
-                              onClick={() => navigate(`/doctor/patient/${appt.id}`)}>
-                              <td>
-                                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: T.dim }}>{idx + 1}</span>
-                              </td>
-                              <td>
-                                <div style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{appt.patient_name}</div>
-                                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: T.muted, marginTop: 2 }}>{appt.patient_phone}</div>
-                              </td>
-                              <td>
-                                <span className="ct-risk-badge" style={{ background: r.bg, color: r.color }}>
-                                  <span className="ct-risk-dot" style={{ background: r.color }} />
-                                  {r.label}
-                                </span>
-                                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: T.dim, marginTop: 4 }}>{appt.risk_numeric}/100</div>
-                              </td>
-                              <td style={{ maxWidth: 180 }}>
-                                <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                                  {appt.symptoms_summary || appt.ai_assessment?.slice(0, 90) || "—"}
-                                </div>
-                              </td>
-                              <td>
-                                <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: T.dim, whiteSpace: "nowrap" }}>
-                                  {appt.arrived_at ? timeSince(appt.arrived_at) : "Pending"}
-                                </span>
-                              </td>
-                              <td onClick={(e) => e.stopPropagation()}>
-                                <div style={{ display: "flex", gap: 6 }}>
-                                  <button className="ct-btn" disabled={isCalling || called}
-                                    onClick={() => handleCall(appt)}
-                                    style={{ background: called ? T.greenBg : T.accentBg, color: called ? T.green : T.accent }}>
-                                    {isCalling ? "..." : called ? "Called ✓" : "Call"}
-                                  </button>
-                                  <button className="ct-btn"
-                                    style={{ background: T.cardHi, color: T.muted }}
-                                    onClick={() => navigate(`/doctor/patient/${appt.id}`)}>
-                                    View
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
+                  <span className="dd-panel-sub">sorted by risk · {queue.length} patient{queue.length !== 1 ? "s" : ""}</span>
                 </div>
 
-                {/* Right panel */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-
-                  {/* AI Triage Feed */}
-                  <div className="ct-panel" style={{ flex: 1 }}>
-                    <div className="ct-panel-header">
-                      AI Triage Feed
-                      <span className="ct-live"><span className="ct-live-dot" /></span>
-                    </div>
-                    <div>
-                      {sortedQueue.slice(0, 4).map((appt, i) => {
-                        const r = RISK[appt.risk_score] || RISK.moderate;
-                        return (
-                          <div key={appt.id} className="ct-feed-item">
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-                              <span className="ct-tag" style={{ background: r.bg, color: r.color }}>
-                                {(appt.risk_score || "").toUpperCase()}
-                              </span>
-                              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: T.dim, marginLeft: "auto" }}>
-                                {appt.arrived_at ? timeSince(appt.arrived_at) : "—"}
-                              </span>
-                            </div>
-                            <p style={{ fontSize: 12, color: T.muted, lineHeight: 1.55, fontWeight: 500 }}>
-                              <span style={{ color: T.text }}>{appt.patient_name}</span>
-                              {appt.ai_assessment
-                                ? ` — ${appt.ai_assessment.slice(0, 90)}${appt.ai_assessment.length > 90 ? "..." : ""}`
-                                : appt.symptoms_summary
-                                  ? ` — ${appt.symptoms_summary.slice(0, 90)}`
-                                  : ""}
-                            </p>
-                          </div>
-                        );
-                      })}
-                      {queue.length === 0 && (
-                        <div style={{ padding: "20px 16px", fontSize: 12, color: T.dim, textAlign: "center" }}>
-                          No triage data yet
-                        </div>
-                      )}
-                    </div>
+                {loading ? (
+                  <div className="dd-empty">Loading queue…</div>
+                ) : queue.length === 0 ? (
+                  <div className="dd-empty">
+                    <p className="dd-empty-title">Queue is clear</p>
+                    <p className="dd-empty-sub">No patients waiting right now.</p>
                   </div>
-
-                  {/* Queue summary */}
-                  <div className="ct-panel">
-                    <div className="ct-panel-header">Queue Summary</div>
-                    <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {[
-                        { label: "Critical", value: queue.filter(a => a.risk_score === "critical").length, color: T.red },
-                        { label: "Moderate", value: queue.filter(a => a.risk_score === "moderate").length, color: T.amber },
-                        { label: "Low Risk", value: queue.filter(a => a.risk_score === "low").length, color: T.green },
-                        { label: "Called / Ready", value: queue.filter(a => a.status === "called").length, color: T.blue },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
-                            <span style={{ fontSize: 12, color: T.muted }}>{label}</span>
+                ) : (
+                  <div className="dd-rows" role="list">
+                    {sortedQueue.map((appt, idx) => {
+                      const r = RISK[appt.risk_score] || RISK.moderate;
+                      const isCalling = calling === appt.id;
+                      const wasCalled = appt.status === "called";
+                      return (
+                        <div
+                          key={appt.id}
+                          role="listitem"
+                          className="dd-row"
+                          style={{ animationDelay: `${idx * 0.04}s` }}
+                          onClick={() => navigate(`/doctor/patient/${appt.id}`)}
+                        >
+                          <div className="dd-row-avatar" style={{ background: r.bg, color: r.color }}>
+                            {patientInitials(appt.patient_name)}
                           </div>
-                          <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 500, color: value > 0 ? color : T.dim }}>
-                            {value}
+                          <div className="dd-row-who">
+                            <span className="dd-row-name">{appt.patient_name}</span>
+                            <span className="dd-row-sub">{appt.symptoms_summary || appt.ai_assessment?.slice(0, 70) || appt.patient_phone || "—"}</span>
+                          </div>
+                          <span className="dd-badge" style={{ background: r.bg, color: r.color }}>
+                            <span className="dd-badge-dot" style={{ background: r.color }} />
+                            {r.label}
                           </span>
+                          <span className="dd-row-time">{appt.arrived_at ? timeSince(appt.arrived_at) : "Pending"}</span>
+                          <div className="dd-row-actions" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className={`dd-action ${wasCalled ? "done" : "primary"}`}
+                              disabled={isCalling || wasCalled}
+                              onClick={() => handleCall(appt)}
+                            >
+                              {isCalling ? "…" : wasCalled ? <><Ic.check size={13} /> Called</> : <><Ic.phone size={13} /> Call</>}
+                            </button>
+                            <button className="dd-action" onClick={() => navigate(`/doctor/patient/${appt.id}`)} aria-label={`View ${appt.patient_name}`}>
+                              <Ic.eye size={13} /> View
+                            </button>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── Consultations view ── */}
-            {view === "consults" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 4 }}>
-                  <span className="ct-live"><span className="ct-live-dot" /></span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Pending Consultations</span>
-                  <span style={{ marginLeft: "auto", fontFamily: "'DM Mono', monospace", fontSize: 10, color: T.dim }}>
-                    {consults.length} waiting
-                  </span>
-                </div>
-
-                {consultsLoading && (
-                  <div style={{ padding: 40, textAlign: "center", color: T.muted, fontSize: 13 }}>
-                    Loading consultations...
+                      );
+                    })}
                   </div>
                 )}
-
-                {!consultsLoading && consults.length === 0 && (
-                  <div className="ct-panel" style={{ padding: 40, textAlign: "center" }}>
-                    <div style={{ fontSize: 28, marginBottom: 10, color: T.dim }}>—</div>
-                    <div style={{ fontWeight: 600, color: T.text, marginBottom: 6 }}>No pending consultations</div>
-                    <div style={{ fontSize: 12, color: T.muted }}>Patients who book online will appear here.</div>
-                  </div>
-                )}
-
-                {!consultsLoading && consults.map((c) => (
-                  <div key={c.id} className="ct-panel" style={{ padding: 18, display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: T.text, marginBottom: 3 }}>{c.patient_name}</div>
-                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: T.accent, marginBottom: 8 }}>{c.patient_phone}</div>
-                      <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                        {c.symptoms_summary}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 18, fontWeight: 500, color: T.accent, marginBottom: 4 }}>
-                        KES {c.fee_amount?.toLocaleString()}
-                      </div>
-                      <div style={{ fontSize: 10, color: T.dim, marginBottom: 12, fontFamily: "'DM Mono', monospace" }}>
-                        {c.started ? timeSince(c.started) : "—"}
-                      </div>
-                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                        <a href={`tel:${c.patient_phone}`} style={{ textDecoration: "none" }}>
-                          <button className="ct-btn" style={{ background: T.greenBg, color: T.green }}>Call</button>
-                        </a>
-                        <button className="ct-btn" style={{ background: T.accentBg, color: T.accent }}
-                          onClick={() => navigate(`/doctor/consult/${c.id}`)}>
-                          Open →
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
               </div>
-            )}
 
-            {/* ── Settings view ── */}
-            {view === "settings" && (
-              <div className="ct-panel" style={{ padding: 24, maxWidth: 600 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>Shift & Breaks Configuration</div>
+              {/* Right: charts */}
+              <div className="dd-side-col">
+                <RiskDonut queue={queue} />
+                <ArrivalsBars queue={queue} />
+              </div>
+            </div>
+          )}
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, color: T.muted, marginBottom: 6, fontWeight: 600 }}>SHIFT START</label>
-                    <input type="time" value={settingsForm.shift_start} onChange={e => setSettingsForm({ ...settingsForm, shift_start: e.target.value })}
-                      style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: `1px solid ${T.border}`, background: "rgba(0,0,0,0.2)", color: T.text, outline: "none", fontFamily: "'DM Mono', monospace" }} />
+          {/* ── Consultations view ── */}
+          {view === "consults" && (
+            <div className="dd-consults">
+              <div className="dd-panel-head dd-consults-head">
+                <div className="dd-panel-title-wrap">
+                  <span className="dd-live-dot" aria-hidden="true" />
+                  <h3 className="dd-panel-title">Pending consultations</h3>
+                </div>
+                <span className="dd-panel-sub">{consults.length} waiting</span>
+              </div>
+
+              {consultsLoading && <div className="dd-panel dd-empty">Loading consultations…</div>}
+
+              {!consultsLoading && consults.length === 0 && (
+                <div className="dd-panel dd-empty">
+                  <p className="dd-empty-title">No pending consultations</p>
+                  <p className="dd-empty-sub">Patients who book online will appear here.</p>
+                </div>
+              )}
+
+              {!consultsLoading && consults.map((c, i) => (
+                <div key={c.id} className="dd-panel dd-consult" style={{ animationDelay: `${i * 0.05}s` }}>
+                  <div className="dd-row-avatar dd-consult-avatar">{patientInitials(c.patient_name)}</div>
+                  <div className="dd-consult-body">
+                    <span className="dd-row-name">{c.patient_name}</span>
+                    <span className="dd-consult-phone">{c.patient_phone}</span>
+                    <span className="dd-row-sub">{c.symptoms_summary}</span>
                   </div>
-                  <div>
-                    <label style={{ display: "block", fontSize: 11, color: T.muted, marginBottom: 6, fontWeight: 600 }}>SHIFT END</label>
-                    <input type="time" value={settingsForm.shift_end} onChange={e => setSettingsForm({ ...settingsForm, shift_end: e.target.value })}
-                      style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: `1px solid ${T.border}`, background: "rgba(0,0,0,0.2)", color: T.text, outline: "none", fontFamily: "'DM Mono', monospace" }} />
+                  <div className="dd-consult-right">
+                    <span className="dd-consult-fee">KES {c.fee_amount?.toLocaleString()}</span>
+                    <span className="dd-consult-time">{c.started ? timeSince(c.started) : "—"}</span>
+                    <div className="dd-row-actions">
+                      <a href={`tel:${c.patient_phone}`} style={{ textDecoration: "none" }}>
+                        <button className="dd-action"><Ic.phone size={13} /> Call</button>
+                      </a>
+                      <button className="dd-action primary" onClick={() => navigate(`/doctor/consult/${c.id}`)}>
+                        Open <Ic.arrowRight size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
 
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Breaks</div>
-                {settingsForm.breaks.map((b, idx) => (
-                  <div key={idx} style={{ display: "flex", gap: 12, marginBottom: 12, alignItems: "center" }}>
-                    <input type="text" placeholder="e.g. Lunch" value={b.title} onChange={e => {
+          {/* ── Settings view ── */}
+          {view === "settings" && (
+            <div className="dd-panel dd-settings">
+              <h3 className="dd-settings-title">Shift &amp; breaks configuration</h3>
+
+              <div className="dd-settings-grid">
+                <div>
+                  <label className="dd-label" htmlFor="shift-start">Shift start</label>
+                  <input id="shift-start" className="dd-input" type="time" value={settingsForm.shift_start}
+                    onChange={e => setSettingsForm({ ...settingsForm, shift_start: e.target.value })} />
+                </div>
+                <div>
+                  <label className="dd-label" htmlFor="shift-end">Shift end</label>
+                  <input id="shift-end" className="dd-input" type="time" value={settingsForm.shift_end}
+                    onChange={e => setSettingsForm({ ...settingsForm, shift_end: e.target.value })} />
+                </div>
+              </div>
+
+              <h4 className="dd-settings-subtitle">Breaks</h4>
+              {settingsForm.breaks.map((b, idx) => (
+                <div key={idx} className="dd-break-row">
+                  <input className="dd-input" type="text" placeholder="e.g. Lunch" value={b.title} onChange={e => {
+                    const newB = [...settingsForm.breaks];
+                    newB[idx].title = e.target.value;
+                    setSettingsForm({ ...settingsForm, breaks: newB });
+                  }} style={{ flex: 1 }} />
+                  <input className="dd-input" type="time" value={b.start} onChange={e => {
+                    const newB = [...settingsForm.breaks];
+                    newB[idx].start = e.target.value;
+                    setSettingsForm({ ...settingsForm, breaks: newB });
+                  }} style={{ width: 120 }} />
+                  <div className="dd-break-mins">
+                    <input className="dd-input" type="number" placeholder="Mins" value={b.duration_minutes} onChange={e => {
                       const newB = [...settingsForm.breaks];
-                      newB[idx].title = e.target.value;
+                      newB[idx].duration_minutes = e.target.value;
                       setSettingsForm({ ...settingsForm, breaks: newB });
-                    }} style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: `1px solid ${T.border}`, background: "rgba(0,0,0,0.2)", color: T.text, outline: "none" }} />
-
-                    <input type="time" value={b.start} onChange={e => {
-                      const newB = [...settingsForm.breaks];
-                      newB[idx].start = e.target.value;
-                      setSettingsForm({ ...settingsForm, breaks: newB });
-                    }} style={{ width: 120, padding: "10px 14px", borderRadius: 8, border: `1px solid ${T.border}`, background: "rgba(0,0,0,0.2)", color: T.text, outline: "none", fontFamily: "'DM Mono', monospace" }} />
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <input type="number" placeholder="Mins" value={b.duration_minutes} onChange={e => {
-                        const newB = [...settingsForm.breaks];
-                        newB[idx].duration_minutes = e.target.value;
-                        setSettingsForm({ ...settingsForm, breaks: newB });
-                      }} style={{ width: 70, padding: "10px 14px", borderRadius: 8, border: `1px solid ${T.border}`, background: "rgba(0,0,0,0.2)", color: T.text, outline: "none", fontFamily: "'DM Mono', monospace" }} />
-                      <span style={{ fontSize: 11, color: T.muted }}>mins</span>
-                    </div>
-
-                    <button onClick={() => {
-                      const newB = settingsForm.breaks.filter((_, i) => i !== idx);
-                      setSettingsForm({ ...settingsForm, breaks: newB });
-                    }} style={{ background: "none", border: "none", color: T.red, cursor: "pointer", padding: 6, opacity: 0.7 }}>✕</button>
+                    }} style={{ width: 74 }} />
+                    <span className="dd-break-mins-label">mins</span>
                   </div>
-                ))}
+                  <button className="dd-break-remove" aria-label="Remove break" onClick={() => {
+                    const newB = settingsForm.breaks.filter((_, i) => i !== idx);
+                    setSettingsForm({ ...settingsForm, breaks: newB });
+                  }}><Ic.x size={15} /></button>
+                </div>
+              ))}
 
-                <button onClick={() => setSettingsForm({ ...settingsForm, breaks: [...settingsForm.breaks, { title: "", start: "", duration_minutes: "" }] })}
-                  style={{ display: "block", marginBottom: 24, fontSize: 12, color: T.accent, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
-                  + Add Break
+              <button className="dd-add-break"
+                onClick={() => setSettingsForm({ ...settingsForm, breaks: [...settingsForm.breaks, { title: "", start: "", duration_minutes: "" }] })}>
+                <Ic.plus size={14} /> Add break
+              </button>
+
+              <div className="dd-settings-footer">
+                <button className="dd-save" onClick={handleSaveSettings} disabled={savingSettings}>
+                  {savingSettings ? "Saving…" : "Save settings"}
                 </button>
-
-                <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16, textAlign: "right" }}>
-                  <button onClick={handleSaveSettings} disabled={savingSettings} className="ct-btn" style={{ background: T.accent, color: T.bg, padding: "10px 24px", fontSize: 13 }}>
-                    {savingSettings ? "Saving..." : "Save Settings"}
-                  </button>
-                </div>
               </div>
-            )}
-
-          </div>
-        </main>
+            </div>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 }
+
+/* ── Scoped styles — light clinical admin system ── */
+const DD_CSS = `
+  .dd-root {
+    display: flex; min-height: 100vh;
+    background: var(--bg); color: var(--text);
+    font-family: 'Outfit', -apple-system, sans-serif;
+  }
+
+  /* ── Sidebar ── */
+  .dd-sidebar {
+    width: 72px; flex-shrink: 0;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 20px 0 18px; gap: 8px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    position: sticky; top: 0; height: 100vh; z-index: 50;
+  }
+  .dd-sidebar-logo {
+    width: 40px; height: 40px; border-radius: 13px; margin-bottom: 18px;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 19px;
+    box-shadow: 0 6px 20px rgba(37,99,235,0.3);
+  }
+  .dd-sidebar-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .dd-side-btn {
+    width: 44px; height: 44px; border-radius: 13px; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted);
+    transition: background 0.2s, color 0.2s, transform 0.15s;
+  }
+  .dd-side-btn:hover { background: var(--accent-bg); color: var(--accent); }
+  .dd-side-btn:active { transform: scale(0.92); }
+  .dd-side-btn.active { background: var(--accent-bg); color: var(--accent); }
+  .dd-side-btn.active::before {
+    content: ''; position: absolute; left: -14px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 22px; border-radius: 2px; background: var(--accent);
+  }
+  .dd-side-badge {
+    position: absolute; top: 4px; right: 4px;
+    min-width: 16px; height: 16px; border-radius: 8px; padding: 0 4px;
+    background: #dc2626; color: #fff;
+    font-size: 9px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .dd-side-logout:hover { background: var(--red-bg); color: var(--red); }
+
+  /* ── Main ── */
+  .dd-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  .dd-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 18px 28px;
+    position: sticky; top: 0; z-index: 40;
+    background: var(--surface-glass);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .dd-header { background: var(--surface); }
+  }
+  .dd-hello { font-size: 21px; font-weight: 800; margin: 0; letter-spacing: -0.4px; }
+  .dd-hello-sub { font-size: 12px; color: var(--text-muted); margin: 2px 0 0; }
+  .dd-header-right { display: flex; align-items: center; gap: 14px; }
+  .dd-status-group { display: flex; gap: 6px; }
+  .dd-status-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 13px; border-radius: 20px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-muted); font-size: 12px; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .dd-status-btn:hover { border-color: var(--border-hi); }
+  .dd-status-btn:active { transform: scale(0.96); }
+  .dd-status-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dd-avatar {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 700;
+    box-shadow: 0 4px 14px rgba(37,99,235,0.28);
+  }
+
+  .dd-content { flex: 1; padding: 22px 28px 90px; max-width: 1200px; width: 100%; margin: 0 auto; }
+
+  /* ── Hero ── */
+  .dd-hero {
+    position: relative; overflow: hidden;
+    border-radius: 22px; padding: 24px 26px;
+    background: linear-gradient(120deg, #1d4ed8 0%, #2563eb 55%, #3b82f6 100%);
+    color: #fff; margin-bottom: 20px;
+    box-shadow: 0 16px 44px rgba(37,99,235,0.28);
+    animation: riseIn 0.5s cubic-bezier(0.22,1,0.36,1) both;
+  }
+  .dd-hero-glass {
+    position: absolute; top: -60px; right: -40px;
+    width: 260px; height: 260px; border-radius: 50%;
+    background: rgba(255,255,255,0.1); filter: blur(2px);
+    pointer-events: none;
+  }
+  .dd-hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; position: relative; }
+  .dd-hero-title { font-size: 18px; font-weight: 700; margin: 0; letter-spacing: -0.2px; }
+  .dd-hero-sub { font-size: 12px; color: rgba(255,255,255,0.75); margin: 4px 0 0; }
+  .dd-hero-chip {
+    display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
+    padding: 6px 13px; border-radius: 20px;
+    background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.22);
+    font-size: 12px; font-weight: 600; color: #fff;
+    backdrop-filter: blur(8px);
+  }
+  .dd-hero-chip-dot { width: 7px; height: 7px; border-radius: 50%; animation: softPulse 2s infinite; }
+  .dd-hero-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-top: 22px; position: relative;
+  }
+  .dd-hero-stat {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 12px 16px; border-radius: 14px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.14);
+  }
+  .dd-hero-stat-value {
+    font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .dd-hero-stat-label { font-size: 11px; color: rgba(255,255,255,0.72); font-weight: 500; }
+
+  /* ── Grid ── */
+  .dd-grid { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
+  .dd-side-col { display: flex; flex-direction: column; gap: 18px; }
+
+  /* ── Panels ── */
+  .dd-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow-sm);
+    animation: riseIn 0.5s cubic-bezier(0.22,1,0.36,1) both;
+    transition: box-shadow 0.25s, border-color 0.25s;
+  }
+  .dd-panel:hover { box-shadow: var(--shadow); }
+  .dd-panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 16px 20px 12px;
+  }
+  .dd-panel-title-wrap { display: flex; align-items: center; gap: 9px; }
+  .dd-panel-title { font-size: 14px; font-weight: 700; margin: 0; letter-spacing: -0.1px; }
+  .dd-panel-sub { font-size: 11px; color: var(--text-muted); }
+  .dd-live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #059669; box-shadow: 0 0 8px rgba(5,150,105,0.5);
+    animation: softPulse 2s infinite;
+  }
+
+  /* ── Queue rows ── */
+  .dd-rows { padding: 0 8px 8px; }
+  .dd-row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 100px 76px auto;
+    align-items: center; gap: 14px;
+    padding: 12px; border-radius: 14px; cursor: pointer;
+    animation: riseIn 0.45s cubic-bezier(0.22,1,0.36,1) both;
+    transition: background 0.15s;
+  }
+  .dd-row:hover { background: var(--surface-hi); }
+  .dd-row-avatar {
+    width: 42px; height: 42px; border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .dd-row-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .dd-row-name { font-size: 13px; font-weight: 700; }
+  .dd-row-sub {
+    font-size: 11.5px; color: var(--text-muted); line-height: 1.45;
+    display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .dd-badge {
+    display: inline-flex; align-items: center; gap: 6px; justify-self: start;
+    padding: 4px 11px; border-radius: 20px;
+    font-size: 11px; font-weight: 700;
+  }
+  .dd-badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .dd-row-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .dd-row-actions { display: flex; gap: 6px; }
+  .dd-action {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 13px; border-radius: 10px;
+    background: var(--surface-hi); border: 1px solid var(--border);
+    color: var(--text-secondary); font-size: 12px; font-weight: 600;
+    font-family: inherit; cursor: pointer;
+    transition: all 0.18s;
+  }
+  .dd-action:hover:not(:disabled) { border-color: var(--border-hi); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,40,0.07); }
+  .dd-action:active:not(:disabled) { transform: scale(0.96); }
+  .dd-action:disabled { opacity: 0.55; cursor: default; }
+  .dd-action.primary { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 4px 14px rgba(37,99,235,0.25); }
+  .dd-action.primary:hover:not(:disabled) { box-shadow: 0 6px 18px rgba(37,99,235,0.35); }
+  .dd-action.done { background: var(--green-bg); border-color: transparent; color: var(--green); }
+
+  .dd-empty { padding: 44px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  .dd-empty-title { font-weight: 700; color: var(--text-secondary); font-size: 14px; margin: 0 0 4px; }
+  .dd-empty-sub { font-size: 12px; color: var(--text-muted); margin: 0; }
+
+  /* ── Donut ── */
+  .dd-donut-body { display: flex; align-items: center; gap: 18px; padding: 6px 20px 20px; }
+  .dd-donut-wrap { position: relative; flex-shrink: 0; }
+  .dd-donut-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .dd-donut-total { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+  .dd-donut-total-label { font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-muted); }
+  .dd-donut-legend { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .dd-legend-row { display: flex; align-items: center; gap: 8px; }
+  .dd-legend-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .dd-legend-label { font-size: 12px; color: var(--text-secondary); }
+  .dd-legend-value { margin-left: auto; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* ── Bars ── */
+  .dd-bars {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 8px; padding: 10px 20px 18px; min-height: 120px;
+  }
+  .dd-bar-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+  .dd-bar-count { font-size: 10px; font-weight: 700; color: var(--accent); height: 13px; font-variant-numeric: tabular-nums; }
+  .dd-bar {
+    width: 100%; max-width: 26px; border-radius: 7px 7px 3px 3px;
+    transform-origin: bottom;
+    animation: growBar 0.6s cubic-bezier(0.22,1,0.36,1) both;
+  }
+  .dd-bar-label { font-size: 9.5px; color: var(--text-muted); white-space: nowrap; }
+
+  /* ── Consults ── */
+  .dd-consults { display: flex; flex-direction: column; gap: 12px; }
+  .dd-consults-head { padding: 0 4px; }
+  .dd-consult { display: flex; align-items: center; gap: 16px; padding: 16px 18px; }
+  .dd-consult-avatar { background: var(--accent-bg); color: var(--accent); }
+  .dd-consult-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .dd-consult-phone { font-size: 11.5px; color: var(--accent); font-weight: 600; }
+  .dd-consult-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+  .dd-consult-fee { font-size: 16px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .dd-consult-time { font-size: 10.5px; color: var(--text-muted); }
+
+  /* ── Settings ── */
+  .dd-settings { padding: 24px; max-width: 620px; }
+  .dd-settings-title { font-size: 16px; font-weight: 800; margin: 0 0 20px; letter-spacing: -0.2px; }
+  .dd-settings-subtitle { font-size: 13px; font-weight: 700; margin: 0 0 12px; }
+  .dd-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .dd-label {
+    display: block; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.6px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 6px;
+  }
+  .dd-input {
+    width: 100%; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--border-hi); background: var(--surface-hi);
+    color: var(--text); font-size: 13px; font-family: inherit; outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .dd-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+  .dd-break-row { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
+  .dd-break-mins { display: flex; align-items: center; gap: 6px; }
+  .dd-break-mins-label { font-size: 11px; color: var(--text-muted); }
+  .dd-break-remove {
+    background: none; border: none; color: var(--red); cursor: pointer;
+    padding: 8px; border-radius: 8px; display: flex;
+    transition: background 0.15s;
+  }
+  .dd-break-remove:hover { background: var(--red-bg); }
+  .dd-add-break {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-bottom: 24px; padding: 8px 14px;
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    background: var(--accent-bg); border: none; border-radius: 10px;
+    font-family: inherit; cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .dd-add-break:active { transform: scale(0.96); }
+  .dd-settings-footer { border-top: 1px solid var(--border); padding-top: 16px; text-align: right; }
+  .dd-save {
+    padding: 11px 26px; border-radius: 11px;
+    background: var(--accent); border: none; color: #fff;
+    font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+    box-shadow: 0 6px 18px rgba(37,99,235,0.28);
+    transition: box-shadow 0.2s, transform 0.15s;
+  }
+  .dd-save:hover:not(:disabled) { box-shadow: 0 8px 24px rgba(37,99,235,0.38); }
+  .dd-save:active:not(:disabled) { transform: scale(0.97); }
+  .dd-save:disabled { opacity: 0.6; cursor: default; }
+
+  /* ── Mobile ── */
+  @media (max-width: 860px) {
+    .dd-grid { grid-template-columns: 1fr; }
+    .dd-side-col { flex-direction: column; }
+    .dd-hero-stats { grid-template-columns: repeat(2, 1fr); }
+    .dd-content { padding: 18px 16px 96px; }
+    .dd-header { padding: 14px 16px; flex-wrap: wrap; }
+    .dd-hello { font-size: 18px; }
+    .dd-status-group { order: 3; width: 100%; }
+    .dd-status-btn { flex: 1; justify-content: center; }
+
+    .dd-sidebar {
+      position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+      top: auto; width: auto; height: auto;
+      flex-direction: row; padding: 8px 12px; gap: 4px;
+      border: 1px solid var(--border); border-radius: 22px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      box-shadow: 0 12px 36px rgba(15,23,40,0.16);
+      z-index: 100;
+    }
+    @supports not (backdrop-filter: blur(1px)) {
+      .dd-sidebar { background: var(--surface); }
+    }
+    .dd-sidebar-logo { display: none; }
+    .dd-sidebar-nav { flex-direction: row; flex: initial; }
+    .dd-side-btn.active::before { display: none; }
+
+    .dd-row {
+      grid-template-columns: 42px minmax(0, 1fr);
+      grid-template-areas:
+        "avatar who"
+        "avatar meta"
+        "actions actions";
+      row-gap: 8px;
+    }
+    .dd-row-avatar { grid-area: avatar; align-self: start; }
+    .dd-row-who { grid-area: who; }
+    .dd-badge { grid-area: meta; }
+    .dd-row-time { display: none; }
+    .dd-row-actions { grid-area: actions; }
+    .dd-row-actions .dd-action { flex: 1; justify-content: center; }
+
+    .dd-consult { flex-wrap: wrap; }
+    .dd-consult-right { width: 100%; flex-direction: row; align-items: center; justify-content: space-between; }
+    .dd-settings-grid { grid-template-columns: 1fr; }
+    .dd-break-row { flex-wrap: wrap; }
+  }
+`;

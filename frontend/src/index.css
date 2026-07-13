@@ -976,3 +976,120 @@ select.input option:checked {
   background: rgba(99, 130, 255, 0.3);
   color: #fff;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT THEME SCOPE — used by the Doctor portal
+   Apply .theme-light on a page root to switch token values.
+   ═══════════════════════════════════════════════════════════ */
+.theme-light {
+  --bg: #f4f6fa;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-hi: #f8fafc;
+  --surface-glass: rgba(255, 255, 255, 0.72);
+
+  --border: #e6eaf2;
+  --border-hi: #d6dcea;
+  --border-focus: rgba(37, 99, 235, 0.45);
+
+  --text: #0f1728;
+  --text-secondary: #55617a;
+  --text-muted: #8a94ab;
+  --text-dim: #c3cad9;
+
+  --accent: #2563eb;
+  --accent-light: #3b82f6;
+  --accent-bg: rgba(37, 99, 235, 0.08);
+  --accent-bd: rgba(37, 99, 235, 0.22);
+  --accent-glow: rgba(37, 99, 235, 0.25);
+
+  --green: #059669;
+  --green-bg: rgba(5, 150, 105, 0.1);
+  --green-bd: rgba(5, 150, 105, 0.25);
+
+  --red: #dc2626;
+  --red-bg: rgba(220, 38, 38, 0.08);
+  --red-bd: rgba(220, 38, 38, 0.22);
+
+  --amber: #d97706;
+  --amber-bg: rgba(217, 119, 6, 0.1);
+  --amber-bd: rgba(217, 119, 6, 0.25);
+
+  --shadow: 0 12px 40px rgba(15, 23, 40, 0.08);
+  --shadow-sm: 0 4px 16px rgba(15, 23, 40, 0.06);
+  --shadow-glow: 0 8px 32px rgba(37, 99, 235, 0.14);
+
+  background: var(--bg);
+  color: var(--text);
+}
+
+.theme-light ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 40, 0.14);
+}
+
+.theme-light ::selection {
+  background: rgba(37, 99, 235, 0.18);
+  color: #0f1728;
+}
+
+/* ── SHARED MOTION UTILITIES ── */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes softPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes growBar {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.rise-in {
+  animation: riseIn 0.5s var(--ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
