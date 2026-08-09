@@ -89,7 +89,7 @@ export default function Consultation() {
           <button style={s.back} className="cc-press" onClick={() => navigate('/dashboard')}>
             <span style={s.backEmoji}>←</span>
           </button>
-          <div style={s.livePill}><span style={s.liveDot} />Live</div>
+          <div style={s.livePill}><span style={s.liveDot} />Live · {doctors.length} online</div>
         </div>
         <h1 style={s.title}>Find a Doctor</h1>
         <p style={s.sub}>Available doctors online now</p>
@@ -176,7 +176,7 @@ export default function Consultation() {
         <div style={{ height: 100 }} />
       </div>
 
-      <BottomNav active="assistant" />
+      <BottomNav active="doctor" />
 
       <style>{`
         ${theme.fontImport}
