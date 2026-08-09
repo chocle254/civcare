@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { getNearbyHospitals } from '../../api/hospitals';
 import useLocation from '../../hooks/useLocation';
 import { confirmArrival } from '../../api/triage';
@@ -8,41 +11,58 @@ import BottomNav from '../../components/BottomNav';
 
 const { color, font, radius } = theme;
 
-// Tints cycled across the hospital list
 const TINTS = [
-  { tint: color.blue,  dim: color.blueDim },
-  { tint: color.violet, dim: 'rgba(139,108,246,0.12)' },
-  { tint: color.mint,  dim: color.mintDim },
-  { tint: color.coral, dim: color.coralDim },
+  { tint: color.blue,  dim: color.blueDim,  hex: '#4C6FFF' },
+  { tint: color.violet, dim: 'rgba(139,108,246,0.12)', hex: '#8B6CF6' },
+  { tint: color.mint,  dim: color.mintDim,  hex: '#22C79A' },
+  { tint: color.coral, dim: color.coralDim, hex: '#FF6584' },
 ];
 
-// Deterministic decorative pin layout for the stylised map header
-const MAP_PINS = [
-  { top: '18%', left: '12%' },
-  { top: '10%', left: '58%' },
-  { top: '14%', left: '88%' },
-  { top: '68%', left: '10%' },
-  { top: '72%', left: '80%' },
-];
+// ── Leaflet icon builders (divIcon — no external image assets needed) ──
+const userIcon = L.divIcon({
+  className: '',
+  html: `<div style="position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">
+           <div style="position:absolute;width:22px;height:22px;border-radius:50%;background:rgba(76,111,255,0.35);animation:pulseRing 2.2s ease-out infinite;"></div>
+           <div style="position:relative;width:14px;height:14px;border-radius:50%;background:#4C6FFF;border:3px solid #fff;box-shadow:0 2px 6px rgba(76,111,255,0.5);"></div>
+         </div>`,
+  iconSize: [22, 22], iconAnchor: [11, 11],
+});
+const hospitalIcon = (hex, selected) => L.divIcon({
+  className: '',
+  html: `<div style="width:${selected ? 34 : 28}px;height:${selected ? 34 : 28}px;border-radius:50% 50% 50% 4px;
+           transform:rotate(-45deg);background:${hex};display:flex;align-items:center;justify-content:center;
+           box-shadow:0 3px 8px rgba(0,0,0,0.3);${selected ? 'outline:3px solid rgba(255,255,255,0.9);' : ''}">
+           <span style="transform:rotate(45deg);font-size:${selected ? 15 : 12}px;">🏥</span>
+         </div>`,
+  iconSize: [selected ? 34 : 28, selected ? 34 : 28],
+  iconAnchor: [selected ? 17 : 14, selected ? 34 : 28],
+});
 
-function StaticMap() {
-  return (
-    <div style={s.map}>
-      <div style={s.mapGrid} />
-      <div style={s.mapRoadV} />
-      <div style={s.mapRoadH} />
-      <div style={{ ...s.mapPatch, top: '8%', left: '4%', width: 70, height: 46 }} />
-      <div style={{ ...s.mapPatch, bottom: '10%', right: '8%', width: 90, height: 54 }} />
-      {MAP_PINS.map((p, i) => (
-        <div key={i} style={{ ...s.mapPin, top: p.top, left: p.left, animationDelay: `${i * 0.4}s` }}>🏥</div>
-      ))}
-      <div style={s.mapUserWrap}>
-        <div style={s.mapUserRing} />
-        <div style={s.mapUserDot} />
-      </div>
-      <div style={s.mapGlassSheen} />
-    </div>
-  );
+// Keeps the map framed around whatever points currently matter (all
+// hospitals, or the active route) — re-fits whenever they change.
+function FitBounds({ points }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!points || points.length === 0) return;
+    if (points.length === 1) { map.setView(points[0], 14); return; }
+    map.fitBounds(L.latLngBounds(points), { padding: [36, 36] });
+  }, [points, map]); // eslint-disable-line
+  return null;
+}
+
+// Real road route via OSRM's public routing service; falls back to a
+// straight line (drawn instantly) if the network call fails.
+async function fetchRoute(from, to) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const coords = data.routes?.[0]?.geometry?.coordinates;
+    if (!coords?.length) throw new Error('no route');
+    return coords.map(([lon, lat]) => [lat, lon]);
+  } catch {
+    return [[from.lat, from.lon], [to.lat, to.lon]];
+  }
 }
 
 export default function HospitalSelect() {
@@ -51,6 +71,9 @@ export default function HospitalSelect() {
   const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [routeCoords, setRouteCoords] = useState(null);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => { getLocation(); }, []); // eslint-disable-line
 
@@ -67,7 +90,18 @@ export default function HospitalSelect() {
     load();
   }, [coords]);
 
-  const handleSelect = async (hospital) => {
+  const handlePick = (h) => {
+    setSelected(h);
+    // Draw the path immediately (straight line), then upgrade to the real
+    // road route once OSRM responds.
+    setRouteCoords([[coords.lat, coords.lon], [h.lat, h.lon]]);
+    fetchRoute(coords, h).then(setRouteCoords);
+  };
+
+  const handleConfirm = async () => {
+    if (!selected || confirming) return;
+    setConfirming(true);
+    const hospital = selected;
     localStorage.setItem('civtech_hospital', JSON.stringify(hospital));
     if (coords) localStorage.setItem('civtech_patient_coords', JSON.stringify(coords));
 
@@ -92,11 +126,20 @@ export default function HospitalSelect() {
         navigate('/arrival');
       } catch {
         setError('Could not confirm hospital selection. Please try again.');
+        setConfirming(false);
       }
     } else {
       navigate('/chat', { state: { mode: 'pre_hospital' } });
     }
   };
+
+  const boundsPoints = useMemo(() => {
+    if (selected && routeCoords) return routeCoords;
+    if (!coords) return [];
+    const pts = [[coords.lat, coords.lon]];
+    hospitals.forEach((h) => pts.push([h.lat, h.lon]));
+    return pts;
+  }, [selected, routeCoords, coords, hospitals]);
 
   return (
     <div style={s.page}>
@@ -110,7 +153,41 @@ export default function HospitalSelect() {
         <h1 style={s.title}>Hospitals Nearby</h1>
         <p style={s.sub}>Within 50km of your location</p>
 
-        <StaticMap />
+        {/* Real map */}
+        {coords && (
+          <div style={s.mapWrap}>
+            <MapContainer
+              center={[coords.lat, coords.lon]}
+              zoom={13}
+              style={{ width: '100%', height: '100%' }}
+              scrollWheelZoom={false}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <Marker position={[coords.lat, coords.lon]} icon={userIcon} />
+              {hospitals.map((h, i) => (
+                <Marker
+                  key={h.id}
+                  position={[h.lat, h.lon]}
+                  icon={hospitalIcon(TINTS[i % TINTS.length].hex, selected?.id === h.id)}
+                  eventHandlers={{ click: () => handlePick(h) }}
+                />
+              ))}
+              {routeCoords && (
+                <Polyline positions={routeCoords} pathOptions={{ color: '#4C6FFF', weight: 4, opacity: 0.85, dashArray: '1 10', lineCap: 'round' }} />
+              )}
+              <FitBounds points={boundsPoints} />
+            </MapContainer>
+            {selected && (
+              <div style={s.mapBanner}>
+                <span style={s.mapBannerDot} />
+                Route to {selected.name}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Loading location */}
         {locLoading && (
@@ -146,31 +223,30 @@ export default function HospitalSelect() {
             <p style={s.countText}>{hospitals.length} facilities found near you</p>
             {hospitals.map((h, i) => {
               const tint = TINTS[i % TINTS.length];
+              const isSelected = selected?.id === h.id;
               return (
                 <div
                   key={h.id}
-                  style={{ ...s.card, animationDelay: `${i * 0.06}s` }}
+                  style={{ ...s.card, animationDelay: `${i * 0.06}s`, ...(isSelected ? s.cardSelected : {}) }}
                   className="cc-cardhover"
-                  onClick={() => handleSelect(h)}
+                  onClick={() => handlePick(h)}
                 >
                   {h.is_testing && <div style={s.testBadge}>Test Mode</div>}
 
-                  <div style={{ ...s.hospitalIcon, background: tint.dim }}>
+                  <div style={{ ...s.hospitalIconWrap, background: tint.dim }}>
                     <span style={{ fontSize: 20 }}>🏢</span>
                   </div>
 
                   <div style={s.cardInfo}>
                     <p style={s.hosName}>{h.name}</p>
                     <p style={s.hosMeta}>{h.town}{h.county ? `, ${h.county}` : ''}</p>
-                    {h.phone && (
-                      <p style={s.hosPhone}>📞 {h.phone}</p>
-                    )}
+                    {h.phone && <p style={s.hosPhone}>📞 {h.phone}</p>}
                   </div>
 
                   <div style={s.cardRight}>
                     <p style={{ ...s.distKm, color: tint.tint }}>{h.distance_km} km</p>
                     <p style={s.distTime}>🕐 {h.travel_time}</p>
-                    <span style={{ color: color.inkFaint, fontSize: 16 }}>›</span>
+                    <span style={{ color: isSelected ? color.blue : color.inkFaint, fontSize: 16 }}>{isSelected ? '✓' : '›'}</span>
                   </div>
                 </div>
               );
@@ -188,8 +264,21 @@ export default function HospitalSelect() {
           </div>
         )}
 
-        <div style={{ height: 100 }} />
+        <div style={{ height: selected ? 150 : 100 }} />
       </div>
+
+      {/* Sticky confirm bar */}
+      {selected && (
+        <div style={s.confirmBar}>
+          <div style={{ minWidth: 0 }}>
+            <p style={s.confirmLabel}>Selected hospital</p>
+            <p style={s.confirmName}>{selected.name}</p>
+          </div>
+          <button style={s.confirmBtn} className="cc-press" onClick={handleConfirm} disabled={confirming}>
+            {confirming ? '···' : 'Continue →'}
+          </button>
+        </div>
+      )}
 
       <BottomNav active="home" />
 
@@ -204,8 +293,9 @@ export default function HospitalSelect() {
         @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes pulseRing{0%{transform:scale(0.6);opacity:0.6}100%{transform:scale(2.2);opacity:0}}
-        @keyframes pinBob{0%,100%{transform:translateY(0) rotate(-45deg)}50%{transform:translateY(-4px) rotate(-45deg)}}
-        @keyframes sheenDrift{0%,100%{transform:translateX(-10%)}50%{transform:translateX(10%)}}
+        @keyframes barUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+        .leaflet-container { font-family: ${font.ui}; background: ${color.surfaceMuted}; }
+        .leaflet-control-attribution { font-size: 9px !important; }
       `}</style>
     </div>
   );
@@ -226,34 +316,17 @@ const s = {
   title: { fontSize: 25, fontWeight: 800, margin: '0 0 3px', letterSpacing: -0.4 },
   sub: { fontSize: 13.5, color: color.inkFaint, margin: '0 0 16px' },
 
-  map: {
-    position: 'relative', width: '100%', height: 190, borderRadius: radius.lg, overflow: 'hidden',
-    background: `linear-gradient(160deg, ${color.surfaceRaised}, ${color.surfaceMuted})`,
-    border: `1px solid ${color.glassBorder}`,
-    marginBottom: 20, boxShadow: theme.shadow.glass,
+  mapWrap: {
+    position: 'relative', width: '100%', height: 240, borderRadius: radius.lg, overflow: 'hidden',
+    border: `1px solid ${color.glassBorder}`, marginBottom: 20, boxShadow: theme.shadow.glass, zIndex: 0,
   },
-  mapGrid: {
-    position: 'absolute', inset: 0,
-    backgroundImage: `linear-gradient(${color.hairline} 1px, transparent 1px), linear-gradient(90deg, ${color.hairline} 1px, transparent 1px)`,
-    backgroundSize: '24px 24px',
+  mapBanner: {
+    position: 'absolute', top: 10, left: 10, right: 10, display: 'flex', alignItems: 'center', gap: 7,
+    background: color.glassStrong, backdropFilter: 'blur(10px)', border: `1px solid ${color.glassBorder}`,
+    borderRadius: radius.pill, padding: '7px 12px', fontSize: 11.5, fontWeight: 600, color: color.ink,
+    boxShadow: theme.shadow.card, zIndex: 1000,
   },
-  mapRoadV: { position: 'absolute', top: 0, bottom: 0, left: '46%', width: 10, background: 'rgba(255,255,255,0.65)' },
-  mapRoadH: { position: 'absolute', left: 0, right: 0, top: '54%', height: 8, background: 'rgba(255,255,255,0.65)' },
-  mapPatch: { position: 'absolute', borderRadius: 10, background: color.mintDim },
-  mapPin: {
-    position: 'absolute', width: 26, height: 26, borderRadius: '50% 50% 50% 4px',
-    transform: 'rotate(-45deg) translate(-50%,-100%)', transformOrigin: 'center',
-    background: color.blue, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 3px 8px rgba(76,111,255,0.4)', fontSize: 11, animation: 'pinBob 2.4s ease-in-out infinite',
-  },
-  mapUserWrap: { position: 'absolute', top: '50%', left: '46%', width: 0, height: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  mapUserRing: { position: 'absolute', width: 40, height: 40, borderRadius: '50%', background: 'rgba(76,111,255,0.35)', animation: 'pulseRing 2.2s ease-out infinite' },
-  mapUserDot: { position: 'absolute', width: 16, height: 16, borderRadius: '50%', background: color.blue, border: '3px solid #fff', boxShadow: '0 2px 6px rgba(76,111,255,0.5)' },
-  mapGlassSheen: {
-    position: 'absolute', top: 0, left: 0, width: '60%', height: '100%',
-    background: 'linear-gradient(100deg, rgba(255,255,255,0.22), transparent 60%)',
-    animation: 'sheenDrift 6s ease-in-out infinite', pointerEvents: 'none',
-  },
+  mapBannerDot: { width: 7, height: 7, borderRadius: '50%', background: color.blue, flexShrink: 0 },
 
   countText: { fontSize: 12.5, color: color.inkFaint, marginBottom: 12 },
   card: {
@@ -263,8 +336,9 @@ const s = {
     borderRadius: radius.lg, padding: '15px',
     marginBottom: 10, cursor: 'pointer', animation: 'fadeUp 0.45s ease both',
   },
+  cardSelected: { border: `1.5px solid ${color.blue}`, boxShadow: '0 6px 18px rgba(76,111,255,0.22)' },
   testBadge: { position: 'absolute', top: -8, right: 12, fontSize: 9.5, fontWeight: 700, color: color.amber, background: color.amberDim, borderRadius: radius.pill, padding: '2px 8px' },
-  hospitalIcon: { width: 46, height: 46, borderRadius: radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: theme.shadow.embossOut },
+  hospitalIconWrap: { width: 46, height: 46, borderRadius: radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: theme.shadow.embossOut },
   cardInfo: { flex: 1, minWidth: 0 },
   hosName: { fontSize: 14, fontWeight: 700, color: color.ink, margin: '0 0 3px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
   hosMeta: { fontSize: 12, color: color.inkFaint, margin: '0 0 3px' },
@@ -280,4 +354,20 @@ const s = {
   alertBox: { background: color.coralDim, borderRadius: radius.lg, padding: '20px', textAlign: 'center', marginBottom: 16, border: '1px solid rgba(255,101,132,0.25)' },
   alertText: { fontSize: 13, color: color.inkDim, margin: '0 0 14px' },
   retryBtn: { background: color.blue, border: 'none', borderRadius: radius.md, color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 22px', cursor: 'pointer', fontFamily: font.ui, boxShadow: '0 6px 16px rgba(76,111,255,0.35)' },
+
+  confirmBar: {
+    position: 'fixed', left: 0, right: 0, bottom: 74, maxWidth: 480, margin: '0 auto', boxSizing: 'border-box',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    background: color.glassStrong, backdropFilter: 'blur(20px) saturate(160%)', WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+    border: `1px solid ${color.glassBorder}`, borderRadius: radius.lg, padding: '12px 14px',
+    boxShadow: '0 10px 30px rgba(31,38,80,0.18)', zIndex: 99, animation: 'barUp 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+    width: 'calc(100% - 40px)',
+  },
+  confirmLabel: { fontSize: 10.5, color: color.inkFaint, margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: 0.5 },
+  confirmName: { fontSize: 13.5, fontWeight: 700, color: color.ink, margin: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
+  confirmBtn: {
+    flexShrink: 0, background: color.blue, border: 'none', borderRadius: radius.md, color: '#fff',
+    fontSize: 13, fontWeight: 700, padding: '11px 18px', cursor: 'pointer', fontFamily: font.ui,
+    boxShadow: '0 6px 16px rgba(76,111,255,0.35)',
+  },
 };
