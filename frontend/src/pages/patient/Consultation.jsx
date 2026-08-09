@@ -1,19 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { theme } from '../../styles/theme';
+import { Icon } from '../../components/Icons';
+import BottomNav from '../../components/BottomNav';
 
 const API = process.env.REACT_APP_API_URL;
+const { color, font, radius } = theme;
 
 const SPEC = {
-  'General Practitioner': { color:'#4f46e5', bg:'rgba(79,70,229,0.15)', icon:'🩺' },
-  'Internal Medicine':    { color:'#7c3aed', bg:'rgba(124,58,237,0.15)', icon:'🫀' },
-  'Emergency Medicine':   { color:'#ff4d6d', bg:'rgba(255,77,109,0.15)', icon:'🚨' },
-  'Paediatrics':          { color:'#06d6a0', bg:'rgba(6,214,160,0.15)',  icon:'👶' },
-  'Gynaecology':          { color:'#f72585', bg:'rgba(247,37,133,0.15)', icon:'🌸' },
-  'Dermatology':          { color:'#ffd166', bg:'rgba(255,209,102,0.15)', icon:'🔬' },
+  'General Practitioner': { tint: color.blue,  tintDim: color.blueDim },
+  'Internal Medicine':    { tint: color.violet, tintDim: 'rgba(139,108,246,0.12)' },
+  'Emergency Medicine':   { tint: color.coral, tintDim: color.coralDim },
+  'Paediatrics':          { tint: color.mint,  tintDim: color.mintDim },
+  'Gynaecology':          { tint: color.pink,  tintDim: color.pinkDim },
+  'Dermatology':          { tint: color.amber, tintDim: color.amberDim },
+};
+const specTint = (spec) => SPEC[spec] || SPEC['General Practitioner'];
+
+const FILTERS = ['All', 'General', 'Internal', 'Emergency', 'Paediatrics'];
+const FILTER_MAP = {
+  All: null,
+  General: 'General Practitioner',
+  Internal: 'Internal Medicine',
+  Emergency: 'Emergency Medicine',
+  Paediatrics: 'Paediatrics',
 };
 
-const FILTERS = ['All','General Practitioner','Internal Medicine','Emergency Medicine','Paediatrics'];
+const initials = (name) => (name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 
 export default function Consultation() {
   const navigate  = useNavigate();
@@ -23,6 +37,7 @@ export default function Consultation() {
   const [doctors,  setDoctors]  = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState('All');
+  const [query,    setQuery]    = useState('');
   const [selected, setSelected] = useState(null);
 
   useEffect(() => { fetchDoctors(); }, []);
@@ -38,7 +53,6 @@ export default function Consultation() {
   const handleConsult = (doctor) => {
     setSelected(doctor.id);
     localStorage.setItem('civtech_selected_doctor', JSON.stringify(doctor));
-    // If patient already has an active session from AI Triage, skip pre-consultation chat
     if (sessionId) {
       axios.post(`${API}/consultation/initiate`, {
         patient_id: patient.id, doctor_id: doctor.id,
@@ -55,109 +69,169 @@ export default function Consultation() {
     }
   };
 
-  const filtered = filter === 'All' ? doctors : doctors.filter(d => d.specialisation === filter);
-  const stars    = (r) => '★'.repeat(Math.floor(r||0)) + '☆'.repeat(5-Math.floor(r||0));
+  const filtered = useMemo(() => {
+    let list = FILTER_MAP[filter] ? doctors.filter((d) => d.specialisation === FILTER_MAP[filter]) : doctors;
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      list = list.filter((d) =>
+        (d.full_name || d.name || '').toLowerCase().includes(q) ||
+        (d.specialisation || '').toLowerCase().includes(q) ||
+        (d.hospital_name || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [doctors, filter, query]);
 
   return (
     <div style={s.page}>
-      <div style={s.orb1}/><div style={s.orb2}/>
-
-      {/* Header */}
-      <div style={s.header}>
-        <button style={s.back} onClick={() => navigate('/dashboard')}>‹</button>
-        <div style={s.headerText}>
-          <h1 style={s.title}>Find a Doctor</h1>
-          <p style={s.sub}>{doctors.length} available now</p>
-        </div>
-        <div style={s.livePill}><span style={s.liveDot}/>Live</div>
-      </div>
-
-      {/* Filter chips */}
-      <div style={s.filterRow}>
-        {FILTERS.map(f => (
-          <button key={f} style={{ ...s.filterChip, ...(filter===f ? s.filterActive : {}) }} onClick={() => setFilter(f)}>
-            {f === 'All' ? '✦ All' : f.split(' ')[0]}
+      <div style={s.main}>
+        {/* Header */}
+        <div style={s.header}>
+          <button style={s.back} onClick={() => navigate('/dashboard')}>
+            <Icon.ChevronLeft size={20} color={color.ink} />
           </button>
-        ))}
-      </div>
+          <div style={s.livePill}><span style={s.liveDot} />Live</div>
+        </div>
+        <h1 style={s.title}>Find a Doctor</h1>
+        <p style={s.sub}>Available doctors online now</p>
 
-      {/* Doctor list */}
-      <div style={s.list}>
-        {loading && [1,2,3].map(i => <div key={i} style={s.skeleton}/>)}
-
-        {!loading && filtered.length === 0 && (
-          <div style={s.empty}>
-            <p style={{fontSize:40}}>🩺</p>
-            <p style={{color:'rgba(255,255,255,0.4)',fontSize:14}}>No doctors available right now.</p>
+        {/* Search */}
+        <div style={s.searchRow}>
+          <div style={s.searchBar}>
+            <Icon.Search size={16} color={color.inkFaint} />
+            <input
+              style={s.searchInput}
+              placeholder="Search doctors, specialties..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
-        )}
+          <button style={s.filterBtn} aria-label="Filter">
+            <Icon.Filter size={17} color={color.ink} />
+          </button>
+        </div>
 
-        {!loading && filtered.map((doc, i) => {
-          const spec = SPEC[doc.specialisation] || SPEC['General Practitioner'];
-          const busy = selected === doc.id;
-          return (
-            <div key={doc.id} style={{ ...s.card, animationDelay:`${i*0.07}s` }}>
-              {/* Spec icon */}
-              <div style={{ ...s.iconWrap, background: spec.bg, border:`1px solid ${spec.color}33` }}>
-                <span style={s.specIcon}>{spec.icon}</span>
-              </div>
-              {/* Info */}
-              <div style={s.info}>
-                <p style={s.docName}>{doc.full_name || doc.name}</p>
-                <p style={{ ...s.docSpec, color: spec.color }}>{doc.specialisation}</p>
-                {doc.hospital_name && <p style={s.docHosp}>🏥 {doc.hospital_name}</p>}
-                <p style={s.stars}>{stars(doc.ai_accuracy_rating)}
-                  <span style={s.rating}>{doc.ai_accuracy_rating?.toFixed(1) || '—'}</span>
-                </p>
-              </div>
-              {/* Fee Button */}
-              <button
-                style={{ ...s.feeBtn, background: busy ? '#1a1a2e' : `linear-gradient(135deg,${spec.color},${spec.color}cc)` }}
-                onClick={() => handleConsult(doc)}
-                disabled={!!selected}
-              >
-                {busy ? '···' : `KSh\n${doc.consultation_fee?.toLocaleString() || '—'}`}
-              </button>
+        {/* Filter chips */}
+        <div style={s.filterRow}>
+          {FILTERS.map((f) => (
+            <button key={f} style={{ ...s.filterChip, ...(filter === f ? s.filterActive : {}) }} onClick={() => setFilter(f)}>
+              {f}
+            </button>
+          ))}
+        </div>
+
+        {/* Doctor list */}
+        <div style={s.list}>
+          {loading && [1, 2, 3, 4].map((i) => <div key={i} style={s.skeleton} />)}
+
+          {!loading && filtered.length === 0 && (
+            <div style={s.empty}>
+              <p style={{ fontSize: 34, margin: '0 0 8px' }}>🩺</p>
+              <p style={{ color: color.inkFaint, fontSize: 13.5, margin: 0 }}>No doctors match right now.</p>
             </div>
-          );
-        })}
+          )}
+
+          {!loading && filtered.map((doc, i) => {
+            const spec = specTint(doc.specialisation);
+            const busy = selected === doc.id;
+            const name = doc.full_name || doc.name || 'Doctor';
+            const rating = doc.ai_accuracy_rating ? doc.ai_accuracy_rating.toFixed(1) : '—';
+            const accuracy = doc.ai_accuracy || Math.round((doc.ai_accuracy_rating || 4.8) * 20);
+            return (
+              <div key={doc.id} style={{ ...s.card, animationDelay: `${i * 0.06}s` }}>
+                <div style={s.avatarWrap}>
+                  <div style={{ ...s.avatar, background: spec.tintDim, color: spec.tint }}>{initials(name)}</div>
+                  <span style={s.onlineDot} />
+                </div>
+
+                <div style={s.info}>
+                  <div style={s.nameRow}>
+                    <p style={s.docName}>Dr. {name.replace(/^Dr\.?\s*/i, '')}</p>
+                    <span style={s.ratingChip}><Icon.Star size={11} filled /> {rating}</span>
+                  </div>
+                  <p style={{ ...s.docSpec, color: spec.tint }}>{doc.specialisation || 'General Practitioner'}</p>
+                  {doc.hospital_name && (
+                    <p style={s.docHosp}><Icon.Hospital size={12} color={color.inkFaint} /> {doc.hospital_name}</p>
+                  )}
+                  <p style={s.docAccuracy}>{accuracy}% AI Accuracy</p>
+                </div>
+
+                <button
+                  style={{ ...s.feeBtn, background: busy ? color.surfaceMuted : spec.tint, color: busy ? color.inkFaint : '#fff' }}
+                  onClick={() => handleConsult(doc)}
+                  disabled={!!selected}
+                >
+                  {busy ? '···' : (
+                    <>
+                      <span style={s.feeCurrency}>KSh</span>
+                      <span style={s.feeAmount}>{doc.consultation_fee?.toLocaleString() || '—'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ height: 100 }} />
       </div>
+
+      <BottomNav active="assistant" />
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
-        @keyframes orb{0%,100%{transform:scale(1);opacity:0.5}50%{transform:scale(1.1);opacity:0.8}}
+        ${theme.fontImport}
+        * { box-sizing: border-box; }
+        button, input { font-family: inherit; }
+        input::placeholder { color: ${color.inkFaint}; }
+        input:focus { outline: none; }
+        button:focus-visible { outline: 2px solid ${color.blue}; outline-offset: 2px; }
         @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
         @keyframes shimmer{from{background-position:-400px 0}to{background-position:400px 0}}
+        .cc-filterrow::-webkit-scrollbar{display:none}
       `}</style>
     </div>
   );
 }
 
 const s = {
-  page: { minHeight:'100vh', backgroundColor:'#080810', fontFamily:"'Outfit',sans-serif", color:'#fff', paddingBottom:40, position:'relative', overflowX:'hidden' },
-  orb1: { position:'absolute',top:-80,left:'30%',width:300,height:300,borderRadius:'50%',background:'radial-gradient(circle,#4f46e5,transparent 70%)',filter:'blur(60px)',opacity:0.4,pointerEvents:'none',zIndex:0,animation:'orb 8s ease-in-out infinite' },
-  orb2: { position:'absolute',top:100,right:-60,width:250,height:250,borderRadius:'50%',background:'radial-gradient(circle,#06d6a0,transparent 70%)',filter:'blur(60px)',opacity:0.25,pointerEvents:'none',zIndex:0 },
-  header: { position:'relative',zIndex:10,display:'flex',alignItems:'center',gap:12,padding:'52px 20px 14px',borderBottom:'1px solid rgba(255,255,255,0.06)' },
-  back:   { background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:12,color:'#fff',fontSize:24,cursor:'pointer',lineHeight:1,padding:'4px 10px',backdropFilter:'blur(10px)' },
-  headerText: { flex:1 },
-  title: { fontFamily:"'Outfit',sans-serif",fontSize:22,fontWeight:800,margin:'0 0 2px',letterSpacing:-0.5 },
-  sub:   { fontSize:12,color:'rgba(255,255,255,0.35)',margin:0 },
-  livePill: { display:'flex',alignItems:'center',gap:5,background:'rgba(6,214,160,0.1)',border:'1px solid rgba(6,214,160,0.25)',borderRadius:20,padding:'4px 12px',fontSize:12,color:'#06d6a0',fontWeight:600 },
-  liveDot:  { width:6,height:6,borderRadius:'50%',background:'#06d6a0',boxShadow:'0 0 8px #06d6a0' },
-  filterRow: { display:'flex',gap:8,padding:'14px 20px',overflowX:'auto',scrollbarWidth:'none',position:'relative',zIndex:10 },
-  filterChip: { background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:20,color:'rgba(255,255,255,0.5)',fontSize:12,fontWeight:600,padding:'7px 16px',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Outfit',sans-serif",transition:'all 0.2s' },
-  filterActive: { background:'rgba(79,70,229,0.2)',border:'1px solid rgba(79,70,229,0.5)',color:'#818cf8' },
-  list: { position:'relative',zIndex:10,padding:'8px 20px 0' },
-  card: { display:'flex',alignItems:'center',gap:14,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.07)',backdropFilter:'blur(16px)',borderRadius:20,padding:'16px',marginBottom:12,animation:'fadeUp 0.45s ease both' },
-  iconWrap: { width:50,height:50,borderRadius:16,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 },
-  specIcon: { fontSize:24 },
-  info: { flex:1,overflow:'hidden' },
-  docName: { fontSize:15,fontWeight:700,color:'#fff',margin:'0 0 2px',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis' },
-  docSpec: { fontSize:12,fontWeight:600,margin:'0 0 2px' },
-  docHosp: { fontSize:11,color:'rgba(255,255,255,0.3)',margin:'0 0 4px' },
-  stars:   { fontSize:12,color:'#ffd166',margin:0,letterSpacing:-0.5 },
-  rating:  { fontSize:11,color:'rgba(255,255,255,0.4)',marginLeft:5,fontWeight:600 },
-  feeBtn: { width:80,padding:'10px 0',border:'none',borderRadius:14,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'Outfit',sans-serif",flexShrink:0,whiteSpace:'pre-line',lineHeight:1.4,textAlign:'center',transition:'opacity 0.2s' },
-  skeleton: { height:82,borderRadius:20,marginBottom:12,background:'linear-gradient(90deg,#111118 25%,#1a1a28 50%,#111118 75%)',backgroundSize:'400px 100%',animation:'shimmer 1.6s infinite' },
-  empty:   { textAlign:'center',padding:'60px 0' },
+  page: { minHeight: '100vh', backgroundColor: color.bg, fontFamily: font.ui, color: color.ink },
+  main: { maxWidth: 480, margin: '0 auto', padding: '18px 20px 40px' },
+
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  back: { width: 38, height: 38, borderRadius: radius.md, background: color.surfaceMuted, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  livePill: { display: 'flex', alignItems: 'center', gap: 6, background: color.tealDim, borderRadius: radius.pill, padding: '6px 13px', fontSize: 12.5, color: color.teal, fontWeight: 700 },
+  liveDot: { width: 7, height: 7, borderRadius: '50%', background: color.teal },
+
+  title: { fontSize: 25, fontWeight: 800, margin: '0 0 3px', letterSpacing: -0.4 },
+  sub: { fontSize: 13.5, color: color.inkFaint, margin: '0 0 18px' },
+
+  searchRow: { display: 'flex', gap: 10, marginBottom: 14 },
+  searchBar: { flex: 1, display: 'flex', alignItems: 'center', gap: 9, background: color.surface, boxShadow: theme.shadow.card, borderRadius: radius.pill, padding: '11px 16px' },
+  searchInput: { flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13.5, color: color.ink },
+  filterBtn: { width: 42, height: 42, borderRadius: radius.md, background: color.surface, boxShadow: theme.shadow.card, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 },
+
+  filterRow: { display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 18 },
+  filterChip: { background: color.surface, boxShadow: theme.shadow.card, border: 'none', borderRadius: radius.pill, color: color.inkDim, fontSize: 12.5, fontWeight: 600, padding: '8px 16px', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: font.ui },
+  filterActive: { background: color.blue, color: '#fff', boxShadow: 'none' },
+
+  list: {},
+  card: { display: 'flex', alignItems: 'flex-start', gap: 13, background: color.surface, boxShadow: theme.shadow.card, borderRadius: radius.lg, padding: '15px', marginBottom: 12, animation: 'fadeUp 0.45s ease both' },
+  avatarWrap: { position: 'relative', flexShrink: 0 },
+  avatar: { width: 52, height: 52, borderRadius: radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700 },
+  onlineDot: { position: 'absolute', bottom: -2, right: -2, width: 13, height: 13, borderRadius: '50%', background: color.teal, border: `2.5px solid ${color.surface}` },
+
+  info: { flex: 1, minWidth: 0 },
+  nameRow: { display: 'flex', alignItems: 'center', gap: 8 },
+  docName: { fontSize: 14.5, fontWeight: 700, color: color.ink, margin: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
+  ratingChip: { display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 700, color: color.ink, flexShrink: 0 },
+  docSpec: { fontSize: 12.5, fontWeight: 600, margin: '2px 0' },
+  docHosp: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: color.inkFaint, margin: '0 0 4px' },
+  docAccuracy: { fontSize: 11.5, color: color.teal, fontWeight: 600, margin: 0 },
+
+  feeBtn: { minWidth: 74, padding: '10px 8px', border: 'none', borderRadius: radius.md, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: font.ui, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 },
+  feeCurrency: { fontSize: 10, opacity: 0.85, fontWeight: 600 },
+  feeAmount: { fontSize: 14 },
+
+  skeleton: { height: 84, borderRadius: radius.lg, marginBottom: 12, background: `linear-gradient(90deg, ${color.surfaceMuted} 25%, ${color.surfaceRaised} 50%, ${color.surfaceMuted} 75%)`, backgroundSize: '400px 100%', animation: 'shimmer 1.6s infinite' },
+  empty: { textAlign: 'center', padding: '50px 0' },
 };
