@@ -30,8 +30,6 @@ const initials = (name) => (name || '?').split(' ').filter(Boolean).slice(0, 2).
 
 export default function Consultation() {
   const navigate  = useNavigate();
-  const patient   = JSON.parse(localStorage.getItem('civtech_patient') || '{}');
-  const sessionId = localStorage.getItem('civtech_session_id') || null;
 
   const [doctors,  setDoctors]  = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -49,23 +47,17 @@ export default function Consultation() {
     finally { setLoading(false); }
   };
 
+  // Selecting a doctor always starts a fresh AI conversation first — the
+  // patient describes their symptoms, the AI builds a report, and only
+  // then (once the AI's triage routes to "consultation") does booking
+  // actually happen, over in Chat.jsx's pre_consultation handling. This
+  // must never be skipped, even if a session ID happens to be sitting in
+  // storage from an unrelated earlier chat.
   const handleConsult = (doctor) => {
     setSelected(doctor.id);
     localStorage.setItem('civtech_selected_doctor', JSON.stringify(doctor));
-    if (sessionId) {
-      axios.post(`${API}/consultation/initiate`, {
-        patient_id: patient.id, doctor_id: doctor.id,
-        session_id: sessionId, payment_method: 'mpesa', fee_amount: doctor.consultation_fee,
-      }).then(res => {
-        localStorage.setItem('civtech_consultation_id', res.data.consultation_id);
-        navigate('/consultation/waiting');
-      }).catch(() => {
-        setSelected(null);
-        alert('Could not book. Please try again.');
-      });
-    } else {
-      navigate('/chat', { state: { mode: 'pre_consultation' } });
-    }
+    localStorage.removeItem('civtech_session_id');
+    navigate('/chat', { state: { mode: 'pre_consultation' } });
   };
 
   const filtered = useMemo(() => {
