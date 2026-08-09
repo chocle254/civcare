@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { theme } from '../../styles/theme';
-import { Icon } from '../../components/Icons';
 import BottomNav from '../../components/BottomNav';
 
 const API = process.env.REACT_APP_API_URL;
@@ -35,27 +34,29 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
 };
 
-// Sparkline used inside the vital stat tiles
+// Sparkline used inside the vital stat tiles — scales to its container
+// (fixed pixel widths here were the cause of horizontal overflow on
+// narrow phones, so this uses a 0–100 viewBox and 100% CSS width instead).
 function Sparkline({ points, color: stroke }) {
-  const w = 64, h = 22;
+  const w = 100, h = 28;
   const max = Math.max(...points), min = Math.min(...points);
   const norm = points.map((v, i) => {
     const x = (i / (points.length - 1)) * w;
-    const y = h - ((v - min) / (max - min || 1)) * h;
+    const y = h - ((v - min) / (max - min || 1)) * (h - 4) - 2;
     return `${x},${y}`;
   });
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
-      <polyline points={norm.join(' ')} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 22 }}>
+      <polyline points={norm.join(' ')} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-function VitalTile({ label, value, unit, IconEl, tint, tintBg, points }) {
+function VitalTile({ label, value, unit, emoji, tint, tintBg, points }) {
   return (
-    <div style={s.vitalTile}>
-      <div style={{ ...s.vitalIconWrap, background: tintBg, color: tint }}>
-        <IconEl size={16} color={tint} />
+    <div style={s.vitalTile} className="cc-press">
+      <div style={{ ...s.vitalIconWrap, background: tintBg }}>
+        <span style={s.vitalEmoji}>{emoji}</span>
       </div>
       <p style={s.vitalValue}>{value}<span style={s.vitalUnit}>{unit}</span></p>
       <p style={s.vitalLabel}>{label}</p>
@@ -220,15 +221,12 @@ export default function SessionDashboard() {
       <div className="cc-main" style={s.main}>
         {/* ── HEADER ── */}
         <div style={s.header}>
-          <button style={s.iconBtn} onClick={() => setMenuOpen(true)} aria-label="Menu">
-            <Icon.Home size={0} />
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color.ink} strokeWidth="2" strokeLinecap="round">
-              <path d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+          <button style={s.iconBtn} className="cc-press" onClick={() => setMenuOpen(true)} aria-label="Menu">
+            <span style={s.headerEmoji}>☰</span>
           </button>
-          <button style={s.iconBtn} onClick={() => navigate('/diagnosis-history')} aria-label="Notifications">
+          <button style={s.iconBtn} className="cc-press" onClick={() => navigate('/diagnosis-history')} aria-label="Notifications">
             <span style={{ position: 'relative' }}>
-              <Icon.Bell size={20} color={color.ink} />
+              <span style={s.headerEmoji}>🔔</span>
               <span style={s.bellDot} />
             </span>
           </button>
@@ -241,27 +239,28 @@ export default function SessionDashboard() {
         {/* ── AI HEALTH ASSISTANT HERO ── */}
         <button
           style={s.heroCard}
+          className="cc-press"
           onClick={() => { localStorage.removeItem('civtech_session_id'); navigate('/chat'); }}
         >
           <div style={s.heroGlowA} />
           <div style={s.heroGlowB} />
-          <span style={s.heroPill}>AI HEALTH ASSISTANT</span>
-          <p style={s.heroTitle}>How are you<br />feeling today?</p>
-          <p style={s.heroSub}>Tell me how you feel and<br />I'll guide you.</p>
-          <span style={s.heroCta}>
-            Start AI Checkup
-            <Icon.ArrowRight size={15} color={color.ink} />
-          </span>
-          <div style={s.heroAvatar}>
-            <div style={s.avatarBlobA} />
-            <div style={s.avatarBlobB} />
-            <Icon.Sparkle size={30} color="#fff" />
+          <div style={s.heroText}>
+            <span style={s.heroPill}>✨ AI HEALTH ASSISTANT</span>
+            <p style={s.heroTitle}>How are you<br />feeling today?</p>
+            <p style={s.heroSub}>Tell me how you feel and I'll guide you.</p>
+            <span style={s.heroCta}>
+              Start AI Checkup
+              <span aria-hidden="true">→</span>
+            </span>
+          </div>
+          <div style={s.heroAvatarRing}>
+            <div style={s.heroAvatar} className="cc-float">🤖</div>
           </div>
         </button>
 
         {/* ── PENDING CONSULTATION ── */}
         {pendingConsult && (
-          <div style={s.pendingBanner} onClick={() => navigate('/consultation/waiting')}>
+          <div style={s.pendingBanner} className="cc-press" onClick={() => navigate('/consultation/waiting')}>
             <div style={s.pendingDot} />
             <div style={{ flex: 1 }}>
               <p style={s.pendingTitle}>
@@ -269,7 +268,7 @@ export default function SessionDashboard() {
               </p>
               <p style={s.pendingSub}>Tap to view status</p>
             </div>
-            <Icon.Chevron size={18} color={color.inkFaint} />
+            <span style={{ color: color.inkFaint, fontSize: 16 }}>›</span>
           </div>
         )}
 
@@ -279,10 +278,10 @@ export default function SessionDashboard() {
           <button style={s.seeAll} onClick={() => navigate('/diagnosis-history')}>See all</button>
         </div>
         <div style={s.vitalsGrid}>
-          <VitalTile label="Heart Rate" value="72" unit=" BPM" IconEl={Icon.Heart} tint={color.coral} tintBg={color.coralDim} points={[60, 66, 58, 70, 64, 72, 68]} />
-          <VitalTile label="Steps" value="7,240" unit="" IconEl={Icon.Footprint} tint={color.mint} tintBg={color.mintDim} points={[10, 30, 25, 45, 40, 60, 72]} />
-          <VitalTile label="Sleep" value="8.2" unit=" h" IconEl={Icon.Moon} tint={color.blue} tintBg={color.blueDim} points={[6, 7, 5, 8, 6.5, 7.5, 8.2]} />
-          <VitalTile label="Oxygen" value="98" unit="%" IconEl={Icon.Droplet} tint={color.sky} tintBg={color.skyDim} points={[95, 96, 97, 95, 98, 97, 98]} />
+          <VitalTile label="Heart Rate" value="72" unit=" BPM" emoji="❤️" tint={color.coral} tintBg={color.coralDim} points={[60, 66, 58, 70, 64, 72, 68]} />
+          <VitalTile label="Steps" value="7,240" unit="" emoji="👣" tint={color.mint} tintBg={color.mintDim} points={[10, 30, 25, 45, 40, 60, 72]} />
+          <VitalTile label="Sleep" value="8.2" unit=" h" emoji="🌙" tint={color.blue} tintBg={color.blueDim} points={[6, 7, 5, 8, 6.5, 7.5, 8.2]} />
+          <VitalTile label="Oxygen" value="98" unit="%" emoji="💧" tint={color.sky} tintBg={color.skyDim} points={[95, 96, 97, 95, 98, 97, 98]} />
         </div>
 
         {/* ── HEALTH SCORE ── */}
@@ -293,15 +292,16 @@ export default function SessionDashboard() {
             <p style={s.scoreSub}>AI Confidence 98%</p>
           </div>
           <div style={s.scoreRingWrap}>
-            <svg width="76" height="76" viewBox="0 0 76 76">
+            <svg viewBox="0 0 76 76" style={{ width: '100%', height: '100%' }}>
               <circle cx="38" cy="38" r="32" fill="none" stroke={color.blueDim} strokeWidth="8" />
               <circle
                 cx="38" cy="38" r="32" fill="none" stroke={color.blue} strokeWidth="8"
                 strokeDasharray={2 * Math.PI * 32} strokeDashoffset={2 * Math.PI * 32 * 0.04}
                 strokeLinecap="round" transform="rotate(-90 38 38)"
+                style={{ animation: 'ringDraw 1.2s ease both' }}
               />
             </svg>
-            <span style={s.scoreRingIcon}><Icon.Shield size={22} color={color.blue} /></span>
+            <span style={s.scoreRingIcon}>❤️</span>
           </div>
         </div>
 
@@ -329,8 +329,8 @@ export default function SessionDashboard() {
         {!loading && recentSessions.map((session, i) => {
           const isActive = session.status === 'active';
           return (
-            <div key={session.id} style={{ ...s.histCard, animationDelay: `${i * 0.05}s` }} onClick={() => handleCardTap(session)}>
-              <div style={s.histIcon}><Icon.Records size={17} color={color.violet} /></div>
+            <div key={session.id} style={{ ...s.histCard, animationDelay: `${i * 0.05}s` }} className="cc-press" onClick={() => handleCardTap(session)}>
+              <div style={s.histIcon}>📋</div>
               <div style={s.cardBody}>
                 <div style={s.cardTop}>
                   <p style={s.cardTitle}>{cardTitle(session)}</p>
@@ -338,7 +338,7 @@ export default function SessionDashboard() {
                 </div>
                 <span style={s.cardDate}>{formatDate(session.started_at)}</span>
               </div>
-              <Icon.Chevron size={16} color={color.inkFaint} />
+              <span style={{ color: color.inkFaint, fontSize: 16 }}>›</span>
             </div>
           );
         })}
@@ -356,10 +356,10 @@ export default function SessionDashboard() {
             <div style={s.sheetPill} />
             <p style={s.menuName}>{patient.name || 'Patient'}</p>
             <p style={s.menuSub}>{patient.phone || ''}</p>
-            <button style={s.menuItem} onClick={() => { setMenuOpen(false); navigate('/profile'); }}>Profile</button>
-            <button style={s.menuItem} onClick={() => { setMenuOpen(false); navigate('/diagnosis-history'); }}>Diagnosis history</button>
-            <button style={s.menuItem} onClick={() => { setMenuOpen(false); navigate('/medications'); }}>Medications</button>
-            <button style={{ ...s.menuItem, color: color.coral }} onClick={handleLogout}>Sign out</button>
+            <button style={s.menuItem} className="cc-press" onClick={() => { setMenuOpen(false); navigate('/profile'); }}>Profile</button>
+            <button style={s.menuItem} className="cc-press" onClick={() => { setMenuOpen(false); navigate('/diagnosis-history'); }}>Diagnosis history</button>
+            <button style={s.menuItem} className="cc-press" onClick={() => { setMenuOpen(false); navigate('/medications'); }}>Medications</button>
+            <button style={{ ...s.menuItem, color: color.coral }} className="cc-press" onClick={handleLogout}>Sign out</button>
           </div>
         </>
       )}
@@ -379,8 +379,8 @@ export default function SessionDashboard() {
                 <p style={s.sheetPreviewText}>&ldquo;{resumeSheet.last_message}&rdquo;</p>
               </div>
             )}
-            <button style={s.sheetBtn} onClick={handleResume}>Resume conversation</button>
-            <button style={s.sheetCancel} onClick={() => setResumeSheet(null)}>Not now</button>
+            <button style={s.sheetBtn} className="cc-press" onClick={handleResume}>Resume conversation</button>
+            <button style={s.sheetCancel} className="cc-press" onClick={() => setResumeSheet(null)}>Not now</button>
           </div>
         </>
       )}
@@ -390,9 +390,14 @@ export default function SessionDashboard() {
         * { box-sizing: border-box; }
         button { font-family: inherit; }
         button:focus-visible { outline: 2px solid ${color.blue}; outline-offset: 2px; }
+        ${theme.motionCss}
         @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
         @keyframes shimmer { from{background-position:-400px 0} to{background-position:400px 0} }
         @keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+        @keyframes ringDraw { from{stroke-dashoffset:201} }
+        @keyframes glowDrift { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(6px,-6px) scale(1.06)} }
+        .cc-float { animation: float 3.2s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
       `}</style>
     </div>
@@ -402,16 +407,19 @@ export default function SessionDashboard() {
 // ── Styles ──────────────────────────────────────────────────────────────
 const s = {
   page: {
-    minHeight: '100vh', backgroundColor: color.bg,
-    fontFamily: font.ui, color: color.ink,
+    minHeight: '100vh', width: '100%', background: color.bgGradient,
+    fontFamily: font.ui, color: color.ink, overflowX: 'hidden', boxSizing: 'border-box',
   },
-  main: { position: 'relative', maxWidth: 480, margin: '0 auto', padding: '18px 20px 0' },
+  main: { position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', padding: '18px 20px 0', boxSizing: 'border-box' },
 
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
   iconBtn: {
     width: 40, height: 40, borderRadius: radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: color.surfaceMuted, border: 'none', cursor: 'pointer',
+    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
+    border: `1px solid ${color.glassBorder}`, boxShadow: theme.shadow.embossOut,
+    cursor: 'pointer', flexShrink: 0,
   },
+  headerEmoji: { fontSize: 17, lineHeight: 1 },
   bellDot: { position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: '50%', background: color.blue, border: `1.5px solid ${color.bgElevated}` },
 
   greetingText: { fontSize: 15, color: color.inkDim, margin: 0, fontFamily: font.ui },
@@ -420,36 +428,53 @@ const s = {
   greetingSub: { fontSize: 14, color: color.inkFaint, margin: '0 0 20px' },
 
   heroCard: {
-    position: 'relative', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
-    borderRadius: radius.xl, padding: '22px 108px 24px 22px', marginBottom: 22, overflow: 'hidden',
+    position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    width: '100%', boxSizing: 'border-box', textAlign: 'left', border: 'none', cursor: 'pointer',
+    borderRadius: radius.xl, padding: '22px', marginBottom: 22, overflow: 'hidden',
     background: `linear-gradient(135deg, ${color.heroFrom}, ${color.heroTo})`,
-    boxShadow: theme.shadow.raised, animation: 'fadeUp 0.5s ease both',
+    boxShadow: '0 12px 28px rgba(76,111,255,0.28), inset 0 1px 0 rgba(255,255,255,0.25)',
+    animation: 'fadeUp 0.5s ease both',
   },
-  heroGlowA: { position: 'absolute', top: -40, right: -30, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255,255,255,0.14)' },
-  heroGlowB: { position: 'absolute', bottom: -50, right: 40, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.10)' },
+  heroGlowA: {
+    position: 'absolute', top: -50, right: -30, width: 170, height: 170, borderRadius: '50%',
+    background: 'rgba(255,255,255,0.16)', filter: 'blur(2px)', animation: 'glowDrift 7s ease-in-out infinite',
+  },
+  heroGlowB: {
+    position: 'absolute', bottom: -60, left: '38%', width: 130, height: 130, borderRadius: '50%',
+    background: 'rgba(255,255,255,0.12)', filter: 'blur(2px)', animation: 'glowDrift 9s ease-in-out infinite reverse',
+  },
+  heroText: { position: 'relative', flex: 1, minWidth: 0 },
   heroPill: {
-    position: 'relative', display: 'inline-block', fontSize: 10, fontWeight: 700, letterSpacing: 0.8,
-    color: '#fff', background: 'rgba(255,255,255,0.22)', borderRadius: radius.pill, padding: '5px 10px', marginBottom: 12,
+    display: 'inline-block', fontSize: 10, fontWeight: 700, letterSpacing: 0.8,
+    color: '#fff', background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(6px)',
+    border: '1px solid rgba(255,255,255,0.3)', borderRadius: radius.pill, padding: '5px 10px', marginBottom: 12,
   },
-  heroTitle: { position: 'relative', fontSize: 22, fontWeight: 800, color: '#fff', margin: '0 0 6px', lineHeight: 1.2 },
-  heroSub: { position: 'relative', fontSize: 12.5, color: 'rgba(255,255,255,0.82)', margin: '0 0 18px', lineHeight: 1.5 },
+  heroTitle: { fontSize: 21, fontWeight: 800, color: '#fff', margin: '0 0 6px', lineHeight: 1.25 },
+  heroSub: { fontSize: 12.5, color: 'rgba(255,255,255,0.82)', margin: '0 0 18px', lineHeight: 1.5 },
   heroCta: {
-    position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8,
-    background: 'rgba(22,24,38,0.88)', color: '#fff', fontSize: 13, fontWeight: 700,
-    borderRadius: radius.pill, padding: '11px 16px',
+    display: 'inline-flex', alignItems: 'center', gap: 8,
+    background: 'rgba(22,24,38,0.88)', color: '#fff', fontSize: 12.5, fontWeight: 700,
+    borderRadius: radius.pill, padding: '10px 15px', boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+  },
+  heroAvatarRing: {
+    position: 'relative', flexShrink: 0, width: 68, height: 68, borderRadius: '50%',
+    background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(8px)',
+    border: '1px solid rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: 'inset 0 2px 6px rgba(255,255,255,0.3), inset 0 -3px 8px rgba(0,0,0,0.12)',
   },
   heroAvatar: {
-    position: 'absolute', right: 8, bottom: 0, top: 0, width: 96, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 52, height: 52, borderRadius: '50%',
+    background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 24, boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.4)',
   },
-  avatarBlobA: { position: 'absolute', width: 78, height: 78, borderRadius: '46% 54% 60% 40% / 50% 45% 55% 50%', background: 'rgba(255,255,255,0.20)' },
-  avatarBlobB: { position: 'absolute', width: 58, height: 58, borderRadius: '50%', background: 'rgba(255,255,255,0.16)' },
 
   pendingBanner: {
-    display: 'flex', alignItems: 'center', gap: 12, background: color.tealDim,
-    border: `1px solid rgba(22,179,120,0.25)`, borderRadius: radius.lg, padding: '14px 16px',
-    marginBottom: 18, cursor: 'pointer', animation: 'fadeUp 0.5s ease both',
+    display: 'flex', alignItems: 'center', gap: 12,
+    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
+    border: `1px solid rgba(22,179,120,0.3)`, borderRadius: radius.lg, padding: '14px 16px',
+    marginBottom: 18, cursor: 'pointer', boxShadow: theme.shadow.glass, animation: 'fadeUp 0.5s ease both',
   },
-  pendingDot: { width: 9, height: 9, borderRadius: '50%', background: color.teal, flexShrink: 0 },
+  pendingDot: { width: 9, height: 9, borderRadius: '50%', background: color.teal, flexShrink: 0, boxShadow: `0 0 0 4px ${color.tealDim}`, animation: 'float 1.8s ease-in-out infinite' },
   pendingTitle: { fontSize: 13.5, fontWeight: 600, color: color.ink, margin: 0 },
   pendingSub: { fontSize: 12, color: color.inkDim, margin: '2px 0 0' },
 
@@ -458,35 +483,39 @@ const s = {
   seeAll: { background: 'none', border: 'none', color: color.blue, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0, fontFamily: font.ui },
   sessionCount: { fontSize: 12, color: color.inkFaint },
 
-  vitalsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 18 },
+  vitalsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, marginBottom: 18 },
   vitalTile: {
-    background: color.surface, borderRadius: radius.md, padding: '12px 10px',
-    boxShadow: theme.shadow.card, animation: 'fadeUp 0.5s ease both',
+    minWidth: 0, background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
+    border: `1px solid ${color.glassBorder}`, borderRadius: radius.md, padding: '12px 8px',
+    boxShadow: theme.shadow.glass, animation: 'fadeUp 0.5s ease both',
   },
-  vitalIconWrap: { width: 26, height: 26, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  vitalIconWrap: { width: 26, height: 26, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10, boxShadow: theme.shadow.embossOut },
+  vitalEmoji: { fontSize: 13, lineHeight: 1 },
   vitalValue: { fontSize: 16, fontWeight: 800, color: color.ink, margin: 0, lineHeight: 1.1 },
   vitalUnit: { fontSize: 10, fontWeight: 600, color: color.inkFaint, marginLeft: 2 },
   vitalLabel: { fontSize: 10.5, color: color.inkFaint, margin: '2px 0 8px' },
 
   scoreCard: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    background: color.surface, borderRadius: radius.lg, padding: '18px 20px', marginBottom: 18,
-    boxShadow: theme.shadow.card, animation: 'fadeUp 0.5s ease both',
+    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
+    border: `1px solid ${color.glassBorder}`, borderRadius: radius.lg, padding: '18px 20px', marginBottom: 18,
+    boxShadow: theme.shadow.glass, animation: 'fadeUp 0.5s ease both',
   },
   scoreLabel: { fontSize: 12.5, color: color.inkFaint, margin: '0 0 4px' },
   scoreValue: { fontSize: 30, fontWeight: 800, color: color.ink, margin: 0, display: 'flex', alignItems: 'baseline', gap: 8 },
   scoreExcellent: { fontSize: 13, fontWeight: 700, color: color.teal },
   scoreSub: { fontSize: 12, color: color.inkFaint, margin: '4px 0 0' },
-  scoreRingWrap: { position: 'relative', width: 76, height: 76, flexShrink: 0 },
-  scoreRingIcon: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  scoreRingWrap: { position: 'relative', width: 76, height: 76, flexShrink: 0, borderRadius: '50%', boxShadow: theme.shadow.embossOut },
+  scoreRingIcon: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 },
 
   eyebrow: { fontSize: 11, fontWeight: 600, letterSpacing: 1.2, textTransform: 'uppercase', color: color.inkFaint, margin: '0 0 12px' },
   medCard: {
-    background: color.surface, borderRadius: radius.lg,
-    padding: '18px 18px 6px', marginBottom: 18, boxShadow: theme.shadow.card, animation: 'fadeUp 0.5s ease both',
+    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
+    border: `1px solid ${color.glassBorder}`, borderRadius: radius.lg,
+    padding: '18px 18px 6px', marginBottom: 18, boxShadow: theme.shadow.glass, animation: 'fadeUp 0.5s ease both',
   },
   doseRow: { display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 14px' },
-  doseRingWrap: { position: 'relative', width: 52, height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  doseRingWrap: { position: 'relative', width: 52, height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', boxShadow: theme.shadow.embossOut },
   doseRingLabel: { position: 'absolute', fontSize: 9, fontWeight: 700, letterSpacing: 0.5 },
   doseInfo: { flex: 1, minWidth: 0 },
   doseName: { fontSize: 14, fontWeight: 600, color: color.ink, margin: 0 },
@@ -499,11 +528,12 @@ const s = {
 
   histCard: {
     display: 'flex', alignItems: 'center', gap: 12,
-    background: color.surface, borderRadius: radius.md,
+    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
+    border: `1px solid ${color.glassBorder}`, borderRadius: radius.md,
     padding: '13px 14px', marginBottom: 8, cursor: 'pointer', animation: 'fadeUp 0.45s ease both',
-    boxShadow: theme.shadow.card,
+    boxShadow: theme.shadow.glass,
   },
-  histIcon: { width: 36, height: 36, borderRadius: 10, background: 'rgba(139,108,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  histIcon: { width: 36, height: 36, borderRadius: 10, background: 'rgba(139,108,246,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 15, boxShadow: theme.shadow.embossOut },
   cardBody: { flex: 1, minWidth: 0 },
   cardTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 },
   cardTitle: { fontSize: 13.5, fontWeight: 600, color: color.ink, margin: 0, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
@@ -520,11 +550,14 @@ const s = {
     backgroundSize: '400px 100%', animation: 'shimmer 1.6s infinite',
   },
 
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(16,18,32,0.45)', zIndex: 200 },
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(16,18,32,0.4)', backdropFilter: 'blur(2px)', zIndex: 200 },
   sheet: {
     position: 'fixed', bottom: 0, left: 0, right: 0,
-    background: color.bgElevated, borderRadius: '24px 24px 0 0', padding: '20px 24px 40px',
-    zIndex: 201, animation: 'sheetUp 0.3s ease both', maxWidth: 480, margin: '0 auto',
+    background: color.glassStrong, backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+    border: `1px solid ${color.glassBorder}`, borderBottom: 'none',
+    borderRadius: '24px 24px 0 0', padding: '20px 24px 40px',
+    zIndex: 201, animation: 'sheetUp 0.32s cubic-bezier(0.34,1.56,0.64,1) both', maxWidth: 480, margin: '0 auto',
+    boxShadow: '0 -12px 40px rgba(31,38,80,0.18)',
   },
   sheetPill: { width: 36, height: 4, borderRadius: 2, background: color.hairlineStrong, margin: '0 auto 18px' },
   sheetTitle: { fontSize: 19, fontWeight: 700, color: color.ink, margin: '0 0 8px' },
@@ -534,13 +567,17 @@ const s = {
   sheetBtn: {
     width: '100%', padding: '15px 0', background: color.blue, border: 'none', borderRadius: radius.md,
     color: '#fff', fontSize: 14.5, fontWeight: 700, fontFamily: font.ui, cursor: 'pointer', marginBottom: 8,
+    boxShadow: '0 6px 16px rgba(76,111,255,0.35)',
   },
   sheetCancel: { width: '100%', padding: '12px 0', background: 'none', border: 'none', color: color.inkFaint, fontSize: 13.5, cursor: 'pointer', fontFamily: font.ui },
 
   menuSheet: {
     position: 'fixed', bottom: 0, left: 0, right: 0,
-    background: color.bgElevated, borderRadius: '24px 24px 0 0', padding: '20px 24px 40px',
-    zIndex: 201, animation: 'sheetUp 0.3s ease both', maxWidth: 480, margin: '0 auto',
+    background: color.glassStrong, backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+    border: `1px solid ${color.glassBorder}`, borderBottom: 'none',
+    borderRadius: '24px 24px 0 0', padding: '20px 24px 40px',
+    zIndex: 201, animation: 'sheetUp 0.32s cubic-bezier(0.34,1.56,0.64,1) both', maxWidth: 480, margin: '0 auto',
+    boxShadow: '0 -12px 40px rgba(31,38,80,0.18)',
   },
   menuName: { fontSize: 18, fontWeight: 700, color: color.ink, margin: '0 0 2px' },
   menuSub: { fontSize: 13, color: color.inkFaint, margin: '0 0 18px' },
