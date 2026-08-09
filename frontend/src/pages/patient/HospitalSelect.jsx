@@ -4,12 +4,11 @@ import { getNearbyHospitals } from '../../api/hospitals';
 import useLocation from '../../hooks/useLocation';
 import { confirmArrival } from '../../api/triage';
 import { theme } from '../../styles/theme';
-import { Icon } from '../../components/Icons';
 import BottomNav from '../../components/BottomNav';
 
 const { color, font, radius } = theme;
 
-// Tints cycled across the hospital list, matching the reference card icons
+// Tints cycled across the hospital list
 const TINTS = [
   { tint: color.blue,  dim: color.blueDim },
   { tint: color.violet, dim: 'rgba(139,108,246,0.12)' },
@@ -35,14 +34,13 @@ function StaticMap() {
       <div style={{ ...s.mapPatch, top: '8%', left: '4%', width: 70, height: 46 }} />
       <div style={{ ...s.mapPatch, bottom: '10%', right: '8%', width: 90, height: 54 }} />
       {MAP_PINS.map((p, i) => (
-        <div key={i} style={{ ...s.mapPin, top: p.top, left: p.left }}>
-          <Icon.Hospital size={13} color="#fff" />
-        </div>
+        <div key={i} style={{ ...s.mapPin, top: p.top, left: p.left, animationDelay: `${i * 0.4}s` }}>🏥</div>
       ))}
       <div style={s.mapUserWrap}>
         <div style={s.mapUserRing} />
         <div style={s.mapUserDot} />
       </div>
+      <div style={s.mapGlassSheen} />
     </div>
   );
 }
@@ -105,8 +103,8 @@ export default function HospitalSelect() {
       <div style={s.main}>
         {/* Header */}
         <div style={s.header}>
-          <button style={s.back} onClick={() => navigate('/dashboard')}>
-            <Icon.ChevronLeft size={20} color={color.ink} />
+          <button style={s.back} className="cc-press" onClick={() => navigate('/dashboard')}>
+            <span style={s.backEmoji}>←</span>
           </button>
         </div>
         <h1 style={s.title}>Hospitals Nearby</h1>
@@ -128,7 +126,7 @@ export default function HospitalSelect() {
           <div style={s.alertBox}>
             <p style={{ fontSize: 30, margin: '0 0 8px' }}>📍</p>
             <p style={s.alertText}>{locError}</p>
-            <button style={s.retryBtn} onClick={getLocation}>Try Again</button>
+            <button style={s.retryBtn} className="cc-press" onClick={getLocation}>Try Again</button>
           </div>
         )}
 
@@ -152,26 +150,27 @@ export default function HospitalSelect() {
                 <div
                   key={h.id}
                   style={{ ...s.card, animationDelay: `${i * 0.06}s` }}
+                  className="cc-cardhover"
                   onClick={() => handleSelect(h)}
                 >
                   {h.is_testing && <div style={s.testBadge}>Test Mode</div>}
 
-                  <div style={{ ...s.hospitalIcon, background: tint.dim, color: tint.tint }}>
-                    <Icon.Building size={20} color={tint.tint} />
+                  <div style={{ ...s.hospitalIcon, background: tint.dim }}>
+                    <span style={{ fontSize: 20 }}>🏢</span>
                   </div>
 
                   <div style={s.cardInfo}>
                     <p style={s.hosName}>{h.name}</p>
                     <p style={s.hosMeta}>{h.town}{h.county ? `, ${h.county}` : ''}</p>
                     {h.phone && (
-                      <p style={s.hosPhone}><Icon.Phone size={11} color={color.inkFaint} /> {h.phone}</p>
+                      <p style={s.hosPhone}>📞 {h.phone}</p>
                     )}
                   </div>
 
                   <div style={s.cardRight}>
                     <p style={{ ...s.distKm, color: tint.tint }}>{h.distance_km} km</p>
-                    <p style={s.distTime}><Icon.Clock size={11} color={color.inkFaint} /> {h.travel_time}</p>
-                    <Icon.Chevron size={16} color={color.inkFaint} />
+                    <p style={s.distTime}>🕐 {h.travel_time}</p>
+                    <span style={{ color: color.inkFaint, fontSize: 16 }}>›</span>
                   </div>
                 </div>
               );
@@ -185,7 +184,7 @@ export default function HospitalSelect() {
             <p style={{ fontSize: 36, marginBottom: 12 }}>🏥</p>
             <p style={s.stateText}>No hospitals found nearby</p>
             <p style={s.stateSubText}>Try speaking to a doctor online instead.</p>
-            <button style={s.retryBtn} onClick={() => navigate('/consultation')}>Consult a Doctor Online</button>
+            <button style={s.retryBtn} className="cc-press" onClick={() => navigate('/consultation')}>Consult a Doctor Online</button>
           </div>
         )}
 
@@ -199,27 +198,39 @@ export default function HospitalSelect() {
         * { box-sizing: border-box; }
         button { font-family: inherit; }
         button:focus-visible { outline: 2px solid ${color.blue}; outline-offset: 2px; }
+        ${theme.motionCss}
+        .cc-cardhover { transition: transform 0.2s ease; }
+        .cc-cardhover:active { transform: scale(0.985); }
         @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes pulseRing{0%{transform:scale(0.6);opacity:0.6}100%{transform:scale(2.2);opacity:0}}
+        @keyframes pinBob{0%,100%{transform:translateY(0) rotate(-45deg)}50%{transform:translateY(-4px) rotate(-45deg)}}
+        @keyframes sheenDrift{0%,100%{transform:translateX(-10%)}50%{transform:translateX(10%)}}
       `}</style>
     </div>
   );
 }
 
 const s = {
-  page: { minHeight: '100vh', backgroundColor: color.bg, fontFamily: font.ui, color: color.ink },
-  main: { maxWidth: 480, margin: '0 auto', padding: '18px 20px 40px' },
+  page: { minHeight: '100vh', width: '100%', background: color.bgGradient, fontFamily: font.ui, color: color.ink, overflowX: 'hidden', boxSizing: 'border-box' },
+  main: { width: '100%', maxWidth: 480, margin: '0 auto', padding: '18px 20px 40px', boxSizing: 'border-box' },
 
   header: { display: 'flex', alignItems: 'center', marginBottom: 14 },
-  back: { width: 38, height: 38, borderRadius: radius.md, background: color.surfaceMuted, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  back: {
+    width: 38, height: 38, borderRadius: radius.md,
+    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
+    border: `1px solid ${color.glassBorder}`, boxShadow: theme.shadow.embossOut,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+  },
+  backEmoji: { fontSize: 17, lineHeight: 1, color: color.ink },
   title: { fontSize: 25, fontWeight: 800, margin: '0 0 3px', letterSpacing: -0.4 },
   sub: { fontSize: 13.5, color: color.inkFaint, margin: '0 0 16px' },
 
   map: {
     position: 'relative', width: '100%', height: 190, borderRadius: radius.lg, overflow: 'hidden',
     background: `linear-gradient(160deg, ${color.surfaceRaised}, ${color.surfaceMuted})`,
-    marginBottom: 20, boxShadow: theme.shadow.card,
+    border: `1px solid ${color.glassBorder}`,
+    marginBottom: 20, boxShadow: theme.shadow.glass,
   },
   mapGrid: {
     position: 'absolute', inset: 0,
@@ -230,21 +241,30 @@ const s = {
   mapRoadH: { position: 'absolute', left: 0, right: 0, top: '54%', height: 8, background: 'rgba(255,255,255,0.65)' },
   mapPatch: { position: 'absolute', borderRadius: 10, background: color.mintDim },
   mapPin: {
-    position: 'absolute', width: 26, height: 26, borderRadius: '50% 50% 50% 4px', transform: 'rotate(-45deg) translate(-50%,-100%)',
-    background: color.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 8px rgba(76,111,255,0.4)',
+    position: 'absolute', width: 26, height: 26, borderRadius: '50% 50% 50% 4px',
+    transform: 'rotate(-45deg) translate(-50%,-100%)', transformOrigin: 'center',
+    background: color.blue, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 3px 8px rgba(76,111,255,0.4)', fontSize: 11, animation: 'pinBob 2.4s ease-in-out infinite',
   },
   mapUserWrap: { position: 'absolute', top: '50%', left: '46%', width: 0, height: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   mapUserRing: { position: 'absolute', width: 40, height: 40, borderRadius: '50%', background: 'rgba(76,111,255,0.35)', animation: 'pulseRing 2.2s ease-out infinite' },
   mapUserDot: { position: 'absolute', width: 16, height: 16, borderRadius: '50%', background: color.blue, border: '3px solid #fff', boxShadow: '0 2px 6px rgba(76,111,255,0.5)' },
+  mapGlassSheen: {
+    position: 'absolute', top: 0, left: 0, width: '60%', height: '100%',
+    background: 'linear-gradient(100deg, rgba(255,255,255,0.22), transparent 60%)',
+    animation: 'sheenDrift 6s ease-in-out infinite', pointerEvents: 'none',
+  },
 
   countText: { fontSize: 12.5, color: color.inkFaint, marginBottom: 12 },
   card: {
     position: 'relative', display: 'flex', alignItems: 'center', gap: 13,
-    background: color.surface, boxShadow: theme.shadow.card, borderRadius: radius.lg, padding: '15px',
+    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
+    border: `1px solid ${color.glassBorder}`, boxShadow: theme.shadow.glass,
+    borderRadius: radius.lg, padding: '15px',
     marginBottom: 10, cursor: 'pointer', animation: 'fadeUp 0.45s ease both',
   },
   testBadge: { position: 'absolute', top: -8, right: 12, fontSize: 9.5, fontWeight: 700, color: color.amber, background: color.amberDim, borderRadius: radius.pill, padding: '2px 8px' },
-  hospitalIcon: { width: 46, height: 46, borderRadius: radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  hospitalIcon: { width: 46, height: 46, borderRadius: radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: theme.shadow.embossOut },
   cardInfo: { flex: 1, minWidth: 0 },
   hosName: { fontSize: 14, fontWeight: 700, color: color.ink, margin: '0 0 3px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
   hosMeta: { fontSize: 12, color: color.inkFaint, margin: '0 0 3px' },
@@ -257,7 +277,7 @@ const s = {
   stateText: { fontSize: 15, fontWeight: 600, color: color.ink, margin: '12px 0 6px' },
   stateSubText: { fontSize: 13, color: color.inkFaint, marginBottom: 20 },
   spinner: { width: 34, height: 34, borderRadius: '50%', border: `3px solid ${color.hairlineStrong}`, borderTop: `3px solid ${color.blue}`, animation: 'spin 0.8s linear infinite', margin: '0 auto' },
-  alertBox: { background: color.coralDim, borderRadius: radius.lg, padding: '20px', textAlign: 'center', marginBottom: 16 },
+  alertBox: { background: color.coralDim, borderRadius: radius.lg, padding: '20px', textAlign: 'center', marginBottom: 16, border: '1px solid rgba(255,101,132,0.25)' },
   alertText: { fontSize: 13, color: color.inkDim, margin: '0 0 14px' },
-  retryBtn: { background: color.blue, border: 'none', borderRadius: radius.md, color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 22px', cursor: 'pointer', fontFamily: font.ui },
+  retryBtn: { background: color.blue, border: 'none', borderRadius: radius.md, color: '#fff', fontSize: 13, fontWeight: 700, padding: '11px 22px', cursor: 'pointer', fontFamily: font.ui, boxShadow: '0 6px 16px rgba(76,111,255,0.35)' },
 };
