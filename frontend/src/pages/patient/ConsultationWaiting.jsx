@@ -2,14 +2,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVideoRoom } from '../../api/video';
 
+const fmtTimer = (sec) => {
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  return `${m}:${s}`;
+};
+
 export default function ConsultationWaiting() {
   const navigate       = useNavigate();
   const patient        = JSON.parse(localStorage.getItem('civtech_patient') || '{}');
   const consultationId = localStorage.getItem('civtech_consultation_id');
+  const doctor          = JSON.parse(localStorage.getItem('civtech_selected_doctor') || '{}');
 
   const [ready, setReady]     = useState(false);
   const [roomUrl, setRoomUrl] = useState(null);
   const [joined, setJoined]   = useState(false);
+  const [elapsed, setElapsed] = useState(0);
 
   const poll = useCallback(async () => {
     if (!consultationId) return;
@@ -29,21 +37,50 @@ export default function ConsultationWaiting() {
     return () => clearInterval(t);
   }, [poll, consultationId, joined]);
 
+  // Live call timer, running only once the patient has joined.
+  useEffect(() => {
+    if (!joined || !roomUrl) return;
+    const start = Date.now();
+    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, [joined, roomUrl]);
+
+  const doctorName = doctor.full_name || doctor.name || 'your doctor';
+
   // ── IN-CALL VIEW ──
   if (joined && roomUrl) {
     return (
       <div style={s.callPage}>
         <div style={s.callBar}>
-          <div style={s.callName}>Consultation with your doctor</div>
-          <button style={s.leaveBtn} onClick={() => navigate('/rate')}>Leave Call</button>
+          <div style={s.callBarLeft}>
+            <div style={s.avatarCircle}>🩺</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={s.callName}>Dr. {doctorName.replace(/^Dr\.?\s*/i, '')}</div>
+              <div style={s.callSub}><span style={s.liveDot} />{fmtTimer(elapsed)} · Live consultation</div>
+            </div>
+          </div>
         </div>
-        <iframe
-          title="Video consultation"
-          src={roomUrl}
-          allow="camera; microphone; fullscreen; speaker; display-capture; autoplay"
-          style={s.iframe}
-        />
-        <p style={s.hint}>Tap the controls to mute your mic or turn your camera off.</p>
+
+        <div style={s.videoWrap}>
+          <iframe
+            title="Video consultation"
+            src={roomUrl}
+            allow="camera; microphone; fullscreen; speaker; display-capture; autoplay"
+            style={s.iframe}
+          />
+        </div>
+
+        <div style={s.fabWrap}>
+          <button style={s.endFab} className="cc-press" onClick={() => navigate('/rate')} aria-label="Leave call">📵</button>
+          <span style={s.endFabLabel}>Leave call</span>
+        </div>
+
+        <style>{`
+          .cc-press { transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }
+          .cc-press:active { transform: scale(0.94); }
+          @keyframes wcPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,77,109,0.5)} 50%{box-shadow:0 0 0 6px rgba(255,77,109,0)} }
+          @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+        `}</style>
       </div>
     );
   }
@@ -97,10 +134,36 @@ const s = {
   note:    { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '14px 22px', margin: '20px 0 32px', fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.7 },
   joinBtn: { width: '100%', maxWidth: 320, padding: '16px 0', background: 'linear-gradient(135deg,#00d4aa,#00a884)', border: 'none', borderRadius: 14, color: '#04241d', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 16 },
   backBtn: { width: '100%', maxWidth: 320, padding: '14px 0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 14, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 14 },
-  callPage:{ minHeight: '100vh', background: '#0b0b12', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif" },
-  callBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)' },
-  callName:{ color: '#fff', fontWeight: 700, fontSize: 14 },
-  leaveBtn:{ background: 'linear-gradient(135deg,#ff4d6d,#d62246)', border: 'none', color: '#fff', fontWeight: 700, fontSize: 13, padding: '10px 18px', borderRadius: 12, cursor: 'pointer' },
-  iframe:  { flex: 1, width: '100%', border: 'none', minHeight: 0 },
-  hint:    { color: 'rgba(255,255,255,0.4)', fontSize: 12, textAlign: 'center', padding: '10px 16px 18px', margin: 0 },
+
+  callPage: {
+    position: 'relative', height: '100vh', width: '100%', overflow: 'hidden',
+    background: 'radial-gradient(1200px 800px at 20% -10%, rgba(0,212,170,0.14), transparent 60%), #0b0b12',
+    display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif",
+  },
+  callBar: {
+    display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', flexShrink: 0, zIndex: 5,
+    background: 'rgba(11,11,18,0.72)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+    borderBottom: '1px solid rgba(255,255,255,0.08)',
+  },
+  callBarLeft: { display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 },
+  avatarCircle: {
+    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+    background: 'rgba(0,212,170,0.14)', border: '1px solid rgba(0,212,170,0.35)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15,
+  },
+  callName: { color: '#fff', fontWeight: 700, fontSize: 14, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
+  callSub: { display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 11.5, marginTop: 2, fontFamily: "'IBM Plex Mono', monospace" },
+  liveDot: { width: 6, height: 6, borderRadius: '50%', background: '#06d6a0', animation: 'wcPulse 1.8s ease-in-out infinite', display: 'inline-block' },
+
+  videoWrap: { position: 'relative', flex: 1, minHeight: 0, margin: '10px 12px', borderRadius: 20, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 40px rgba(0,0,0,0.6)' },
+  iframe: { position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' },
+
+  fabWrap: { position: 'absolute', left: 0, right: 0, bottom: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, zIndex: 6, pointerEvents: 'none' },
+  endFab: {
+    pointerEvents: 'auto', width: 60, height: 60, borderRadius: '50%',
+    background: 'linear-gradient(135deg,#ff4d6d,#d62246)', border: '3px solid rgba(255,255,255,0.15)',
+    color: '#fff', fontSize: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0 10px 28px rgba(255,77,109,0.45)',
+  },
+  endFabLabel: { pointerEvents: 'none', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)', background: 'rgba(11,11,18,0.7)', padding: '4px 10px', borderRadius: 999, backdropFilter: 'blur(8px)' },
 };
