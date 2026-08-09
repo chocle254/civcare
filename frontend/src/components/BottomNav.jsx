@@ -1,21 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { theme } from '../styles/theme';
 
 const { color, font, radius } = theme;
+const API = process.env.REACT_APP_API_URL;
 
 const TABS = [
-  { id: 'home',      label: 'Home',        path: '/dashboard',         emoji: '🏠' },
-  { id: 'health',    label: 'Health',      path: '/medications',       emoji: '❤️' },
-  { id: 'assistant', label: 'AI Assistant',path: '/chat',               emoji: '✨' },
-  { id: 'records',   label: 'Records',     path: '/diagnosis-history', emoji: '📄' },
-  { id: 'more',      label: 'More',        emoji: '⋯' },
+  { id: 'home',   label: 'Home',        path: '/dashboard',   emoji: '🏠' },
+  { id: 'meds',   label: 'Medications', path: '/medications', emoji: '💊' },
+  { id: 'assistant', label: 'AI Assistant', path: '/chat',     emoji: '✨' },
+  { id: 'doctor', label: 'Find a Doctor', path: '/consultation', emoji: '🩺', badge: 'doctors' },
+  { id: 'more',   label: 'More',        emoji: '⋯' },
 ];
 
 const MORE_ITEMS = [
-  { emoji: '🩺', title: 'Find a Doctor',    sub: 'Consult online',     path: '/consultation' },
   { emoji: '🏥', title: 'Hospitals Nearby', sub: 'Find care near you', path: '/hospitals' },
-  { emoji: '💊', title: 'Medications',      sub: 'Reminders & doses',  path: '/medications' },
   { emoji: '📋', title: 'Diagnosis History',sub: 'Past consultations', path: '/diagnosis-history' },
   { emoji: '👤', title: 'Profile',          sub: 'Your details',       path: '/profile' },
   { emoji: '🚪', title: 'Sign Out',         sub: 'Log out of CivCare', action: 'logout' },
@@ -24,6 +24,15 @@ const MORE_ITEMS = [
 export default function BottomNav({ active }) {
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [doctorCount, setDoctorCount] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    axios.get(`${API}/doctors/available`)
+      .then((res) => { if (alive) setDoctorCount(Array.isArray(res.data) ? res.data.length : null); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   const handleTab = (t) => {
     if (t.id === 'more') { setMoreOpen(true); return; }
@@ -41,10 +50,14 @@ export default function BottomNav({ active }) {
       <nav className="cc-bottomnav" style={s.bar}>
         {TABS.map((t) => {
           const isActive = t.id === active || (t.id === 'more' && moreOpen);
+          const showBadge = t.badge === 'doctors' && doctorCount != null && doctorCount > 0;
           return (
             <button key={t.id} style={s.btn} className="cc-navbtn" onClick={() => handleTab(t)}>
               {isActive && <span style={s.activeBubble} />}
-              <span style={{ ...s.emoji, opacity: isActive ? 1 : 0.55, transform: isActive ? 'scale(1.12)' : 'scale(1)' }}>{t.emoji}</span>
+              <span style={s.emojiWrap}>
+                <span style={{ ...s.emoji, opacity: isActive ? 1 : 0.55, transform: isActive ? 'scale(1.12)' : 'scale(1)' }}>{t.emoji}</span>
+                {showBadge && <span style={s.countBadge}>{doctorCount > 9 ? '9+' : doctorCount}</span>}
+              </span>
               <span style={{ ...s.label, color: isActive ? color.blue : color.inkFaint }}>{t.label}</span>
             </button>
           );
@@ -86,6 +99,7 @@ export default function BottomNav({ active }) {
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
         @keyframes gridIn { from{opacity:0;transform:translateY(10px) scale(0.96)} to{opacity:1;transform:translateY(0) scale(1)} }
         @keyframes bubblePop { from{transform:scale(0.4);opacity:0} to{transform:scale(1);opacity:1} }
+        @keyframes badgePop { from{transform:scale(0)} to{transform:scale(1)} }
       `}</style>
     </>
   );
@@ -109,7 +123,14 @@ const s = {
     position: 'absolute', top: -2, width: 34, height: 34, borderRadius: '50%',
     background: color.blueDim, animation: 'bubblePop 0.28s cubic-bezier(0.34,1.56,0.64,1) both',
   },
+  emojiWrap: { position: 'relative', display: 'inline-flex' },
   emoji: { position: 'relative', fontSize: 19, lineHeight: 1, transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1)' },
+  countBadge: {
+    position: 'absolute', top: -6, right: -10, minWidth: 15, height: 15, borderRadius: 8,
+    background: color.teal, color: '#fff', fontSize: 8.5, fontWeight: 800, lineHeight: '15px',
+    textAlign: 'center', padding: '0 3px', border: `1.5px solid ${color.bgElevated}`,
+    animation: 'badgePop 0.25s cubic-bezier(0.34,1.56,0.64,1) both',
+  },
   label: { position: 'relative', fontSize: 10, fontWeight: 600 },
 
   overlay: { position: 'fixed', inset: 0, background: 'rgba(16,18,32,0.4)', backdropFilter: 'blur(2px)', zIndex: 200, animation: 'fadeIn 0.2s ease both' },
