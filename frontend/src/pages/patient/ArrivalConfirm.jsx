@@ -130,136 +130,446 @@ export default function ArrivalConfirm() {
 
   return (
     <div style={s.page}>
-      <div style={s.orb1} /><div style={s.orb2} />
+      <main style={s.main}>
+        <header style={s.header}>
+          <button
+            type="button"
+            style={s.back}
+            onClick={() => navigate('/hospitals')}
+            aria-label="Back to hospital selection"
+          >
+            <span style={s.backIcon}>‹</span>
+          </button>
 
-      <div style={s.header}>
-        <button style={s.back} onClick={() => navigate('/hospitals')}>‹</button>
-        <div style={s.headerText}>
-          <h1 style={s.title}>Travel & Arrival</h1>
-          <p style={s.sub}>Proceed to destination</p>
-        </div>
-      </div>
+          <div style={s.headerText}>
+            <p style={s.eyebrow}>CIVCARE • NEXT STEP</p>
+            <h1 style={s.title}>Confirm your arrival</h1>
+            <p style={s.sub}>Review your destination before checking in.</p>
+          </div>
+        </header>
 
-      <div style={s.body}>
-        {/* Destination Card */}
-        <div style={s.card}>
-          <p style={s.cardLabel}>DESTINATION</p>
-          <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 4 }}>
-            {hospital.name}
-          </p>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>
-            {hospital.town}, {hospital.county} • <span style={{ color: '#00d4aa' }}>{hospital.distance_km} km away</span>
-          </p>
-        </div>
-
-        {/* Symptoms Preview */}
-        {sessionData?.assessment && (
-          <div style={s.card}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <p style={{ ...s.cardLabel, margin: 0 }}>YOUR AI TRIAGE SUMMARY</p>
+        <section style={s.content}>
+          <div style={s.destinationCard}>
+            <div style={s.destinationTop}>
+              <div style={s.facilityIcon}>
+                <span>+</span>
+              </div>
+              <div style={s.destinationMeta}>
+                <p style={s.cardLabel}>SELECTED FACILITY</p>
+                <h2 style={s.hospitalName}>{hospital.name || 'Selected hospital'}</h2>
+                <p style={s.location}>
+                  {hospital.town || 'Location'}{hospital.county ? `, ${hospital.county}` : ''}
+                </p>
+              </div>
+              <span style={s.readyPill}>READY</span>
             </div>
 
-            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>
-              This summary will be submitted directly to the doctor to save time.
+            <div style={s.destinationDetails}>
+              <div style={s.detail}>
+                <span style={s.detailLabel}>DISTANCE</span>
+                <strong style={s.detailValue}>
+                  {hospital.distance_km != null ? `${hospital.distance_km} km` : '—'}
+                </strong>
+              </div>
+              <div style={s.detailDivider} />
+              <div style={s.detail}>
+                <span style={s.detailLabel}>NEXT STEP</span>
+                <strong style={s.detailValue}>Confirm arrival</strong>
+              </div>
+            </div>
+          </div>
+
+          {sessionData?.assessment && (
+            <section style={s.summaryCard}>
+              <div style={s.sectionHeading}>
+                <div>
+                  <p style={s.cardLabel}>CARE SUMMARY</p>
+                  <h2 style={s.sectionTitle}>Your triage information</h2>
+                </div>
+                <div style={s.summaryIcon}>✓</div>
+              </div>
+
+              <p style={s.helper}>
+                This information will be available to the doctor so you do not have to repeat the same details.
+              </p>
+
+              <div style={s.summaryGrid}>
+                {sessionData.assessment.symptom && (
+                  <div style={s.summaryItem}>
+                    <span style={s.summaryKey}>Primary symptom</span>
+                    <span style={s.summaryVal}>{sessionData.assessment.symptom}</span>
+                  </div>
+                )}
+                {sessionData.assessment.duration && (
+                  <div style={s.summaryItem}>
+                    <span style={s.summaryKey}>Duration</span>
+                    <span style={s.summaryVal}>{sessionData.assessment.duration}</span>
+                  </div>
+                )}
+                {sessionData.assessment.severity && (
+                  <div style={s.summaryItem}>
+                    <span style={s.summaryKey}>Severity</span>
+                    <span style={s.summaryVal}>{sessionData.assessment.severity}/10</span>
+                  </div>
+                )}
+                {sessionData.assessment.associated && (
+                  <div style={s.summaryItem}>
+                    <span style={s.summaryKey}>Other symptoms</span>
+                    <span style={s.summaryVal}>{sessionData.assessment.associated}</span>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          <section style={s.mapCard}>
+            <div style={s.mapHeader}>
+              <div>
+                <p style={s.cardLabel}>ROUTE</p>
+                <h2 style={s.sectionTitle}>Getting there</h2>
+              </div>
+              {!isReady && <span style={s.mapStatus}>MAP OPTIONAL</span>}
+            </div>
+
+            <p style={s.helper}>
+              View the route from your current location to the selected facility.
             </p>
 
-            <div style={s.summaryGrid}>
-              {sessionData.assessment.symptom && (
-                <div style={s.summaryRow}>
-                  <span style={s.summaryKey}>Primary Symptom:</span>
-                  <span style={s.summaryVal}>{sessionData.assessment.symptom}</span>
-                </div>
-              )}
-              {sessionData.assessment.duration && (
-                <div style={s.summaryRow}>
-                  <span style={s.summaryKey}>Duration:</span>
-                  <span style={s.summaryVal}>{sessionData.assessment.duration}</span>
-                </div>
-              )}
-              {sessionData.assessment.severity && (
-                <div style={s.summaryRow}>
-                  <span style={s.summaryKey}>Severity:</span>
-                  <span style={s.summaryVal}>{sessionData.assessment.severity}/10</span>
-                </div>
-              )}
-              {sessionData.assessment.associated && (
-                <div style={s.summaryRow}>
-                  <span style={s.summaryKey}>Other Symptoms:</span>
-                  <span style={s.summaryVal}>{sessionData.assessment.associated}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Map Container */}
-        {isReady && (
-          <div style={{ ...s.card, padding: 0, overflow: 'hidden', height: 350, position: 'relative' }}>
-            {!mapReady && (
-              <div style={s.mapLoader}>
-                <div className="spinner" style={{ borderColor: 'rgba(255,255,255,0.1)', borderTopColor: '#00d4aa' }} />
-                <p style={{ marginTop: 12, fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Loading map data...</p>
+            {!isReady ? (
+              <button type="button" style={s.mapButton} onClick={() => setIsReady(true)}>
+                <span style={s.mapButtonIcon}>⌖</span>
+                <span>
+                  <strong>View route</strong>
+                  <small>Load the map when you need directions</small>
+                </span>
+                <span style={s.chevron}>›</span>
+              </button>
+            ) : (
+              <div style={s.mapViewport}>
+                {!mapReady && (
+                  <div style={s.mapLoader}>
+                    <div className="spinner" />
+                    <p>Loading route…</p>
+                  </div>
+                )}
+                <div ref={mapRef} style={s.map} />
               </div>
             )}
-            <div ref={mapRef} style={{ width: '100%', height: '100%', filter: 'invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%)' }} />
-          </div>
-        )}
-      </div>
+          </section>
 
-      {/* Action Bar */}
+          {error && <div style={s.errorBox}>{error}</div>}
+        </section>
+      </main>
+
       <div style={s.actionBar}>
-        {error && <div style={s.errorBox}>{error}</div>}
+        <div style={s.actionInner}>
+          <div style={s.actionCopy}>
+            <span style={s.actionDot} />
+            <div>
+              <strong>Ready to check in?</strong>
+              <span>Confirm once you have arrived at the facility.</span>
+            </div>
+          </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {!isReady && (
-            <button style={s.btnSecondary} onClick={() => setIsReady(true)}>
-              🗺️ Load Map (Uses Data)
-            </button>
-          )}
-          <button style={{ ...s.btnPrimary, ...(loading ? { opacity: 0.6 } : {}) }} onClick={handleConfirm} disabled={loading}>
-            {loading ? 'Checking in...' : '📍 Confirm Arrival Now'}
+          <button
+            type="button"
+            style={{ ...s.btnPrimary, ...(loading ? s.btnDisabled : {}) }}
+            onClick={handleConfirm}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <span className="buttonSpinner" />
+                Checking in…
+              </>
+            ) : (
+              <>
+                Confirm arrival
+                <span style={s.buttonArrow}>→</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
-        @keyframes orb{0%,100%{transform:scale(1);opacity:0.4}50%{transform:scale(1.1);opacity:0.7}}
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        * { box-sizing: border-box; }
+
+        .spinner,
+        .buttonSpinner {
+          display: inline-block;
+          border-radius: 50%;
+          animation: spin .8s linear infinite;
+        }
+
+        .spinner {
+          width: 26px;
+          height: 26px;
+          border: 3px solid #dbe5ef;
+          border-top-color: #1769aa;
+        }
+
+        .buttonSpinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid rgba(255,255,255,.35);
+          border-top-color: #fff;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 700px) {
+          .leaflet-control-container .leaflet-routing-container {
+            max-width: 220px;
+            font-size: 11px;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .spinner, .buttonSpinner { animation: none; }
+        }
       `}</style>
     </div>
   );
 }
-
 const s = {
-  page: { minHeight: '100vh', backgroundColor: '#080810', fontFamily: "'Outfit',sans-serif", color: '#fff', position: 'relative', overflowX: 'hidden', display: 'flex', flexDirection: 'column' },
-  orb1: { position: 'absolute', top: -100, left: '10%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle,rgba(0,212,170,0.15),transparent 70%)', filter: 'blur(60px)', pointerEvents: 'none', zIndex: 0, animation: 'orb 8s ease-in-out infinite' },
-  orb2: { position: 'absolute', bottom: '20%', right: -100, width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle,rgba(77,143,255,0.1),transparent 70%)', filter: 'blur(60px)', pointerEvents: 'none', zIndex: 0 },
-
-  header: { position: 'relative', zIndex: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '52px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(8,8,16,0.6)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' },
-  back: { background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontSize: 24, cursor: 'pointer', lineHeight: 1, padding: '4px 10px', backdropFilter: 'blur(10px)' },
+  page: {
+    minHeight: '100vh',
+    background: '#f5f7fa',
+    color: '#14212f',
+    fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    paddingBottom: 132
+  },
+  main: { maxWidth: 980, margin: '0 auto' },
+  header: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 16,
+    padding: '34px 24px 20px',
+    background: '#f5f7fa'
+  },
+  back: {
+    width: 44,
+    height: 44,
+    flexShrink: 0,
+    borderRadius: 14,
+    border: '1px solid #dce4ec',
+    background: '#fff',
+    color: '#203040',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 8px rgba(25,45,65,.05)'
+  },
+  backIcon: { fontSize: 29, lineHeight: .8, marginTop: -3 },
   headerText: { flex: 1 },
-  title: { fontFamily: "'Outfit',sans-serif", fontSize: 22, fontWeight: 800, margin: '0 0 2px', letterSpacing: -0.5 },
-  sub: { fontSize: 12, color: 'rgba(255,255,255,0.35)', margin: 0 },
+  eyebrow: {
+    margin: '2px 0 6px',
+    fontSize: 10,
+    fontWeight: 800,
+    letterSpacing: 1.35,
+    color: '#1769aa'
+  },
+  title: {
+    margin: 0,
+    fontSize: 'clamp(24px, 4vw, 32px)',
+    lineHeight: 1.15,
+    letterSpacing: -.7,
+    fontWeight: 800,
+    color: '#14212f'
+  },
+  sub: { margin: '7px 0 0', color: '#6b7b8c', fontSize: 14, lineHeight: 1.5 },
+  content: { padding: '4px 24px 28px' },
 
-  body: { position: 'relative', zIndex: 10, padding: '20px 20px 140px', flex: 1, overflowY: 'auto' },
+  destinationCard: {
+    background: '#fff',
+    border: '1px solid #e2e8ef',
+    borderRadius: 20,
+    padding: 22,
+    boxShadow: '0 8px 28px rgba(30,55,80,.06)',
+    marginBottom: 16
+  },
+  destinationTop: { display: 'flex', alignItems: 'center', gap: 14 },
+  facilityIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    flexShrink: 0,
+    background: '#eaf4fb',
+    color: '#1769aa',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 28,
+    fontWeight: 500
+  },
+  destinationMeta: { minWidth: 0, flex: 1 },
+  cardLabel: {
+    margin: 0,
+    fontSize: 10,
+    lineHeight: 1.2,
+    letterSpacing: 1.25,
+    fontWeight: 800,
+    color: '#8291a0',
+    textTransform: 'uppercase'
+  },
+  hospitalName: {
+    margin: '5px 0 3px',
+    fontSize: 19,
+    lineHeight: 1.3,
+    fontWeight: 750,
+    color: '#182635'
+  },
+  location: { margin: 0, color: '#738292', fontSize: 13 },
+  readyPill: {
+    flexShrink: 0,
+    padding: '6px 9px',
+    borderRadius: 999,
+    background: '#edf8f3',
+    color: '#187653',
+    fontSize: 9,
+    fontWeight: 800,
+    letterSpacing: .8
+  },
+  destinationDetails: {
+    display: 'flex',
+    alignItems: 'stretch',
+    marginTop: 20,
+    paddingTop: 17,
+    borderTop: '1px solid #edf0f3'
+  },
+  detail: { flex: 1, display: 'flex', flexDirection: 'column', gap: 5 },
+  detailDivider: { width: 1, background: '#e7edf2', margin: '0 18px' },
+  detailLabel: { fontSize: 9, letterSpacing: 1, fontWeight: 800, color: '#93a0ad' },
+  detailValue: { fontSize: 13, fontWeight: 700, color: '#334454' },
 
-  card: { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderRadius: 24, padding: '20px', marginBottom: 16, boxShadow: '0 10px 40px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)' },
-  cardLabel: { fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: 'rgba(255,255,255,0.3)', marginBottom: 8, textTransform: 'uppercase' },
+  summaryCard: {
+    background: '#fff',
+    border: '1px solid #e2e8ef',
+    borderRadius: 20,
+    padding: 22,
+    boxShadow: '0 8px 28px rgba(30,55,80,.05)',
+    marginBottom: 16
+  },
+  sectionHeading: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
+  sectionTitle: { margin: '5px 0 0', fontSize: 17, fontWeight: 750, color: '#1c2a38' },
+  summaryIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    background: '#edf8f3',
+    color: '#187653',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800
+  },
+  helper: { margin: '11px 0 17px', color: '#7b8997', fontSize: 12.5, lineHeight: 1.55 },
+  summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 },
+  summaryItem: {
+    minWidth: 0,
+    padding: '12px 13px',
+    background: '#f7f9fb',
+    border: '1px solid #edf1f4',
+    borderRadius: 13,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 5
+  },
+  summaryKey: { color: '#8996a3', fontSize: 10.5, fontWeight: 600 },
+  summaryVal: { color: '#263746', fontSize: 13, fontWeight: 650, overflowWrap: 'anywhere' },
 
-  criticalBadge: { background: 'rgba(255,77,109,0.15)', border: '1px solid rgba(255,77,109,0.3)', color: '#ff4d6d', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, letterSpacing: 0.5 },
-  summaryGrid: { display: 'grid', gap: 12 },
-  summaryRow: { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, background: 'rgba(255,255,255,0.02)', padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.03)' },
-  summaryKey: { color: 'rgba(255,255,255,0.4)', fontWeight: 600, flexShrink: 0 },
-  summaryVal: { color: '#fff', fontWeight: 500 },
+  mapCard: {
+    background: '#fff',
+    border: '1px solid #e2e8ef',
+    borderRadius: 20,
+    padding: 22,
+    boxShadow: '0 8px 28px rgba(30,55,80,.05)'
+  },
+  mapHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14 },
+  mapStatus: {
+    padding: '6px 9px',
+    borderRadius: 999,
+    background: '#f1f5f8',
+    color: '#718090',
+    fontSize: 9,
+    fontWeight: 800,
+    letterSpacing: .7
+  },
+  mapButton: {
+    width: '100%',
+    border: '1px solid #dfe7ee',
+    background: '#f8fafc',
+    borderRadius: 15,
+    padding: '14px 15px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    color: '#263746',
+    textAlign: 'left',
+    cursor: 'pointer'
+  },
+  mapButtonIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    background: '#eaf4fb',
+    color: '#1769aa',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 21,
+    flexShrink: 0
+  },
+  chevron: { marginLeft: 'auto', fontSize: 24, color: '#8291a0' },
+  mapViewport: { height: 330, borderRadius: 16, overflow: 'hidden', position: 'relative', background: '#e9eef2', border: '1px solid #dfe7ee' },
+  map: { width: '100%', height: '100%' },
+  mapLoader: { position: 'absolute', inset: 0, zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.88)', color: '#687887', fontSize: 12 },
+  errorBox: { marginTop: 16, padding: '12px 14px', borderRadius: 13, background: '#fff2f2', border: '1px solid #f3cccc', color: '#b43a3a', fontSize: 12.5, fontWeight: 600 },
 
-  mapLoader: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', zIndex: 10 },
-
-  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: '24px 20px 32px', background: 'linear-gradient(to top, #080810 60%, transparent)', zIndex: 100 },
-  btnPrimary: { width: '100%', padding: '16px 0', background: 'linear-gradient(135deg,#00d4aa,#4d8fff)', border: 'none', borderRadius: 16, color: '#fff', fontSize: 16, fontWeight: 700, fontFamily: "'Outfit',sans-serif", cursor: 'pointer', boxShadow: '0 8px 32px rgba(0,212,170,0.3)' },
-  btnSecondary: { width: '100%', padding: '16px 0', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, color: '#fff', fontSize: 15, fontWeight: 600, fontFamily: "'Outfit',sans-serif", cursor: 'pointer', backdropFilter: 'blur(10px)' },
-  btnOutline: { width: '100%', padding: '14px 0', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 14, color: '#fff', fontSize: 15, fontWeight: 600, fontFamily: "'Outfit',sans-serif", cursor: 'pointer', marginTop: 12 },
-
-  successIcon: { fontSize: 64, marginBottom: 20, filter: 'drop-shadow(0 0 20px rgba(0,212,170,0.4))' },
-  infoBox: { background: 'rgba(77,143,255,0.1)', border: '1px solid rgba(77,143,255,0.2)', borderRadius: 16, padding: '16px', marginBottom: 24 },
-  errorBox: { background: 'rgba(255,77,109,0.1)', border: '1px solid rgba(255,77,109,0.3)', color: '#ff4d6d', padding: '12px 16px', borderRadius: 12, fontSize: 13, marginBottom: 16, textAlign: 'center', fontWeight: 500 },
+  actionBar: {
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 100,
+    padding: '14px 24px 20px',
+    background: 'rgba(255,255,255,.94)',
+    borderTop: '1px solid #dfe6ed',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)'
+  },
+  actionInner: {
+    maxWidth: 980,
+    margin: '0 auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 22
+  },
+  actionCopy: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 },
+  actionDot: { width: 9, height: 9, borderRadius: '50%', background: '#1769aa', flexShrink: 0 },
+  actionCopy: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 },
+  btnPrimary: {
+    minWidth: 210,
+    border: 0,
+    borderRadius: 13,
+    padding: '14px 18px',
+    background: '#1769aa',
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 750,
+    cursor: 'pointer',
+    boxShadow: '0 7px 18px rgba(23,105,170,.22)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10
+  },
+  btnDisabled: { opacity: .65, cursor: 'wait' },
+  buttonArrow: { fontSize: 18, lineHeight: 1 },
+  actionCopy: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 },
+  actionCopyText: { minWidth: 0 },
 };
