@@ -2,66 +2,207 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../../api/client';
 
-// Inject pulse keyframe animation for timer dot
-if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-// ── Form-aware wording so we never call an injection or syrup a "pill" ──
 const FORM_META = {
-  tablet:    { unit: 'tablet',   units: 'tablets',   verb: 'Take',     icon: '💊' },
-  capsule:   { unit: 'capsule',  units: 'capsules',  verb: 'Take',     icon: '💊' },
-  liquid:    { unit: 'dose',     units: 'doses',     verb: 'Take',     icon: '🧴' },
-  injection: { unit: 'injection',units: 'injections',verb: 'Administer',icon: '💉' },
-  drops:     { unit: 'dose',     units: 'doses',     verb: 'Apply',    icon: '💧' },
+  tablet: {
+    unit: 'tablet',
+    units: 'tablets',
+    verb: 'Take',
+    icon: 'pill',
+  },
+  capsule: {
+    unit: 'capsule',
+    units: 'capsules',
+    verb: 'Take',
+    icon: 'capsule',
+  },
+  liquid: {
+    unit: 'dose',
+    units: 'doses',
+    verb: 'Take',
+    icon: 'liquid',
+  },
+  injection: {
+    unit: 'injection',
+    units: 'injections',
+    verb: 'Administer',
+    icon: 'injection',
+  },
+  drops: {
+    unit: 'dose',
+    units: 'doses',
+    verb: 'Apply',
+    icon: 'drops',
+  },
 };
+
 const formMeta = (form) => FORM_META[form] || FORM_META.tablet;
 
-// Live "next dose in Xh Ym" countdown shown on each scheduled medication.
+function Icon({ name, size = 20, strokeWidth = 1.8 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  };
+
+  const paths = {
+    pill: (
+      <>
+        <rect x="4" y="8" width="16" height="8" rx="4" transform="rotate(-45 12 12)" />
+        <path d="m8.5 15.5 7-7" />
+      </>
+    ),
+    capsule: (
+      <>
+        <rect x="5" y="7" width="14" height="10" rx="5" transform="rotate(-45 12 12)" />
+        <path d="m8.5 15.5 7-7" />
+      </>
+    ),
+    liquid: (
+      <>
+        <path d="M9 3h6" />
+        <path d="M10 3v5l-4.5 8.2A3 3 0 0 0 8.1 21h7.8a3 3 0 0 0 2.6-4.8L14 8V3" />
+        <path d="M8 16h8" />
+      </>
+    ),
+    injection: (
+      <>
+        <path d="m14 4 6 6" />
+        <path d="m13 5-8 8 6 6 8-8" />
+        <path d="m8 10 6 6" />
+        <path d="M5 18 3 21" />
+        <path d="m18 3 3 3" />
+      </>
+    ),
+    drops: (
+      <>
+        <path d="M12 3s6 6.2 6 11a6 6 0 0 1-12 0c0-4.8 6-11 6-11Z" />
+        <path d="M9.5 16a2.8 2.8 0 0 0 2.5 1.5" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    check: (
+      <>
+        <path d="m5 12 4 4L19 6" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="4" y="5" width="16" height="15" rx="2" />
+        <path d="M8 3v4M16 3v4M4 10h16" />
+      </>
+    ),
+    arrow: (
+      <>
+        <path d="M5 12h13" />
+        <path d="m14 7 5 5-5 5" />
+      </>
+    ),
+    edit: (
+      <>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+      </>
+    ),
+    close: (
+      <>
+        <path d="m6 6 12 12M18 6 6 18" />
+      </>
+    ),
+    hospital: (
+      <>
+        <path d="M4 21V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16" />
+        <path d="M9 21v-5h6v5M10 8h4M12 6v4" />
+      </>
+    ),
+    doctor: (
+      <>
+        <circle cx="12" cy="7" r="3" />
+        <path d="M5 21a7 7 0 0 1 14 0" />
+        <path d="M17 11h4M19 9v4" />
+      </>
+    ),
+    shield: (
+      <>
+        <path d="M12 3 20 6v5c0 5-3.3 8.4-8 10-4.7-1.6-8-5-8-10V6Z" />
+        <path d="m8.5 12 2.2 2.2 4.8-5" />
+      </>
+    ),
+    back: (
+      <>
+        <path d="m15 18-6-6 6-6" />
+      </>
+    ),
+  };
+
+  return <svg {...common}>{paths[name]}</svg>;
+}
+
 function NextDoseTimer({ nextDoseAt }) {
   const [now, setNow] = useState(Date.now());
+
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
+
   if (!nextDoseAt) return null;
 
   const diff = new Date(nextDoseAt).getTime() - now;
+
   if (diff <= 0) {
-    return <span style={styles.timerDue}>Dose due now</span>;
+    return (
+      <span className="meds-timer meds-timer--due">
+        <span className="meds-live-dot" />
+        Dose due now
+      </span>
+    );
   }
-  const h = Math.floor(diff / 3_600_000);
-  const m = Math.floor((diff % 3_600_000) / 60_000);
-  const s = Math.floor((diff % 60_000) / 1000);
-  const label = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+
+  const label =
+    h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+
   return (
-    <span style={styles.timer}>
-      <span aria-hidden="true" style={styles.timerDot} />
+    <span className="meds-timer">
+      <span className="meds-live-dot" />
       Next dose in {label}
     </span>
   );
 }
 
+
+
+
+
+
 export default function Medications() {
   const navigate = useNavigate();
-  const patient = JSON.parse(localStorage.getItem('civtech_patient') || '{}');
+  const patient = JSON.parse(
+    localStorage.getItem('civtech_patient') || '{}'
+  );
+
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  // per-med setup form inputs, keyed by prescription id
   const [drafts, setDrafts] = useState({});
   const [editing, setEditing] = useState({});
 
-  // ── Carer loop state ──
   const [dose, setDose] = useState(null);
-  const [step, setStep] = useState('confirm');   // confirm -> feel (feel only when ask_checkin)
+  const [step, setStep] = useState('confirm');
   const [answer, setAnswer] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [followup, setFollowup] = useState(null);
@@ -69,13 +210,19 @@ export default function Medications() {
 
   const loadCourses = useCallback(async () => {
     try {
-      const res = await client.get(`/reminders/courses?patient_id=${patient.id}`);
-      setCourses(res.data || []);
-      // default any unscheduled meds into edit mode
-      const ed = {};
-      (res.data || []).forEach((c) =>
-        c.meds.forEach((m) => { if (!m.reminders_active) ed[m.id] = true; })
+      const res = await client.get(
+        `/reminders/courses?patient_id=${patient.id}`
       );
+
+      setCourses(res.data || []);
+
+      const ed = {};
+      (res.data || []).forEach((course) =>
+        course.meds.forEach((med) => {
+          if (!med.reminders_active) ed[med.id] = true;
+        })
+      );
+
       setEditing((prev) => ({ ...ed, ...prev }));
     } catch {
       setCourses([]);
@@ -86,35 +233,62 @@ export default function Medications() {
 
   const checkDue = useCallback(async () => {
     if (!patient.id) return;
+
     try {
-      const res = await client.get(`/reminders/due?patient_id=${patient.id}`);
-      if (res.data?.due) setDose((prev) => prev || res.data);
-    } catch { /* silent — polling */ }
+      const res = await client.get(
+        `/reminders/due?patient_id=${patient.id}`
+      );
+
+      if (res.data?.due) {
+        setDose((prev) => prev || res.data);
+      }
+    } catch {
+      // Silent polling failure.
+    }
   }, [patient.id]);
 
   useEffect(() => {
     loadCourses();
     checkDue();
+
     pollRef.current = setInterval(checkDue, 20000);
+
     return () => clearInterval(pollRef.current);
   }, [loadCourses, checkDue]);
 
-  const setDraft = (id, field, value) =>
-    setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  const setDraft = (id, field, value) => {
+    setDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        [field]: value,
+      },
+    }));
+  };
 
   const handleSetReminder = async (med) => {
     const d = drafts[med.id] || {};
+
     if (!d.dosageInput || !d.firstDose) return;
+
     setSaving(true);
+
     try {
       await client.post('/reminders/set', {
         prescription_id: med.id,
         dosage_notation: d.dosageInput,
         first_dose_time: d.firstDose,
-        pills_dispensed: d.pillsInput ? parseInt(d.pillsInput, 10) : null,
+        pills_dispensed: d.pillsInput
+          ? parseInt(d.pillsInput, 10)
+          : null,
         patient_id: patient.id,
       });
-      setEditing((prev) => ({ ...prev, [med.id]: false }));
+
+      setEditing((prev) => ({
+        ...prev,
+        [med.id]: false,
+      }));
+
       loadCourses();
     } catch {
       alert('Could not set reminder. Please try again.');
@@ -123,10 +297,11 @@ export default function Medications() {
     }
   };
 
-  // ── Submit a dose check-in ──
   const submitDose = async ({ taken, skipReason }) => {
     if (!dose) return;
+
     setSubmitting(true);
+
     try {
       const res = await client.post('/reminders/checkin', {
         prescription_id: dose.prescription_id,
@@ -136,15 +311,26 @@ export default function Medications() {
         pills_taken: taken ? dose.units_per_dose : null,
         skip_reason: skipReason || null,
         checkin_question: dose.checkin_question,
-        answer: taken && dose.ask_checkin ? answer : null,
+        answer:
+          taken && dose.ask_checkin
+            ? answer
+            : null,
       });
+
       const data = res.data || {};
+
       setDose(null);
       setStep('confirm');
       setAnswer('');
+
       loadCourses();
+
       if (data.offer_followup) {
-        setFollowup({ message: data.message, course_outcome_id: data.course_outcome_id || null });
+        setFollowup({
+          message: data.message,
+          course_outcome_id:
+            data.course_outcome_id || null,
+        });
       }
     } catch {
       alert('Could not save your check-in. Please try again.');
@@ -153,240 +339,1242 @@ export default function Medications() {
     }
   };
 
-  // When the patient confirms intake: if it's the evening check-in, go ask how
-  // they feel; otherwise just log the dose and close.
   const handleTaken = () => {
-    if (dose?.ask_checkin) setStep('feel');
-    else submitDose({ taken: true });
+    if (dose?.ask_checkin) {
+      setStep('feel');
+    } else {
+      submitDose({ taken: true });
+    }
   };
 
   const reRoute = (destination) => {
     if (followup?.course_outcome_id) {
-      localStorage.setItem('civtech_followup_course', followup.course_outcome_id);
+      localStorage.setItem(
+        'civtech_followup_course',
+        followup.course_outcome_id
+      );
     }
+
     localStorage.setItem('civtech_followup_active', 'true');
     setFollowup(null);
-    navigate(destination === 'hospital' ? '/hospitals' : '/consultation');
+
+    navigate(
+      destination === 'hospital'
+        ? '/hospitals'
+        : '/consultation'
+    );
   };
 
-  const meta = dose ? formMeta(dose.med_form) : formMeta('tablet');
+  const meta = dose
+    ? formMeta(dose.med_form)
+    : formMeta('tablet');
+
+  const allMeds = courses.flatMap((course) => course.meds || []);
+  const activeMeds = allMeds.filter((med) => med.reminders_active);
+  const totalDoses = courses.reduce(
+    (sum, course) => sum + (course.doses_total || 0),
+    0
+  );
+  const completedDoses = courses.reduce(
+    (sum, course) => sum + (course.doses_done || 0),
+    0
+  );
+
+  const nextDose = activeMeds
+    .filter((med) => med.next_dose_at)
+    .sort(
+      (a, b) =>
+        new Date(a.next_dose_at) -
+        new Date(b.next_dose_at)
+    )[0];
+
+  const overallProgress =
+    totalDoses > 0
+      ? Math.round((completedDoses / totalDoses) * 100)
+      : 0;
 
   return (
-    <div className="page">
-      <div className="header">
-        <div>
-          <div className="header__logo">CivTech Care</div>
-          <div className="header__sub">My Treatment Plan</div>
-        </div>
-      </div>
+    <div className="meds-page">
+      <style>{`
+        @keyframes medsPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: .45; transform: scale(.82); }
+        }
 
-      <div className="container">
-        <div style={styles.tip}>
-          After visiting the pharmacy, enter how you were told to take each
-          medication. We&apos;ll remind you for every dose and check in once each
-          evening to see how you&apos;re doing.
-        </div>
+        @keyframes medsSlideUp {
+          from { transform: translateY(24px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
 
-        {loading && <div className="loader"><div className="spinner" /></div>}
+        .meds-page {
+          min-height: 100vh;
+          background: var(--meds-bg, #f5f7fb);
+          color: var(--meds-text, #162033);
+          padding-bottom: 110px;
+        }
 
-        {!loading && courses.length === 0 && (
-          <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-            <p style={{ fontSize: 28, marginBottom: 8 }}>💊</p>
-            <p style={{ fontWeight: 600, marginBottom: 8 }}>No treatment plan yet</p>
-            <p style={{ fontSize: 13, color: 'var(--gray-600)' }}>
-              Your medications will appear here, grouped by diagnosis, after your
-              doctor submits their verdict.
-            </p>
+        .meds-shell {
+          width: min(1080px, calc(100% - 32px));
+          margin: 0 auto;
+        }
+
+        .meds-topbar {
+          padding: 24px 0 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .meds-brand {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+        }
+
+        .meds-brand-mark {
+          width: 40px;
+          height: 40px;
+          border-radius: 13px;
+          display: grid;
+          place-items: center;
+          color: white;
+          background: linear-gradient(145deg, #1769e0, #0754c8);
+          box-shadow: 0 8px 20px rgba(23, 105, 224, .2);
+        }
+
+        .meds-brand-name {
+          font-size: 15px;
+          font-weight: 800;
+          letter-spacing: -.2px;
+        }
+
+        .meds-brand-sub {
+          font-size: 11px;
+          color: var(--meds-muted, #718096);
+          margin-top: 2px;
+        }
+
+        .meds-back {
+          border: 0;
+          background: var(--meds-surface, white);
+          color: var(--meds-muted, #65748b);
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          border: 1px solid var(--meds-border, #e5e9f0);
+        }
+
+        .meds-hero {
+          padding: 25px 0 22px;
+        }
+
+        .meds-eyebrow {
+          margin: 0 0 7px;
+          color: #1769e0;
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .9px;
+        }
+
+        .meds-title {
+          margin: 0;
+          font-size: clamp(27px, 5vw, 39px);
+          line-height: 1.08;
+          letter-spacing: -.9px;
+          font-weight: 800;
+        }
+
+        .meds-description {
+          max-width: 650px;
+          margin: 11px 0 0;
+          color: var(--meds-muted, #68778d);
+          font-size: 14px;
+          line-height: 1.6;
+        }
+
+        .meds-summary {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+          margin: 6px 0 25px;
+        }
+
+        .meds-stat {
+          background: var(--meds-surface, white);
+          border: 1px solid var(--meds-border, #e5e9f0);
+          border-radius: 17px;
+          padding: 16px;
+          min-width: 0;
+        }
+
+        .meds-stat-label {
+          font-size: 11px;
+          color: var(--meds-muted, #748196);
+          font-weight: 700;
+          margin-bottom: 7px;
+        }
+
+        .meds-stat-value {
+          font-size: 21px;
+          font-weight: 800;
+          letter-spacing: -.3px;
+        }
+
+        .meds-stat-meta {
+          margin-top: 4px;
+          font-size: 11px;
+          color: var(--meds-muted, #748196);
+        }
+
+        .meds-section-title {
+          font-size: 17px;
+          margin: 0;
+          font-weight: 800;
+          letter-spacing: -.2px;
+        }
+
+        .meds-section-sub {
+          margin: 5px 0 15px;
+          font-size: 12px;
+          color: var(--meds-muted, #748196);
+        }
+
+        .meds-course {
+          background: var(--meds-surface, white);
+          border: 1px solid var(--meds-border, #e5e9f0);
+          border-radius: 20px;
+          overflow: hidden;
+          margin-bottom: 15px;
+          box-shadow: 0 5px 18px rgba(25, 42, 70, .035);
+        }
+
+        .meds-course-head {
+          padding: 19px 20px 17px;
+          border-bottom: 1px solid var(--meds-border, #e5e9f0);
+        }
+
+        .meds-course-title-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 15px;
+        }
+
+        .meds-course-kicker {
+          margin: 0 0 5px;
+          font-size: 10px;
+          color: #738198;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .8px;
+        }
+
+        .meds-course-title {
+          margin: 0;
+          font-size: 18px;
+          line-height: 1.25;
+          font-weight: 800;
+        }
+
+        .meds-progress-number {
+          font-size: 18px;
+          font-weight: 800;
+          color: #1769e0;
+          white-space: nowrap;
+        }
+
+        .meds-progress-track {
+          height: 7px;
+          background: #e9edf3;
+          border-radius: 20px;
+          overflow: hidden;
+          margin-top: 15px;
+        }
+
+        .meds-progress-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #1769e0, #1b9f8a);
+          border-radius: inherit;
+          transition: width .4s ease;
+        }
+
+        .meds-progress-meta {
+          margin: 8px 0 0;
+          font-size: 11px;
+          color: var(--meds-muted, #748196);
+        }
+
+        .meds-list {
+          padding: 4px 20px;
+        }
+
+        .med-row {
+          padding: 17px 0;
+          border-bottom: 1px solid var(--meds-border, #edf0f4);
+        }
+
+        .med-row:last-child {
+          border-bottom: 0;
+        }
+
+        .med-main {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+        }
+
+        .med-identity {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+
+        .med-icon {
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
+          border-radius: 13px;
+          display: grid;
+          place-items: center;
+          background: #edf5ff;
+          color: #1769e0;
+        }
+
+        .med-name {
+          margin: 0;
+          font-size: 14px;
+          font-weight: 800;
+        }
+
+        .med-meta {
+          margin: 4px 0 0;
+          font-size: 11px;
+          color: var(--meds-muted, #748196);
+          text-transform: capitalize;
+        }
+
+        .med-status {
+          padding: 5px 9px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 800;
+          white-space: nowrap;
+          background: #e8f7f1;
+          color: #168463;
+        }
+
+        .med-schedule {
+          margin: 12px 0 0 54px;
+          padding: 12px;
+          background: var(--meds-soft, #f7f9fc);
+          border-radius: 13px;
+        }
+
+        .med-next {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .med-detail {
+          margin-top: 6px;
+          font-size: 11px;
+          line-height: 1.6;
+          color: var(--meds-muted, #748196);
+        }
+
+        .med-edit {
+          margin-top: 9px;
+          border: 0;
+          padding: 0;
+          background: none;
+          color: #1769e0;
+          font-size: 11px;
+          font-weight: 800;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .med-form {
+          margin: 14px 0 0 54px;
+          padding: 15px;
+          background: var(--meds-soft, #f7f9fc);
+          border: 1px solid var(--meds-border, #e5e9f0);
+          border-radius: 14px;
+        }
+
+        .med-field {
+          margin-bottom: 12px;
+        }
+
+        .med-field:last-of-type {
+          margin-bottom: 14px;
+        }
+
+        .med-field label {
+          display: block;
+          margin-bottom: 6px;
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--meds-muted, #64748b);
+        }
+
+        .med-input {
+          width: 100%;
+          box-sizing: border-box;
+          min-height: 43px;
+          border: 1px solid var(--meds-border, #dce2ea);
+          border-radius: 10px;
+          background: var(--meds-surface, white);
+          color: var(--meds-text, #162033);
+          padding: 0 12px;
+          font: inherit;
+          font-size: 13px;
+          outline: none;
+        }
+
+        .med-input:focus {
+          border-color: #1769e0;
+          box-shadow: 0 0 0 3px rgba(23, 105, 224, .1);
+        }
+
+        .med-button {
+          min-height: 42px;
+          border: 0;
+          border-radius: 11px;
+          padding: 0 15px;
+          font: inherit;
+          font-size: 12px;
+          font-weight: 800;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+        }
+
+        .med-button:disabled {
+          opacity: .55;
+          cursor: not-allowed;
+        }
+
+        .med-button--primary {
+          background: #1769e0;
+          color: white;
+        }
+
+        .med-button--success {
+          background: #168b70;
+          color: white;
+        }
+
+        .med-button--secondary {
+          background: var(--meds-soft, #f4f6f9);
+          color: var(--meds-text, #26344a);
+          border: 1px solid var(--meds-border, #e1e6ed);
+        }
+
+        .med-button--full {
+          width: 100%;
+        }
+
+        .med-empty {
+          background: var(--meds-surface, white);
+          border: 1px dashed var(--meds-border, #dbe1e9);
+          border-radius: 20px;
+          padding: 40px 22px;
+          text-align: center;
+        }
+
+        .med-empty-icon {
+          width: 54px;
+          height: 54px;
+          margin: 0 auto 13px;
+          border-radius: 17px;
+          display: grid;
+          place-items: center;
+          color: #1769e0;
+          background: #edf5ff;
+        }
+
+        .med-empty h3 {
+          margin: 0 0 7px;
+          font-size: 16px;
+        }
+
+        .med-empty p {
+          max-width: 390px;
+          margin: 0 auto;
+          color: var(--meds-muted, #748196);
+          font-size: 12px;
+          line-height: 1.6;
+        }
+
+        .med-tip {
+          display: flex;
+          gap: 11px;
+          align-items: flex-start;
+          background: #edf7f8;
+          border: 1px solid #d7ecee;
+          color: #355f66;
+          border-radius: 15px;
+          padding: 13px 14px;
+          margin-bottom: 22px;
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        .med-tip-icon {
+          flex: 0 0 auto;
+          margin-top: 1px;
+          color: #168b8c;
+        }
+
+        .med-bottom-action {
+          margin-top: 22px;
+          text-align: center;
+        }
+
+        .meds-timer {
+          color: #1769e0;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .meds-timer--due {
+          color: #c44949;
+        }
+
+        .meds-live-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: currentColor;
+          animation: medsPulse 2s infinite;
+        }
+
+        .med-modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1000;
+          background: rgba(10, 19, 34, .58);
+          backdrop-filter: blur(7px);
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          padding: 14px;
+        }
+
+        .med-modal {
+          width: min(470px, 100%);
+          background: var(--meds-surface, white);
+          color: var(--meds-text, #162033);
+          border: 1px solid var(--meds-border, #e5e9f0);
+          border-radius: 23px;
+          padding: 22px;
+          box-shadow: 0 -15px 60px rgba(0, 0, 0, .18);
+          animation: medsSlideUp .25s ease;
+        }
+
+        .med-modal-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 15px;
+        }
+
+        .med-modal-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 15px;
+          display: grid;
+          place-items: center;
+          background: #edf5ff;
+          color: #1769e0;
+          margin-bottom: 15px;
+        }
+
+        .med-modal-kicker {
+          margin: 0 0 6px;
+          color: #1769e0;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .8px;
+        }
+
+        .med-modal-title {
+          margin: 0;
+          font-size: 20px;
+          line-height: 1.3;
+          font-weight: 800;
+        }
+
+        .med-modal-close {
+          width: 34px;
+          height: 34px;
+          border: 1px solid var(--meds-border, #e5e9f0);
+          border-radius: 10px;
+          background: var(--meds-soft, #f7f9fc);
+          color: var(--meds-muted, #748196);
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+        }
+
+        .med-modal-body {
+          margin: 9px 0 18px;
+          color: var(--meds-muted, #68778d);
+          font-size: 13px;
+          line-height: 1.6;
+        }
+
+        .med-checkin-box {
+          margin: 0 0 15px;
+          padding: 13px;
+          border-radius: 13px;
+          background: var(--meds-soft, #f7f9fc);
+          font-size: 12px;
+          color: var(--meds-muted, #68778d);
+          line-height: 1.5;
+        }
+
+        .med-textarea {
+          width: 100%;
+          box-sizing: border-box;
+          resize: none;
+          min-height: 110px;
+          padding: 12px;
+          border-radius: 12px;
+          border: 1px solid var(--meds-border, #dce2ea);
+          background: var(--meds-soft, #f7f9fc);
+          color: var(--meds-text, #162033);
+          font: inherit;
+          font-size: 13px;
+          outline: none;
+          margin-bottom: 12px;
+        }
+
+        .med-textarea:focus {
+          border-color: #1769e0;
+          box-shadow: 0 0 0 3px rgba(23, 105, 224, .1);
+        }
+
+        .med-followup-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 15px;
+          background: #fff5e8;
+          color: #bd7218;
+          display: grid;
+          place-items: center;
+          margin-bottom: 15px;
+        }
+
+        .med-followup-note {
+          padding: 12px;
+          border-radius: 12px;
+          background: var(--meds-soft, #f7f9fc);
+          color: var(--meds-muted, #68778d);
+          font-size: 12px;
+          line-height: 1.55;
+          margin-bottom: 15px;
+        }
+
+        @media (max-width: 620px) {
+          .meds-shell {
+            width: min(100% - 24px, 1080px);
+          }
+
+          .meds-topbar {
+            padding-top: 16px;
+          }
+
+          .meds-summary {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .meds-summary .meds-stat:last-child {
+            grid-column: 1 / -1;
+          }
+
+          .med-main {
+            gap: 8px;
+          }
+
+          .med-status {
+            font-size: 9px;
+            padding: 4px 7px;
+          }
+
+          .med-schedule,
+          .med-form {
+            margin-left: 0;
+          }
+
+          .med-course-head,
+          .meds-list {
+            padding-left: 15px;
+            padding-right: 15px;
+          }
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .meds-page {
+            --meds-bg: #0b1220;
+            --meds-surface: #111b2b;
+            --meds-soft: #172235;
+            --meds-text: #eef4fb;
+            --meds-muted: #91a0b5;
+            --meds-border: #223047;
+          }
+
+          .meds-progress-track {
+            background: #202d42;
+          }
+
+          .med-icon,
+          .med-empty-icon,
+          .med-modal-icon {
+            background: #142b4b;
+          }
+
+          .med-tip {
+            background: #10292d;
+            border-color: #1d4146;
+            color: #a9cdd0;
+          }
+        }
+      `}</style>
+
+      <div className="meds-shell">
+        <header className="meds-topbar">
+          <div className="meds-brand">
+            <div className="meds-brand-mark">
+              <Icon name="shield" size={21} />
+            </div>
+
+            <div>
+              <div className="meds-brand-name">CivCare</div>
+              <div className="meds-brand-sub">
+                Medication & treatment
+              </div>
+            </div>
           </div>
-        )}
 
-        {/* ── One card per diagnosis (course) ── */}
-        {courses.map((course) => (
-          <div key={course.verdict_id || course.diagnosis} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={styles.courseHead}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <p style={styles.courseKicker}>Treatment for</p>
-                  <p style={styles.courseTitle}>{course.diagnosis}</p>
+          <button
+            className="meds-back"
+            onClick={() => navigate('/dashboard')}
+            aria-label="Back to dashboard"
+          >
+            <Icon name="back" size={20} />
+          </button>
+        </header>
+
+        <main>
+          <section className="meds-hero">
+            <p className="meds-eyebrow">Your treatment plan</p>
+            <h1 className="meds-title">
+              Medications &amp; treatment
+            </h1>
+            <p className="meds-description">
+              Keep track of your prescribed treatment, upcoming
+              doses, and progress. CivCare will remind you when it is
+              time for your next dose.
+            </p>
+          </section>
+
+          {!loading && courses.length > 0 && (
+            <section className="meds-summary">
+              <div className="meds-stat">
+                <div className="meds-stat-label">Treatment progress</div>
+                <div className="meds-stat-value">
+                  {overallProgress}%
                 </div>
-                <div style={styles.pct}>{course.progress}%</div>
+                <div className="meds-stat-meta">
+                  {completedDoses} of {totalDoses} doses
+                </div>
               </div>
-              <div style={styles.barTrack}>
-                <div style={{ ...styles.barFill, width: `${course.progress}%` }} />
+
+              <div className="meds-stat">
+                <div className="meds-stat-label">
+                  Active medications
+                </div>
+                <div className="meds-stat-value">
+                  {activeMeds.length}
+                </div>
+                <div className="meds-stat-meta">
+                  currently being tracked
+                </div>
               </div>
-              <p style={styles.progressMeta}>
-                {course.doses_done} of {course.doses_total} doses taken across {course.meds.length}{' '}
-                medication{course.meds.length > 1 ? 's' : ''}
+
+              <div className="meds-stat">
+                <div className="meds-stat-label">Next dose</div>
+                <div className="meds-stat-value">
+                  {nextDose ? (
+                    <NextDoseTimer
+                      nextDoseAt={nextDose.next_dose_at}
+                    />
+                  ) : (
+                    '—'
+                  )}
+                </div>
+                <div className="meds-stat-meta">
+                  {nextDose?.medication_name || 'No scheduled dose'}
+                </div>
+              </div>
+            </section>
+          )}
+
+          <div className="med-tip">
+            <div className="med-tip-icon">
+              <Icon name="clock" size={17} />
+            </div>
+            <div>
+              After visiting the pharmacy, enter how you were told
+              to take each medication. CivCare will remind you for
+              every dose and check in once each evening to see how
+              you are doing.
+            </div>
+          </div>
+
+          {loading && (
+            <div className="med-empty">
+              <div className="med-empty-icon">
+                <Icon name="pill" size={23} />
+              </div>
+              <h3>Loading your treatment plan</h3>
+              <p>
+                Getting your latest prescriptions and medication
+                schedules.
               </p>
             </div>
+          )}
 
-            <div style={{ padding: 16 }}>
-              {course.meds.map((med) => {
-                const m = formMeta(med.med_form);
-                const isEditing = editing[med.id];
-                const d = drafts[med.id] || {};
-                return (
-                  <div key={med.id} style={styles.medRow}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                        <span style={styles.medIcon} aria-hidden="true">{m.icon}</span>
+          {!loading && courses.length === 0 && (
+            <div className="med-empty">
+              <div className="med-empty-icon">
+                <Icon name="pill" size={23} />
+              </div>
+              <h3>No treatment plan yet</h3>
+              <p>
+                Your medications will appear here, grouped by
+                diagnosis, after your doctor submits their verdict.
+              </p>
+            </div>
+          )}
+
+          {!loading && courses.length > 0 && (
+            <>
+              <section>
+                <h2 className="meds-section-title">
+                  Active treatment
+                </h2>
+                <p className="meds-section-sub">
+                  Your medications are grouped by the condition they
+                  were prescribed for.
+                </p>
+
+                {courses.map((course) => (
+                  <article
+                    key={
+                      course.verdict_id ||
+                      course.diagnosis
+                    }
+                    className="meds-course"
+                  >
+                    <div className="meds-course-head">
+                      <div className="meds-course-title-row">
                         <div>
-                          <p style={{ fontWeight: 700 }}>{med.medication_name}</p>
-                          <p style={{ fontSize: 12, color: 'var(--gray-400)', textTransform: 'capitalize' }}>
-                            {med.med_form}{med.dosage_notation ? ` · ${med.dosage_notation}` : ''}
+                          <p className="meds-course-kicker">
+                            Treatment for
                           </p>
+                          <h3 className="meds-course-title">
+                            {course.diagnosis}
+                          </h3>
+                        </div>
+
+                        <div className="meds-progress-number">
+                          {course.progress}%
                         </div>
                       </div>
-                      {med.reminders_active && (
-                        <span style={styles.onBadge}>On track</span>
-                      )}
+
+                      <div className="meds-progress-track">
+                        <div
+                          className="meds-progress-fill"
+                          style={{
+                            width: `${course.progress}%`,
+                          }}
+                        />
+                      </div>
+
+                      <p className="meds-progress-meta">
+                        {course.doses_done} of{' '}
+                        {course.doses_total} doses taken across{' '}
+                        {course.meds.length}{' '}
+                        medication
+                        {course.meds.length > 1 ? 's' : ''}
+                      </p>
                     </div>
 
-                    {isEditing && (
-                      <div style={{ marginTop: 12 }}>
-                        <div className="form-group">
-                          <label className="label">How were you told to take it?</label>
-                          <select
-                            className="input"
-                            value={d.dosageInput || ''}
-                            onChange={(e) => setDraft(med.id, 'dosageInput', e.target.value)}
-                            style={{ appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer' }}
+                    <div className="meds-list">
+                      {course.meds.map((med) => {
+                        const m = formMeta(med.med_form);
+                        const isEditing = editing[med.id];
+                        const d = drafts[med.id] || {};
+
+                        return (
+                          <div
+                            key={med.id}
+                            className="med-row"
                           >
-                            <option value="">Select schedule</option>
-                            <option value="1x1">1 {m.unit} once a day</option>
-                            <option value="1x2">1 {m.unit} twice a day</option>
-                            <option value="1x3">1 {m.unit} three times a day</option>
-                            <option value="2x2">2 {m.units} twice a day</option>
-                            <option value="2x3">2 {m.units} three times a day</option>
-                            <option value="1x4">1 {m.unit} four times a day</option>
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label className="label">How many {m.units} were you given?</label>
-                          <input
-                            className="input"
-                            type="number"
-                            min="1"
-                            placeholder="e.g. 21"
-                            value={d.pillsInput || ''}
-                            onChange={(e) => setDraft(med.id, 'pillsInput', e.target.value)}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="label">Time of your first dose</label>
-                          <input
-                            className="input"
-                            type="time"
-                            value={d.firstDose || ''}
-                            onChange={(e) => setDraft(med.id, 'firstDose', e.target.value)}
-                          />
-                        </div>
-                        <button
-                          className="btn btn--success btn--sm"
-                          onClick={() => handleSetReminder(med)}
-                          disabled={saving || !d.dosageInput || !d.firstDose}
-                        >
-                          {saving ? 'Setting…' : 'Set Reminders'}
-                        </button>
-                      </div>
-                    )}
+                            <div className="med-main">
+                              <div className="med-identity">
+                                <div className="med-icon">
+                                  <Icon
+                                    name={m.icon}
+                                    size={20}
+                                  />
+                                </div>
 
-                    {!isEditing && med.reminders_active && (
-                      <div style={{ fontSize: 13, color: 'var(--gray-600)', marginTop: 8 }}>
-                        <NextDoseTimer nextDoseAt={med.next_dose_at} />
-                        <p>Every {med.reminder_interval_hours} hours, from {med.first_dose_time}</p>
-                        {med.pills_dispensed && (
-                          <p>{med.pills_dispensed} {m.units} · {med.duration_days}-day course</p>
-                        )}
-                        {med.reminders_end_at && (
-                          <p style={{ color: 'var(--blue)', fontWeight: 600 }}>
-                            Finishes {new Date(med.reminders_end_at).toLocaleDateString()}
-                          </p>
-                        )}
-                        <button
-                          className="btn btn--ghost btn--sm"
-                          style={{ marginTop: 8 }}
-                          onClick={() => setEditing((prev) => ({ ...prev, [med.id]: true }))}
-                        >
-                          Edit schedule
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                                <div>
+                                  <p className="med-name">
+                                    {med.medication_name}
+                                  </p>
+
+                                  <p className="med-meta">
+                                    {med.med_form}
+                                    {med.dosage_notation
+                                      ? ` · ${med.dosage_notation}`
+                                      : ''}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {med.reminders_active && (
+                                <span className="med-status">
+                                  On track
+                                </span>
+                              )}
+                            </div>
+
+                            {isEditing && (
+                              <div className="med-form">
+                                <div className="med-field">
+                                  <label>
+                                    How were you told to take it?
+                                  </label>
+
+                                  <select
+                                    className="med-input"
+                                    value={
+                                      d.dosageInput || ''
+                                    }
+                                    onChange={(e) =>
+                                      setDraft(
+                                        med.id,
+                                        'dosageInput',
+                                        e.target.value
+                                      )
+                                    }
+                                  >
+                                    <option value="">
+                                      Select schedule
+                                    </option>
+                                    <option value="1x1">
+                                      1 {m.unit} once a day
+                                    </option>
+                                    <option value="1x2">
+                                      1 {m.unit} twice a day
+                                    </option>
+                                    <option value="1x3">
+                                      1 {m.unit} three times a day
+                                    </option>
+                                    <option value="2x2">
+                                      2 {m.units} twice a day
+                                    </option>
+                                    <option value="2x3">
+                                      2 {m.units} three times a day
+                                    </option>
+                                    <option value="1x4">
+                                      1 {m.unit} four times a day
+                                    </option>
+                                  </select>
+                                </div>
+
+                                <div className="med-field">
+                                  <label>
+                                    How many {m.units} were you given?
+                                  </label>
+
+                                  <input
+                                    className="med-input"
+                                    type="number"
+                                    min="1"
+                                    placeholder="e.g. 21"
+                                    value={
+                                      d.pillsInput || ''
+                                    }
+                                    onChange={(e) =>
+                                      setDraft(
+                                        med.id,
+                                        'pillsInput',
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                </div>
+
+                                <div className="med-field">
+                                  <label>
+                                    Time of your first dose
+                                  </label>
+
+                                  <input
+                                    className="med-input"
+                                    type="time"
+                                    value={
+                                      d.firstDose || ''
+                                    }
+                                    onChange={(e) =>
+                                      setDraft(
+                                        med.id,
+                                        'firstDose',
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                </div>
+
+                                <button
+                                  className="med-button med-button--success"
+                                  onClick={() =>
+                                    handleSetReminder(med)
+                                  }
+                                  disabled={
+                                    saving ||
+                                    !d.dosageInput ||
+                                    !d.firstDose
+                                  }
+                                >
+                                  <Icon
+                                    name="check"
+                                    size={15}
+                                  />
+                                  {saving
+                                    ? 'Setting…'
+                                    : 'Set reminders'}
+                                </button>
+                              </div>
+                            )}
+
+                            {!isEditing &&
+                              med.reminders_active && (
+                                <div className="med-schedule">
+                                  <div className="med-next">
+                                    <NextDoseTimer
+                                      nextDoseAt={
+                                        med.next_dose_at
+                                      }
+                                    />
+                                  </div>
+
+                                  <div className="med-detail">
+                                    Every{' '}
+                                    {
+                                      med.reminder_interval_hours
+                                    }{' '}
+                                    hours, from{' '}
+                                    {med.first_dose_time}
+                                    {med.pills_dispensed
+                                      ? ` · ${med.pills_dispensed} ${m.units}`
+                                      : ''}
+                                    {med.duration_days
+                                      ? ` · ${med.duration_days}-day course`
+                                      : ''}
+                                  </div>
+
+                                  {med.reminders_end_at && (
+                                    <div
+                                      className="med-detail"
+                                      style={{
+                                        color: '#1769e0',
+                                        fontWeight: 700,
+                                      }}
+                                    >
+                                      Finishes{' '}
+                                      {new Date(
+                                        med.reminders_end_at
+                                      ).toLocaleDateString(
+                                        'en-KE'
+                                      )}
+                                    </div>
+                                  )}
+
+                                  <button
+                                    className="med-edit"
+                                    onClick={() =>
+                                      setEditing(
+                                        (prev) => ({
+                                          ...prev,
+                                          [med.id]: true,
+                                        })
+                                      )
+                                    }
+                                  >
+                                    <Icon
+                                      name="edit"
+                                      size={13}
+                                    />
+                                    Edit schedule
+                                  </button>
+                                </div>
+                              )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </article>
+                ))}
+              </section>
+            </>
+          )}
+
+          <div className="med-bottom-action">
+            <button
+              className="med-button med-button--secondary"
+              onClick={() => navigate('/chat')}
+            >
+              <Icon name="arrow" size={15} />
+              Back to AI Assistant
+            </button>
           </div>
-        ))}
-
-        <button className="btn btn--outline" style={{ marginTop: 8 }} onClick={() => navigate('/chat')}>
-          Back to Chat
-        </button>
+        </main>
       </div>
 
-      {/* ── DOSE CHECK-IN POP-UP ── */}
       {dose && (
-        <div style={modalStyles.overlay} role="dialog" aria-modal="true" aria-label="Medication reminder">
-          <div style={modalStyles.sheet}>
+        <div
+          className="med-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Medication reminder"
+        >
+          <div className="med-modal">
             {step === 'confirm' && (
               <>
-                <p style={modalStyles.kicker}>Time for your dose</p>
-                <h3 style={modalStyles.title}>{meta.icon} {dose.medication_name}</h3>
-                <p style={modalStyles.body}>
-                  {meta.verb} <strong>{dose.units_per_dose}</strong>{' '}
-                  {dose.units_per_dose > 1 ? meta.units : meta.unit} now.
+                <div className="med-modal-top">
+                  <div>
+                    <div className="med-modal-icon">
+                      <Icon name={meta.icon} size={23} />
+                    </div>
+
+                    <p className="med-modal-kicker">
+                      Time for your dose
+                    </p>
+
+                    <h3 className="med-modal-title">
+                      {dose.medication_name}
+                    </h3>
+                  </div>
+
+                  <button
+                    className="med-modal-close"
+                    onClick={() => setDose(null)}
+                    aria-label="Close reminder"
+                    disabled={submitting}
+                  >
+                    <Icon name="close" size={17} />
+                  </button>
+                </div>
+
+                <p className="med-modal-body">
+                  {meta.verb}{' '}
+                  <strong>{dose.units_per_dose}</strong>{' '}
+                  {dose.units_per_dose > 1
+                    ? meta.units
+                    : meta.unit}{' '}
+                  now.
                 </p>
+
                 <button
-                  className="btn btn--success"
-                  style={{ width: '100%' }}
+                  className="med-button med-button--success med-button--full"
                   disabled={submitting}
                   onClick={handleTaken}
                 >
-                  {`Done — I've taken my ${dose.units_per_dose} ${dose.units_per_dose > 1 ? meta.units : meta.unit}`}
+                  <Icon name="check" size={17} />
+                  I've taken my dose
                 </button>
+
                 <button
-                  className="btn btn--ghost btn--sm"
-                  style={{ width: '100%', marginTop: 8 }}
+                  className="med-button med-button--secondary med-button--full"
+                  style={{ marginTop: 9 }}
                   disabled={submitting}
-                  onClick={() => submitDose({ taken: false, skipReason: 'forgot' })}
+                  onClick={() =>
+                    submitDose({
+                      taken: false,
+                      skipReason: 'forgot',
+                    })
+                  }
                 >
-                  I can&apos;t take it right now
+                  I can't take it right now
                 </button>
               </>
             )}
 
             {step === 'feel' && (
               <>
-                <p style={modalStyles.kicker}>Your evening check-in</p>
-                <h3 style={modalStyles.title}>
-                  {dose.checkin_question ||
-                    "Evening — well done for staying on track today. How are you feeling tonight?"}
-                </h3>
-                <p style={modalStyles.body}>
-                  Take your time. There&apos;s no right or wrong answer — I just want to know
-                  how you&apos;re really doing tonight.
+                <div className="med-modal-icon">
+                  <Icon name="shield" size={23} />
+                </div>
+
+                <p className="med-modal-kicker">
+                  Evening check-in
                 </p>
+
+                <h3 className="med-modal-title">
+                  {dose.checkin_question ||
+                    'Evening — well done for staying on track today. How are you feeling tonight?'}
+                </h3>
+
+                <p className="med-modal-body">
+                  Take your time. There is no right or wrong
+                  answer. This helps keep your treatment follow-up
+                  connected to how you are actually doing.
+                </p>
+
                 <textarea
-                  className="input"
-                  rows={4}
+                  className="med-textarea"
                   placeholder="Tell me in your own words how you feel…"
                   value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
-                  style={{
-                    resize: 'none',
-                    marginBottom: 12,
-                    backgroundColor: 'var(--bg-elevated)',
-                    color: 'var(--text)',
-                    borderColor: 'var(--border-hi)',
-                  }}
+                  onChange={(e) =>
+                    setAnswer(e.target.value)
+                  }
                 />
+
                 <button
-                  className="btn btn--success"
-                  style={{ width: '100%' }}
-                  disabled={submitting || !answer.trim()}
-                  onClick={() => submitDose({ taken: true })}
+                  className="med-button med-button--success med-button--full"
+                  disabled={
+                    submitting || !answer.trim()
+                  }
+                  onClick={() =>
+                    submitDose({ taken: true })
+                  }
                 >
-                  {submitting ? 'Saving…' : 'Send'}
+                  {submitting ? 'Saving…' : 'Send check-in'}
                 </button>
               </>
             )}
@@ -394,23 +1582,58 @@ export default function Medications() {
         </div>
       )}
 
-      {/* ── STILL-UNWELL FOLLOW-UP MODAL ── */}
       {followup && (
-        <div style={modalStyles.overlay} role="dialog" aria-modal="true" aria-label="Follow-up options">
-          <div style={modalStyles.sheet}>
-            <p style={modalStyles.kicker}>Let&apos;s get you reviewed</p>
-            <h3 style={modalStyles.title}>{followup.message}</h3>
-            <p style={modalStyles.body}>
-              I&apos;ll pass your previous diagnosis, the medication you took, and what has
-              and hasn&apos;t improved straight to the doctor — you won&apos;t need to start over.
+        <div
+          className="med-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Follow-up options"
+        >
+          <div className="med-modal">
+            <div className="med-followup-icon">
+              <Icon name="doctor" size={23} />
+            </div>
+
+            <p className="med-modal-kicker">
+              Let's get you reviewed
             </p>
-            <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => reRoute('hospital')}>
+
+            <h3 className="med-modal-title">
+              {followup.message}
+            </h3>
+
+            <p className="med-modal-body">
+              Your previous diagnosis, medication history, and
+              treatment progress can be passed to the next care
+              step so you do not have to start over.
+            </p>
+
+            <div className="med-followup-note">
+              Choose the option that works best for you.
+            </div>
+
+            <button
+              className="med-button med-button--primary med-button--full"
+              onClick={() => reRoute('hospital')}
+            >
+              <Icon name="hospital" size={16} />
               Go to a nearby hospital
             </button>
-            <button className="btn btn--success" style={{ width: '100%', marginTop: 8 }} onClick={() => reRoute('consultation')}>
+
+            <button
+              className="med-button med-button--success med-button--full"
+              style={{ marginTop: 9 }}
+              onClick={() => reRoute('consultation')}
+            >
+              <Icon name="doctor" size={16} />
               Talk to a doctor online
             </button>
-            <button className="btn btn--ghost btn--sm" style={{ width: '100%', marginTop: 8 }} onClick={() => setFollowup(null)}>
+
+            <button
+              className="med-button med-button--secondary med-button--full"
+              style={{ marginTop: 9 }}
+              onClick={() => setFollowup(null)}
+            >
               Not now
             </button>
           </div>
@@ -419,122 +1642,3 @@ export default function Medications() {
     </div>
   );
 }
-
-const styles = {
-  timer: {
-    fontSize: 12,
-    color: 'var(--blue-600)',
-    fontWeight: 500,
-    marginBottom: 6,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  timerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: '50%',
-    backgroundColor: 'var(--blue-600)',
-    animation: 'pulse 2s infinite',
-  },
-  timerDue: {
-    fontSize: 12,
-    color: 'var(--red-600)',
-    fontWeight: 700,
-    marginBottom: 6,
-  },
-  tip: {
-    background: 'var(--blue-light)',
-    borderRadius: 'var(--radius)',
-    padding: 14,
-    marginTop: 20,
-    marginBottom: 20,
-    fontSize: 14,
-    color: 'var(--gray-600)',
-  },
-  courseHead: {
-    background: 'var(--blue, #1d4ed8)',
-    color: '#fff',
-    padding: 16,
-  },
-  courseKicker: {
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    opacity: 0.85,
-  },
-  courseTitle: { fontSize: 18, fontWeight: 700, lineHeight: 1.3 },
-  pct: { fontSize: 22, fontWeight: 800 },
-  barTrack: {
-    marginTop: 12,
-    height: 8,
-    borderRadius: 20,
-    background: 'rgba(255,255,255,0.3)',
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 20,
-    background: '#fff',
-    transition: 'width 0.4s ease',
-  },
-  progressMeta: { fontSize: 12, marginTop: 8, opacity: 0.9 },
-  medRow: { paddingBottom: 14, marginBottom: 14, borderBottom: '1px solid var(--gray-100, #eee)' },
-  medIcon: { fontSize: 22, lineHeight: 1 },
-  onBadge: {
-    background: '#d4edda',
-    color: 'var(--green)',
-    fontSize: 11,
-    fontWeight: 700,
-    padding: '3px 10px',
-    borderRadius: 20,
-    whiteSpace: 'nowrap',
-  },
-};
-
-const modalStyles = {
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.6)',
-    display: 'flex',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    zIndex: 1000,
-    padding: 16,
-    backdropFilter: 'blur(8px)',
-    WebkitBackdropFilter: 'blur(8px)',
-  },
-  sheet: {
-    background: 'var(--surface-hi)',
-    border: '1px solid var(--border-hi)',
-    borderRadius: 'var(--radius-lg, 22px)',
-    padding: 22,
-    width: '100%',
-    maxWidth: 440,
-    boxShadow: '0 -12px 48px rgba(0,0,0,0.5)',
-    animation: 'slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-  },
-  kicker: {
-    fontSize: 12,
-    fontWeight: 700,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    color: 'var(--accent-light)',
-    marginBottom: 6,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 700,
-    lineHeight: 1.4,
-    marginBottom: 10,
-    color: 'var(--text)',
-  },
-  body: {
-    fontSize: 14,
-    lineHeight: 1.5,
-    color: 'var(--text-secondary)',
-    marginBottom: 16,
-  },
-};

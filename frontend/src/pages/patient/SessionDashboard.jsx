@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { theme } from '../../styles/theme';
@@ -7,164 +7,410 @@ import BottomNav from '../../components/BottomNav';
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
 
-// ── Helpers ─────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   ICONS
+───────────────────────────────────────────────────────────── */
+
+function Icon({ name, size = 20, stroke = 'currentColor', strokeWidth = 1.9 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke,
+    strokeWidth,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+  };
+
+  const paths = {
+    menu: (
+      <>
+        <path d="M4 6h16M4 12h16M4 18h16" />
+      </>
+    ),
+    bell: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+        <path d="M10 21h4" />
+      </>
+    ),
+    arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+    chevron: <path d="m9 18 6-6-6-6" />,
+    spark: (
+      <>
+        <path d="m12 3 1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3Z" />
+        <path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" />
+      </>
+    ),
+    pill: (
+      <>
+        <rect x="4" y="7" width="16" height="10" rx="5" transform="rotate(-45 12 12)" />
+        <path d="m8.5 8.5 7 7" />
+      </>
+    ),
+    history: (
+      <>
+        <path d="M4 5h16v15H4z" />
+        <path d="M8 9h8M8 13h8M8 17h5" />
+      </>
+    ),
+    doctor: (
+      <>
+        <circle cx="12" cy="8" r="3" />
+        <path d="M5 20c.8-4 3.1-6 7-6s6.2 2 7 6" />
+        <path d="M18 4v4M16 6h4" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+    check: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8 12 2.5 2.5L16 9" />
+      </>
+    ),
+    alert: (
+      <>
+        <path d="M12 4 3.5 19h17L12 4Z" />
+        <path d="M12 9v4M12 16h.01" />
+      </>
+    ),
+    close: (
+      <>
+        <path d="m6 6 12 12M18 6 6 18" />
+      </>
+    ),
+    profile: (
+      <>
+        <circle cx="12" cy="8" r="3.2" />
+        <path d="M5 20c.8-3.7 3.1-5.6 7-5.6s6.2 1.9 7 5.6" />
+      </>
+    ),
+  };
+
+  return <svg {...common}>{paths[name] || paths.spark}</svg>;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────────────── */
+
 const isUrlLike = (str) => /^https?:\/\//i.test((str || '').trim());
 
 const cardTitle = (session) => {
   const raw = session.symptoms_summary || session.ai_assessment || '';
   if (!raw || isUrlLike(raw)) return 'Health consultation';
-  return raw.length > 60 ? raw.slice(0, 60) + '…' : raw;
-};
-
-const fmtClock = (ms) => {
-  const tot = Math.max(0, Math.floor(ms / 1000));
-  const h = String(Math.floor(tot / 3600)).padStart(2, '0');
-  const m = String(Math.floor((tot % 3600) / 60)).padStart(2, '0');
-  const sec = String(tot % 60).padStart(2, '0');
-  return `${h}:${m}:${sec}`;
+  return raw.length > 60 ? `${raw.slice(0, 60)}…` : raw;
 };
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '';
-  const d = new Date(dateStr), now = new Date();
+  const d = new Date(dateStr);
+  const now = new Date();
   const diffDays = Math.floor((now - d) / 86400000);
+
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
+  if (diffDays > 1 && diffDays < 7) return `${diffDays}d ago`;
+
+  return d.toLocaleDateString('en-KE', {
+    day: 'numeric',
+    month: 'short',
+  });
 };
 
-// Sparkline used inside the vital stat tiles — scales to its container
-// (fixed pixel widths here were the cause of horizontal overflow on
-// narrow phones, so this uses a 0–100 viewBox and 100% CSS width instead).
-function Sparkline({ points, color: stroke }) {
-  const w = 100, h = 28;
-  const max = Math.max(...points), min = Math.min(...points);
-  const norm = points.map((v, i) => {
-    const x = (i / (points.length - 1)) * w;
-    const y = h - ((v - min) / (max - min || 1)) * (h - 4) - 2;
-    return `${x},${y}`;
-  });
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: 22 }}>
-      <polyline points={norm.join(' ')} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+const formatCountdown = (ms) => {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
 
-function VitalTile({ label, value, unit, emoji, tint, tintBg, points }) {
-  return (
-    <div style={s.vitalTile} className="cc-press">
-      <div style={{ ...s.vitalIconWrap, background: tintBg }}>
-        <span style={s.vitalEmoji}>{emoji}</span>
-      </div>
-      <p style={s.vitalValue}>{value}<span style={s.vitalUnit}>{unit}</span></p>
-      <p style={s.vitalLabel}>{label}</p>
-      <Sparkline points={points} color={tint} />
-    </div>
-  );
-}
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return 'Now';
+};
 
-// ── Dose ring — medication reminder visual ─────────────────────────────
-function DoseRing({ label, dose, remaining, intervalMs, isAlert }) {
-  const R = 22;
-  const C = 2 * Math.PI * R;
-  const pct = intervalMs > 0 ? Math.max(0, Math.min(1, 1 - remaining / intervalMs)) : 0;
-  const ringColor = isAlert ? color.coral : color.blue;
+const medicationInterval = (medication) => {
+  const notation = medication?.dosage_notation || '1x1';
+  const timesPerDay = parseInt(notation.split('x')[1], 10) || 1;
+  return (24 / timesPerDay) * 60 * 60 * 1000;
+};
 
-  return (
-    <div style={s.doseRow}>
-      <div style={s.doseRingWrap}>
-        <svg width="52" height="52" viewBox="0 0 56 56">
-          <circle cx="28" cy="28" r={R} fill="none" stroke={color.hairlineStrong} strokeWidth="4" />
-          <circle
-            cx="28" cy="28" r={R} fill="none" stroke={ringColor} strokeWidth="4"
-            strokeDasharray={C} strokeDashoffset={C * (1 - pct)} strokeLinecap="round"
-            transform="rotate(-90 28 28)" style={{ transition: 'stroke-dashoffset 1s linear' }}
-          />
-        </svg>
-        <span style={{ ...s.doseRingLabel, color: ringColor }}>{isAlert ? 'NOW' : ''}</span>
-      </div>
-      <div style={s.doseInfo}>
-        <p style={s.doseName}>{label}</p>
-        <p style={s.doseMeta}>{dose}</p>
-      </div>
-      <div style={{ ...s.doseTime, color: isAlert ? color.coral : color.inkFaint }}>
-        {isAlert ? 'Take now' : fmtClock(remaining)}
-      </div>
-    </div>
-  );
-}
+const nextMedicationTime = (medication, now = Date.now()) => {
+  if (!medication?.reminders_start_at) return null;
 
-function MedCard({ prescriptions }) {
-  const [timers, setTimers] = useState([]);
-  const [alertIdx, setAlertIdx] = useState(null);
+  const start = new Date(medication.reminders_start_at).getTime();
+  if (!Number.isFinite(start)) return null;
+
+  const interval = medicationInterval(medication);
+
+  if (now <= start) return start;
+
+  const elapsed = now - start;
+  const cycles = Math.floor(elapsed / interval) + 1;
+
+  return start + cycles * interval;
+};
+
+/* ─────────────────────────────────────────────────────────────
+   MEDICATION SUMMARY
+───────────────────────────────────────────────────────────── */
+
+function MedicationSummary({ prescriptions, onOpen }) {
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (!prescriptions?.length) return;
+    if (!prescriptions?.length) return undefined;
 
-    const calc = () =>
-      prescriptions.map((p) => {
-        const timesPerDay = parseInt((p.dosage_notation || '1x1').split('x')[1]) || 1;
-        const intervalMs = (24 / timesPerDay) * 60 * 60 * 1000;
-        const startMs = p.reminders_start_at ? new Date(p.reminders_start_at).getTime() : Date.now();
-        const elapsed = (Date.now() - startMs) % intervalMs;
-        return { ...p, remaining: intervalMs - elapsed, intervalMs };
-      });
-
-    setTimers(calc());
-    const iv = setInterval(() => {
-      setTimers((prev) =>
-        prev.map((t, i) => {
-          const next = t.remaining - 1000;
-          if (next <= 0) {
-            setAlertIdx(i);
-            setTimeout(() => setAlertIdx(null), 5000);
-            return { ...t, remaining: t.intervalMs };
-          }
-          return { ...t, remaining: next };
-        })
-      );
-    }, 1000);
-    return () => clearInterval(iv);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, [prescriptions]);
 
-  if (!timers.length) return null;
+  const medicationState = useMemo(() => {
+    return (prescriptions || []).map((medication) => {
+      const next = nextMedicationTime(medication, now);
+      const remaining = next ? Math.max(0, next - now) : null;
+
+      return {
+        ...medication,
+        next,
+        remaining,
+        due: remaining !== null && remaining <= 60000,
+      };
+    });
+  }, [prescriptions, now]);
+
+  if (!medicationState.length) return null;
+
+  const dueNow = medicationState.filter((item) => item.due).length;
+  const upcoming = medicationState
+    .filter((item) => !item.due && item.remaining !== null)
+    .sort((a, b) => a.remaining - b.remaining)
+    .slice(0, 2);
+
+  const due = medicationState.filter((item) => item.due);
 
   return (
-    <div style={s.medCard}>
-      <p style={s.eyebrow}>Medication reminders</p>
-      {timers.map((t, i) => {
-        const startMs = t.reminders_start_at ? new Date(t.reminders_start_at).getTime() : Date.now();
-        const dayIndex = Math.floor((Date.now() - startMs) / 86400000) + 1;
-        return (
-          <div key={t.id}>
-            <DoseRing
-              label={t.medication_name}
-              dose={t.dosage_notation || '—'}
-              remaining={t.remaining}
-              intervalMs={t.intervalMs}
-              isAlert={alertIdx === i}
-            />
-            {t.duration_days ? (
-              <div style={s.courseWrap}>
-                <div style={s.courseTrack}>
-                  <div style={{ ...s.courseFill, width: `${Math.min(1, dayIndex / t.duration_days) * 100}%` }} />
-                </div>
-                <span style={s.courseLabel}>Day {Math.min(dayIndex, t.duration_days)} of {t.duration_days}</span>
-              </div>
-            ) : null}
+    <section style={s.section}>
+      <div style={s.sectionHeader}>
+        <div>
+          <p style={s.eyebrow}>Treatment</p>
+          <h2 style={s.sectionTitle}>Your medications</h2>
+        </div>
+
+        <button style={s.textButton} onClick={onOpen}>
+          View all
+        </button>
+      </div>
+
+      <div style={s.medicationCard}>
+        <div style={s.medicationHeader}>
+          <div style={s.medicationIcon}>
+            <Icon name="pill" size={19} stroke={color.blue} />
           </div>
-        );
-      })}
-    </div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={s.medicationHeading}>
+              {dueNow > 0 ? 'Medication due now' : 'Treatment schedule'}
+            </p>
+
+            <p style={s.medicationSubheading}>
+              {dueNow > 0
+                ? `${dueNow} dose${dueNow === 1 ? '' : 's'} need your attention`
+                : `${prescriptions.length} active medication${prescriptions.length === 1 ? '' : 's'}`}
+            </p>
+          </div>
+
+          {dueNow > 0 && (
+            <span style={s.dueBadge}>
+              {dueNow}
+            </span>
+          )}
+        </div>
+
+        {due.length > 0 && (
+          <div style={s.medicationDueBox}>
+            {due.slice(0, 2).map((medication) => (
+              <div key={medication.id || medication.prescription_id} style={s.medicationRow}>
+                <div style={s.medicationStatusDot} />
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={s.medicationName}>
+                    {medication.medication_name || 'Medication'}
+                  </p>
+                  <p style={s.medicationDose}>
+                    {medication.dosage_notation || 'Follow prescribed dose'}
+                  </p>
+                </div>
+
+                <span style={s.takeNow}>Due now</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {due.length === 0 && upcoming.length > 0 && (
+          <div style={s.upcomingDose}>
+            <div style={s.clockCircle}>
+              <Icon name="clock" size={17} stroke={color.blue} />
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={s.nextDoseLabel}>Next dose</p>
+              <p style={s.nextDoseName}>
+                {upcoming[0].medication_name || 'Medication'}
+              </p>
+            </div>
+
+            <div style={s.nextDoseTime}>
+              {formatCountdown(upcoming[0].remaining)}
+            </div>
+          </div>
+        )}
+
+        <button
+          style={s.medicationFooter}
+          onClick={onOpen}
+        >
+          <span>Open treatment plan</span>
+          <Icon name="arrow" size={16} stroke={color.blue} />
+        </button>
+      </div>
+    </section>
   );
 }
 
-// ── Main dashboard ─────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   NOTIFICATIONS
+───────────────────────────────────────────────────────────── */
+
+function NotificationPanel({
+  notifications,
+  onClose,
+  onRead,
+  onOpenMedication,
+  onOpenConsultation,
+}) {
+  return (
+    <>
+      <div style={s.notificationOverlay} onClick={onClose} />
+
+      <aside style={s.notificationPanel}>
+        <div style={s.notificationPanelHeader}>
+          <div>
+            <p style={s.eyebrow}>CivCare</p>
+            <h2 style={s.notificationTitle}>Notifications</h2>
+          </div>
+
+          <button
+            style={s.closeButton}
+            onClick={onClose}
+            aria-label="Close notifications"
+          >
+            <Icon name="close" size={19} />
+          </button>
+        </div>
+
+        {notifications.length === 0 ? (
+          <div style={s.notificationEmpty}>
+            <div style={s.notificationEmptyIcon}>
+              <Icon name="check" size={26} stroke={color.teal} />
+            </div>
+
+            <h3 style={s.emptyTitle}>You're all caught up</h3>
+            <p style={s.emptyText}>
+              Important care updates will appear here.
+            </p>
+          </div>
+        ) : (
+          <div style={s.notificationList}>
+            {notifications.map((item) => (
+              <button
+                key={item.id}
+                style={{
+                  ...s.notificationItem,
+                  ...(item.read ? s.notificationRead : {}),
+                }}
+                onClick={() => {
+                  onRead(item.id);
+
+                  if (item.type === 'medication') {
+                    onOpenMedication();
+                  } else if (item.type === 'consultation') {
+                    onOpenConsultation();
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    ...s.notificationIcon,
+                    background:
+                      item.type === 'medication'
+                        ? color.blueDim
+                        : color.tealDim,
+                  }}
+                >
+                  <Icon
+                    name={item.type === 'medication' ? 'pill' : 'doctor'}
+                    size={18}
+                    stroke={
+                      item.type === 'medication'
+                        ? color.blue
+                        : color.teal
+                    }
+                  />
+                </div>
+
+                <div style={s.notificationContent}>
+                  <div style={s.notificationItemTop}>
+                    <p style={s.notificationItemTitle}>
+                      {item.title}
+                    </p>
+
+                    {!item.read && <span style={s.unreadDot} />}
+                  </div>
+
+                  <p style={s.notificationItemText}>
+                    {item.message}
+                  </p>
+
+                  <span style={s.notificationTime}>
+                    {item.time}
+                  </span>
+                </div>
+
+                <Icon name="chevron" size={16} stroke={color.inkFaint} />
+              </button>
+            ))}
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MAIN DASHBOARD
+───────────────────────────────────────────────────────────── */
+
 export default function SessionDashboard() {
   const navigate = useNavigate();
-  const patient = (() => { try { return JSON.parse(localStorage.getItem('civtech_patient') || '{}'); } catch { return {}; } })();
+
+  const patient = (() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem('civtech_patient') || '{}'
+      );
+    } catch {
+      return {};
+    }
+  })();
+
   const [sessions, setSessions] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -172,418 +418,1838 @@ export default function SessionDashboard() {
   const [pendingConsult, setPendingConsult] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationRead, setNotificationRead] = useState(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem('civcare_notification_read') || '[]'
+      );
+    } catch {
+      return [];
+    }
+  });
+
+  const [now, setNow] = useState(Date.now());
+  const [dosePopup, setDosePopup] = useState(null);
+
   const firstName = (patient.name || 'there').split(' ')[0];
+
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+  const greeting =
+    hour < 12
+      ? 'Good morning'
+      : hour < 17
+        ? 'Good afternoon'
+        : 'Good evening';
 
   const fetchData = useCallback(async () => {
     if (!patient.id) return;
+
     try {
       const [sessRes, presRes, pendRes] = await Promise.allSettled([
         axios.get(`${API}/triage/sessions/${patient.id}`),
         axios.get(`${API}/prescriptions/active/${patient.id}`),
-        axios.get(`${API}/consultation/pending`, { params: { patient_id: patient.id } }),
+        axios.get(`${API}/consultation/pending`, {
+          params: { patient_id: patient.id },
+        }),
       ]);
-      if (sessRes.status === 'fulfilled') setSessions(sessRes.value.data || []);
-      if (presRes.status === 'fulfilled') setPrescriptions(presRes.value.data || []);
-      if (pendRes.status === 'fulfilled') setPendingConsult(pendRes.value.data || null);
-    } catch (e) {
-      console.error(e);
+
+      if (sessRes.status === 'fulfilled') {
+        setSessions(sessRes.value.data || []);
+      }
+
+      if (presRes.status === 'fulfilled') {
+        setPrescriptions(presRes.value.data || []);
+      }
+
+      if (pendRes.status === 'fulfilled') {
+        setPendingConsult(pendRes.value.data || null);
+      }
+    } catch (error) {
+      console.error('Dashboard data loading failed:', error);
     } finally {
       setLoading(false);
     }
   }, [patient.id]);
 
   useEffect(() => {
-    if (!patient.id) { navigate('/'); return; }
+    if (!patient.id) {
+      navigate('/');
+      return;
+    }
+
     fetchData();
   }, [fetchData, navigate, patient.id]);
 
-  const handleLogout = () => { localStorage.clear(); navigate('/login'); };
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  /* ─────────────────────────────────────────────────────────
+     REAL-TIME MEDICATION NOTIFICATION
+  ───────────────────────────────────────────────────────── */
+
+  useEffect(() => {
+    if (!prescriptions.length) return;
+
+    const dueMedication = prescriptions.find((medication) => {
+      const next = nextMedicationTime(medication, now);
+
+      return (
+        next !== null &&
+        now >= next &&
+        now - next < 65000
+      );
+    });
+
+    if (!dueMedication) return;
+
+    const notificationId =
+      `med-${dueMedication.id || dueMedication.prescription_id}-${Math.floor(now / 60000)}`;
+
+    const alreadyShown =
+      localStorage.getItem(`civcare_popup_${notificationId}`);
+
+    if (!alreadyShown) {
+      localStorage.setItem(
+        `civcare_popup_${notificationId}`,
+        'true'
+      );
+
+      setDosePopup(dueMedication);
+    }
+  }, [prescriptions, now]);
+
+  const markNotificationRead = (id) => {
+    setNotificationRead((previous) => {
+      const next = previous.includes(id)
+        ? previous
+        : [...previous, id];
+
+      localStorage.setItem(
+        'civcare_notification_read',
+        JSON.stringify(next)
+      );
+
+      return next;
+    });
+  };
+
+  const notifications = useMemo(() => {
+    const items = [];
+
+    const dueMedications = prescriptions.filter((medication) => {
+      const next = nextMedicationTime(medication, now);
+
+      return next !== null && now >= next;
+    });
+
+    dueMedications.forEach((medication) => {
+      const id =
+        `med-due-${medication.id || medication.prescription_id}`;
+
+      items.push({
+        id,
+        type: 'medication',
+        title: 'Medication due',
+        message: `${medication.medication_name || 'Your medication'} is due according to your treatment schedule.`,
+        time: 'Now',
+        read: notificationRead.includes(id),
+      });
+    });
+
+    if (pendingConsult) {
+      const id = 'consultation-pending';
+
+      items.push({
+        id,
+        type: 'consultation',
+        title: 'Consultation update',
+        message: pendingConsult.doctor_name
+          ? `Your consultation with Dr. ${pendingConsult.doctor_name} is waiting for your attention.`
+          : 'You have a consultation waiting for your attention.',
+        time: 'Current',
+        read: notificationRead.includes(id),
+      });
+    }
+
+    return items;
+  }, [
+    prescriptions,
+    pendingConsult,
+    notificationRead,
+    now,
+  ]);
+
+  const unreadCount = notifications.filter(
+    (item) => !item.read
+  ).length;
+
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate('/login');
+  };
 
   const handleCardTap = (session) => {
-    if (session.status === 'active') setResumeSheet(session);
-    else { localStorage.setItem('civtech_session_id', session.id); navigate('/chat'); }
+    if (session.status === 'active') {
+      setResumeSheet(session);
+    } else {
+      localStorage.setItem(
+        'civtech_session_id',
+        session.id
+      );
+      navigate('/chat');
+    }
   };
 
   const handleResume = () => {
-    localStorage.setItem('civtech_session_id', resumeSheet.id);
+    if (!resumeSheet) return;
+
+    localStorage.setItem(
+      'civtech_session_id',
+      resumeSheet.id
+    );
+
     setResumeSheet(null);
     navigate('/chat');
   };
 
   const recentSessions = [...sessions]
-    .sort((a, b) => new Date(b.started_at) - new Date(a.started_at))
+    .sort(
+      (a, b) =>
+        new Date(b.started_at) -
+        new Date(a.started_at)
+    )
     .slice(0, 4);
 
   return (
     <div style={s.page}>
-      <div className="cc-main" style={s.main}>
-        {/* ── HEADER ── */}
-        <div style={s.header}>
-          <button style={s.iconBtn} className="cc-press" onClick={() => setMenuOpen(true)} aria-label="Menu">
-            <span style={s.headerEmoji}>☰</span>
-          </button>
-          <button style={s.iconBtn} className="cc-press" onClick={() => navigate('/diagnosis-history')} aria-label="Notifications">
-            <span style={{ position: 'relative' }}>
-              <span style={s.headerEmoji}>🔔</span>
-              <span style={s.bellDot} />
-            </span>
-          </button>
-        </div>
+      <main style={s.main}>
+        {/* HEADER */}
 
-        <p style={s.greetingText}>{greeting}</p>
-        <h1 style={s.greetingName}>{firstName} <span style={s.wave}>👋</span></h1>
-        <p style={s.greetingSub}>Your health looks great today</p>
+        <header style={s.header}>
+          <button
+            style={s.iconButton}
+            className="cc-press"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+          >
+            <Icon name="menu" size={20} />
+          </button>
 
-        {/* ── AI HEALTH ASSISTANT HERO ── */}
+          <button
+            style={{
+              ...s.iconButton,
+              position: 'relative',
+            }}
+            className="cc-press"
+            onClick={() => setNotificationOpen(true)}
+            aria-label="Open notifications"
+          >
+            <Icon name="bell" size={19} />
+
+            {unreadCount > 0 && (
+              <span style={s.notificationBadge}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+        </header>
+
+        {/* GREETING */}
+
+        <section style={s.greeting}>
+          <p style={s.greetingSmall}>{greeting}</p>
+
+          <h1 style={s.greetingName}>
+            {firstName}
+          </h1>
+
+          <p style={s.greetingSub}>
+            Your CivCare overview
+          </p>
+        </section>
+
+        {/* AI ASSISTANT */}
+
         <button
-          style={s.heroCard}
+          style={s.aiHero}
           className="cc-press"
-          onClick={() => { localStorage.removeItem('civtech_session_id'); navigate('/chat'); }}
+          onClick={() => {
+            localStorage.removeItem(
+              'civtech_session_id'
+            );
+            navigate('/chat');
+          }}
         >
-          <div style={s.heroGlowA} />
-          <div style={s.heroGlowB} />
-          <div style={s.heroText}>
-            <span style={s.heroPill}>✨ AI HEALTH ASSISTANT</span>
-            <p style={s.heroTitle}>How are you<br />feeling today?</p>
-            <p style={s.heroSub}>Tell me how you feel and I'll guide you.</p>
-            <span style={s.heroCta}>
-              Start AI Checkup
-              <span aria-hidden="true">→</span>
+          <div style={s.aiHeroAccent} />
+
+          <div style={s.aiHeroContent}>
+            <div style={s.aiHeroLabel}>
+              <Icon
+                name="spark"
+                size={13}
+                stroke="#ffffff"
+              />
+              AI HEALTH ASSISTANT
+            </div>
+
+            <h2 style={s.aiHeroTitle}>
+              How are you feeling today?
+            </h2>
+
+            <p style={s.aiHeroText}>
+              Describe your symptoms and let CivCare
+              guide your next step.
+            </p>
+
+            <span style={s.aiHeroButton}>
+              Start health check
+              <Icon
+                name="arrow"
+                size={15}
+                stroke="#ffffff"
+              />
             </span>
           </div>
-          <div style={s.heroAvatarRing}>
-            <div style={s.heroAvatar} className="cc-float">🤖</div>
+
+          <div style={s.aiHeroMark}>
+            <Icon
+              name="spark"
+              size={28}
+              stroke="#ffffff"
+            />
           </div>
         </button>
 
-        {/* ── PENDING CONSULTATION ── */}
+        {/* PENDING CONSULTATION */}
+
         {pendingConsult && (
-          <div style={s.pendingBanner} className="cc-press" onClick={() => navigate('/consultation/waiting')}>
-            <div style={s.pendingDot} />
-            <div style={{ flex: 1 }}>
-              <p style={s.pendingTitle}>
-                {pendingConsult.doctor_name ? `Waiting for Dr. ${pendingConsult.doctor_name}` : 'Consultation in progress'}
+          <button
+            style={s.consultationBanner}
+            className="cc-press"
+            onClick={() =>
+              navigate('/consultation/waiting')
+            }
+          >
+            <div style={s.liveIndicator}>
+              <span style={s.liveDot} />
+            </div>
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={s.consultationTitle}>
+                {pendingConsult.doctor_name
+                  ? `Dr. ${pendingConsult.doctor_name}`
+                  : 'Consultation in progress'}
               </p>
-              <p style={s.pendingSub}>Tap to view status</p>
+
+              <p style={s.consultationSub}>
+                Your consultation needs your attention
+              </p>
             </div>
-            <span style={{ color: color.inkFaint, fontSize: 16 }}>›</span>
-          </div>
+
+            <Icon
+              name="chevron"
+              size={17}
+              stroke={color.teal}
+            />
+          </button>
         )}
 
-        {/* ── HEALTH OVERVIEW ── */}
-        <div style={s.sectionHeader}>
-          <p style={s.sectionTitle}>Health Overview</p>
-          <button style={s.seeAll} onClick={() => navigate('/diagnosis-history')}>See all</button>
-        </div>
-        <div style={s.vitalsGrid}>
-          <VitalTile label="Heart Rate" value="72" unit=" BPM" emoji="❤️" tint={color.coral} tintBg={color.coralDim} points={[60, 66, 58, 70, 64, 72, 68]} />
-          <VitalTile label="Steps" value="7,240" unit="" emoji="👣" tint={color.mint} tintBg={color.mintDim} points={[10, 30, 25, 45, 40, 60, 72]} />
-          <VitalTile label="Sleep" value="8.2" unit=" h" emoji="🌙" tint={color.blue} tintBg={color.blueDim} points={[6, 7, 5, 8, 6.5, 7.5, 8.2]} />
-          <VitalTile label="Oxygen" value="98" unit="%" emoji="💧" tint={color.sky} tintBg={color.skyDim} points={[95, 96, 97, 95, 98, 97, 98]} />
-        </div>
+        {/* MEDICATIONS */}
 
-        {/* ── HEALTH SCORE ── */}
-        <div style={s.scoreCard}>
-          <div>
-            <p style={s.scoreLabel}>Health Score</p>
-            <p style={s.scoreValue}>96 <span style={s.scoreExcellent}>Excellent</span></p>
-            <p style={s.scoreSub}>AI Confidence 98%</p>
+        <MedicationSummary
+          prescriptions={prescriptions}
+          onOpen={() => navigate('/medications')}
+        />
+
+        {/* RECENT CONSULTATIONS */}
+
+        <section style={s.section}>
+          <div style={s.sectionHeader}>
+            <div>
+              <p style={s.eyebrow}>Care activity</p>
+              <h2 style={s.sectionTitle}>
+                Recent consultations
+              </h2>
+            </div>
+
+            <button
+              style={s.textButton}
+              onClick={() =>
+                navigate('/diagnosis-history')
+              }
+            >
+              View history
+            </button>
           </div>
-          <div style={s.scoreRingWrap}>
-            <svg viewBox="0 0 76 76" style={{ width: '100%', height: '100%' }}>
-              <circle cx="38" cy="38" r="32" fill="none" stroke={color.blueDim} strokeWidth="8" />
-              <circle
-                cx="38" cy="38" r="32" fill="none" stroke={color.blue} strokeWidth="8"
-                strokeDasharray={2 * Math.PI * 32} strokeDashoffset={2 * Math.PI * 32 * 0.04}
-                strokeLinecap="round" transform="rotate(-90 38 38)"
-                style={{ animation: 'ringDraw 1.2s ease both' }}
-              />
-            </svg>
-            <span style={s.scoreRingIcon}>❤️</span>
-          </div>
-        </div>
 
-        <MedCard prescriptions={prescriptions} />
+          {loading && (
+            <div style={s.loadingStack}>
+              {[1, 2, 3].map((item) => (
+                <div
+                  key={item}
+                  style={s.skeleton}
+                />
+              ))}
+            </div>
+          )}
 
-        {/* ── RECENT HEALTH HISTORY ── */}
-        <div style={s.sectionHeader}>
-          <p style={s.sectionTitle}>Recent Activity</p>
-          <span style={s.sessionCount}>{sessions.length} session{sessions.length === 1 ? '' : 's'}</span>
-        </div>
-
-        {loading && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[1, 2, 3].map((i) => <div key={i} style={s.skeleton} />)}
-          </div>
-        )}
-
-        {!loading && sessions.length === 0 && (
-          <div style={s.empty}>
-            <p style={{ fontSize: 14.5, color: color.inkDim, margin: 0 }}>No consultations yet.</p>
-            <p style={{ fontSize: 12.5, color: color.inkFaint, marginTop: 4 }}>Start your first one above.</p>
-          </div>
-        )}
-
-        {!loading && recentSessions.map((session, i) => {
-          const isActive = session.status === 'active';
-          return (
-            <div key={session.id} style={{ ...s.histCard, animationDelay: `${i * 0.05}s` }} className="cc-press" onClick={() => handleCardTap(session)}>
-              <div style={s.histIcon}>📋</div>
-              <div style={s.cardBody}>
-                <div style={s.cardTop}>
-                  <p style={s.cardTitle}>{cardTitle(session)}</p>
-                  {isActive && <span style={s.activePill}>Active</span>}
-                </div>
-                <span style={s.cardDate}>{formatDate(session.started_at)}</span>
+          {!loading && sessions.length === 0 && (
+            <div style={s.emptyCard}>
+              <div style={s.emptyIcon}>
+                <Icon
+                  name="history"
+                  size={22}
+                  stroke={color.blue}
+                />
               </div>
-              <span style={{ color: color.inkFaint, fontSize: 16 }}>›</span>
-            </div>
-          );
-        })}
 
-        <div style={{ height: 100 }} />
-      </div>
+              <h3 style={s.emptyTitle}>
+                No consultations yet
+              </h3>
+
+              <p style={s.emptyText}>
+                Start an AI health check whenever
+                you need help deciding your next step.
+              </p>
+            </div>
+          )}
+
+          {!loading &&
+            recentSessions.map((session, index) => {
+              const isActive =
+                session.status === 'active';
+
+              return (
+                <button
+                  key={session.id}
+                  style={{
+                    ...s.historyCard,
+                    animationDelay:
+                      `${index * 0.05}s`,
+                  }}
+                  className="cc-press"
+                  onClick={() =>
+                    handleCardTap(session)
+                  }
+                >
+                  <div style={s.historyIcon}>
+                    <Icon
+                      name="history"
+                      size={18}
+                      stroke={color.blue}
+                    />
+                  </div>
+
+                  <div style={s.historyBody}>
+                    <div style={s.historyTop}>
+                      <p style={s.historyTitle}>
+                        {cardTitle(session)}
+                      </p>
+
+                      {isActive && (
+                        <span style={s.activeBadge}>
+                          Active
+                        </span>
+                      )}
+                    </div>
+
+                    <span style={s.historyDate}>
+                      {formatDate(
+                        session.started_at
+                      )}
+                    </span>
+                  </div>
+
+                  <Icon
+                    name="chevron"
+                    size={16}
+                    stroke={color.inkFaint}
+                  />
+                </button>
+              );
+            })}
+        </section>
+
+        {/* QUICK ACTIONS */}
+
+        <section style={s.section}>
+          <div style={s.sectionHeader}>
+            <div>
+              <p style={s.eyebrow}>Quick access</p>
+              <h2 style={s.sectionTitle}>
+                Your care
+              </h2>
+            </div>
+          </div>
+
+          <div style={s.quickGrid}>
+            <button
+              style={s.quickCard}
+              className="cc-press"
+              onClick={() =>
+                navigate('/medications')
+              }
+            >
+              <div
+                style={{
+                  ...s.quickIcon,
+                  background: color.blueDim,
+                }}
+              >
+                <Icon
+                  name="pill"
+                  size={19}
+                  stroke={color.blue}
+                />
+              </div>
+
+              <span style={s.quickLabel}>
+                Medications
+              </span>
+            </button>
+
+            <button
+              style={s.quickCard}
+              className="cc-press"
+              onClick={() =>
+                navigate('/diagnosis-history')
+              }
+            >
+              <div
+                style={{
+                  ...s.quickIcon,
+                  background: color.violetDim,
+                }}
+              >
+                <Icon
+                  name="history"
+                  size={19}
+                  stroke={color.violet}
+                />
+              </div>
+
+              <span style={s.quickLabel}>
+                Medical history
+              </span>
+            </button>
+
+            <button
+              style={s.quickCard}
+              className="cc-press"
+              onClick={() =>
+                navigate('/consultation')
+              }
+            >
+              <div
+                style={{
+                  ...s.quickIcon,
+                  background: color.tealDim,
+                }}
+              >
+                <Icon
+                  name="doctor"
+                  size={19}
+                  stroke={color.teal}
+                />
+              </div>
+
+              <span style={s.quickLabel}>
+                Doctors
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <div style={{ height: 110 }} />
+      </main>
 
       <BottomNav active="home" />
 
-      {/* ── SIDE MENU ── */}
-      {menuOpen && (
+      {/* NOTIFICATION PANEL */}
+
+      {notificationOpen && (
+        <NotificationPanel
+          notifications={notifications}
+          onClose={() =>
+            setNotificationOpen(false)
+          }
+          onRead={markNotificationRead}
+          onOpenMedication={() => {
+            setNotificationOpen(false);
+            navigate('/medications');
+          }}
+          onOpenConsultation={() => {
+            setNotificationOpen(false);
+            navigate('/consultation/waiting');
+          }}
+        />
+      )}
+
+      {/* MEDICATION DUE POPUP */}
+
+      {dosePopup && (
         <>
-          <div style={s.overlay} onClick={() => setMenuOpen(false)} />
-          <div style={s.menuSheet}>
-            <div style={s.sheetPill} />
-            <p style={s.menuName}>{patient.name || 'Patient'}</p>
-            <p style={s.menuSub}>{patient.phone || ''}</p>
-            <button style={s.menuItem} className="cc-press" onClick={() => { setMenuOpen(false); navigate('/profile'); }}>Profile</button>
-            <button style={s.menuItem} className="cc-press" onClick={() => { setMenuOpen(false); navigate('/diagnosis-history'); }}>Diagnosis history</button>
-            <button style={s.menuItem} className="cc-press" onClick={() => { setMenuOpen(false); navigate('/medications'); }}>Medications</button>
-            <button style={{ ...s.menuItem, color: color.coral }} className="cc-press" onClick={handleLogout}>Sign out</button>
+          <div
+            style={s.popupOverlay}
+            onClick={() => setDosePopup(null)}
+          />
+
+          <div style={s.dosePopup}>
+            <div style={s.popupHandle} />
+
+            <div style={s.popupIcon}>
+              <Icon
+                name="pill"
+                size={24}
+                stroke={color.blue}
+              />
+            </div>
+
+            <p style={s.eyebrow}>
+              Medication reminder
+            </p>
+
+            <h2 style={s.popupTitle}>
+              Time to take your medication
+            </h2>
+
+            <p style={s.popupMedication}>
+              {dosePopup.medication_name ||
+                'Your medication'}
+            </p>
+
+            <p style={s.popupDose}>
+              {dosePopup.dosage_notation ||
+                'Follow your prescribed dose'}
+            </p>
+
+            <button
+              style={s.popupPrimary}
+              className="cc-press"
+              onClick={() => {
+                setDosePopup(null);
+                navigate('/medications');
+              }}
+            >
+              View treatment
+            </button>
+
+            <button
+              style={s.popupSecondary}
+              onClick={() =>
+                setDosePopup(null)
+              }
+            >
+              Remind me later
+            </button>
           </div>
         </>
       )}
 
-      {/* ── RESUME SHEET ── */}
+      {/* MENU */}
+
+      {menuOpen && (
+        <>
+          <div
+            style={s.overlay}
+            onClick={() => setMenuOpen(false)}
+          />
+
+          <div style={s.menuSheet}>
+            <div style={s.sheetHandle} />
+
+            <div style={s.profileHeader}>
+              <div style={s.profileAvatar}>
+                <Icon
+                  name="profile"
+                  size={22}
+                  stroke={color.blue}
+                />
+              </div>
+
+              <div>
+                <p style={s.menuName}>
+                  {patient.name || 'Patient'}
+                </p>
+
+                <p style={s.menuSub}>
+                  {patient.phone || ''}
+                </p>
+              </div>
+            </div>
+
+            <button
+              style={s.menuItem}
+              onClick={() => {
+                setMenuOpen(false);
+                navigate('/profile');
+              }}
+            >
+              <Icon
+                name="profile"
+                size={18}
+              />
+              Profile
+            </button>
+
+            <button
+              style={s.menuItem}
+              onClick={() => {
+                setMenuOpen(false);
+                navigate('/diagnosis-history');
+              }}
+            >
+              <Icon
+                name="history"
+                size={18}
+              />
+              Medical history
+            </button>
+
+            <button
+              style={s.menuItem}
+              onClick={() => {
+                setMenuOpen(false);
+                navigate('/medications');
+              }}
+            >
+              <Icon
+                name="pill"
+                size={18}
+              />
+              Medications
+            </button>
+
+            <button
+              style={{
+                ...s.menuItem,
+                color: color.coral,
+              }}
+              onClick={handleLogout}
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* RESUME SESSION */}
+
       {resumeSheet && (
         <>
-          <div style={s.overlay} onClick={() => setResumeSheet(null)} />
+          <div
+            style={s.overlay}
+            onClick={() => setResumeSheet(null)}
+          />
+
           <div style={s.sheet}>
-            <div style={s.sheetPill} />
-            <p style={s.eyebrow}>Continuing session</p>
-            <h2 style={s.sheetTitle}>{cardTitle(resumeSheet)}</h2>
-            <p style={s.sheetSub}>The AI has full context and will continue from where you left off.</p>
-            {resumeSheet.last_message && !isUrlLike(resumeSheet.last_message) && (
-              <div style={s.sheetPreview}>
-                <p style={s.eyebrow}>Last message</p>
-                <p style={s.sheetPreviewText}>&ldquo;{resumeSheet.last_message}&rdquo;</p>
-              </div>
-            )}
-            <button style={s.sheetBtn} className="cc-press" onClick={handleResume}>Resume conversation</button>
-            <button style={s.sheetCancel} className="cc-press" onClick={() => setResumeSheet(null)}>Not now</button>
+            <div style={s.sheetHandle} />
+
+            <p style={s.eyebrow}>
+              Continuing session
+            </p>
+
+            <h2 style={s.sheetTitle}>
+              {cardTitle(resumeSheet)}
+            </h2>
+
+            <p style={s.sheetSub}>
+              Your previous conversation is still
+              available and can continue from where
+              you stopped.
+            </p>
+
+            {resumeSheet.last_message &&
+              !isUrlLike(
+                resumeSheet.last_message
+              ) && (
+                <div style={s.sheetPreview}>
+                  <p style={s.eyebrow}>
+                    Last message
+                  </p>
+
+                  <p style={s.sheetPreviewText}>
+                    “{resumeSheet.last_message}”
+                  </p>
+                </div>
+              )}
+
+            <button
+              style={s.sheetPrimary}
+              className="cc-press"
+              onClick={handleResume}
+            >
+              Resume conversation
+            </button>
+
+            <button
+              style={s.sheetCancel}
+              onClick={() =>
+                setResumeSheet(null)
+              }
+            >
+              Not now
+            </button>
           </div>
         </>
       )}
 
       <style>{`
         ${theme.fontImport}
-        * { box-sizing: border-box; }
-        button { font-family: inherit; }
-        button:focus-visible { outline: 2px solid ${color.blue}; outline-offset: 2px; }
+
+        * {
+          box-sizing: border-box;
+        }
+
+        button {
+          font-family: inherit;
+        }
+
+        button:focus-visible {
+          outline: 2px solid ${color.blue};
+          outline-offset: 2px;
+        }
+
         ${theme.motionCss}
-        @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes shimmer { from{background-position:-400px 0} to{background-position:400px 0} }
-        @keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-        @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-        @keyframes ringDraw { from{stroke-dashoffset:201} }
-        @keyframes glowDrift { 0%,100%{transform:translate(0,0) scale(1)} 50%{transform:translate(6px,-6px) scale(1.06)} }
-        .cc-float { animation: float 3.2s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+        @keyframes fadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes sheetUp {
+          from {
+            transform: translateY(100%);
+          }
+          to {
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes panelIn {
+          from {
+            opacity: 0;
+            transform: translateX(18px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes pulseDot {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(22,179,120,0.25);
+          }
+          50% {
+            box-shadow: 0 0 0 7px rgba(22,179,120,0);
+          }
+        }
+
+        @keyframes popupIn {
+          from {
+            opacity: 0;
+            transform: translate(-50%, 30px);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
+        }
+
+        .cc-press {
+          transition:
+            transform 160ms ease,
+            box-shadow 160ms ease,
+            opacity 160ms ease;
+        }
+
+        .cc-press:active {
+          transform: scale(0.985);
+        }
+
+        @media (min-width: 700px) {
+          .cc-dashboard-main {
+            max-width: 760px !important;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
       `}</style>
     </div>
   );
 }
 
-// ── Styles ──────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────
+   STYLES
+───────────────────────────────────────────────────────────── */
+
 const s = {
   page: {
-    minHeight: '100vh', width: '100%', background: color.bgGradient,
-    fontFamily: font.ui, color: color.ink, overflowX: 'hidden', boxSizing: 'border-box',
-  },
-  main: { position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto', padding: '18px 20px 0', boxSizing: 'border-box' },
-
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-  iconBtn: {
-    width: 40, height: 40, borderRadius: radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
-    border: `1px solid ${color.glassBorder}`, boxShadow: theme.shadow.embossOut,
-    cursor: 'pointer', flexShrink: 0,
-  },
-  headerEmoji: { fontSize: 17, lineHeight: 1 },
-  bellDot: { position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: '50%', background: color.blue, border: `1.5px solid ${color.bgElevated}` },
-
-  greetingText: { fontSize: 15, color: color.inkDim, margin: 0, fontFamily: font.ui },
-  greetingName: { fontSize: 30, fontWeight: 800, color: color.ink, margin: '2px 0 4px', letterSpacing: -0.5 },
-  wave: { display: 'inline-block' },
-  greetingSub: { fontSize: 14, color: color.inkFaint, margin: '0 0 20px' },
-
-  heroCard: {
-    position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-    width: '100%', boxSizing: 'border-box', textAlign: 'left', border: 'none', cursor: 'pointer',
-    borderRadius: radius.xl, padding: '22px', marginBottom: 22, overflow: 'hidden',
-    background: `linear-gradient(135deg, ${color.heroFrom}, ${color.heroTo})`,
-    boxShadow: '0 12px 28px rgba(76,111,255,0.28), inset 0 1px 0 rgba(255,255,255,0.25)',
-    animation: 'fadeUp 0.5s ease both',
-  },
-  heroGlowA: {
-    position: 'absolute', top: -50, right: -30, width: 170, height: 170, borderRadius: '50%',
-    background: 'rgba(255,255,255,0.16)', filter: 'blur(2px)', animation: 'glowDrift 7s ease-in-out infinite',
-  },
-  heroGlowB: {
-    position: 'absolute', bottom: -60, left: '38%', width: 130, height: 130, borderRadius: '50%',
-    background: 'rgba(255,255,255,0.12)', filter: 'blur(2px)', animation: 'glowDrift 9s ease-in-out infinite reverse',
-  },
-  heroText: { position: 'relative', flex: 1, minWidth: 0 },
-  heroPill: {
-    display: 'inline-block', fontSize: 10, fontWeight: 700, letterSpacing: 0.8,
-    color: '#fff', background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(6px)',
-    border: '1px solid rgba(255,255,255,0.3)', borderRadius: radius.pill, padding: '5px 10px', marginBottom: 12,
-  },
-  heroTitle: { fontSize: 21, fontWeight: 800, color: '#fff', margin: '0 0 6px', lineHeight: 1.25 },
-  heroSub: { fontSize: 12.5, color: 'rgba(255,255,255,0.82)', margin: '0 0 18px', lineHeight: 1.5 },
-  heroCta: {
-    display: 'inline-flex', alignItems: 'center', gap: 8,
-    background: 'rgba(22,24,38,0.88)', color: '#fff', fontSize: 12.5, fontWeight: 700,
-    borderRadius: radius.pill, padding: '10px 15px', boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-  },
-  heroAvatarRing: {
-    position: 'relative', flexShrink: 0, width: 68, height: 68, borderRadius: '50%',
-    background: 'rgba(255,255,255,0.14)', backdropFilter: 'blur(8px)',
-    border: '1px solid rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: 'inset 0 2px 6px rgba(255,255,255,0.3), inset 0 -3px 8px rgba(0,0,0,0.12)',
-  },
-  heroAvatar: {
-    width: 52, height: 52, borderRadius: '50%',
-    background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 24, boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.4)',
+    minHeight: '100vh',
+    width: '100%',
+    background: color.bgGradient,
+    color: color.ink,
+    fontFamily: font.ui,
+    overflowX: 'hidden',
   },
 
-  pendingBanner: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
-    border: `1px solid rgba(22,179,120,0.3)`, borderRadius: radius.lg, padding: '14px 16px',
-    marginBottom: 18, cursor: 'pointer', boxShadow: theme.shadow.glass, animation: 'fadeUp 0.5s ease both',
+  main: {
+    position: 'relative',
+    width: '100%',
+    maxWidth: 760,
+    margin: '0 auto',
+    padding: '18px 20px 0',
   },
-  pendingDot: { width: 9, height: 9, borderRadius: '50%', background: color.teal, flexShrink: 0, boxShadow: `0 0 0 4px ${color.tealDim}`, animation: 'float 1.8s ease-in-out infinite' },
-  pendingTitle: { fontSize: 13.5, fontWeight: 600, color: color.ink, margin: 0 },
-  pendingSub: { fontSize: 12, color: color.inkDim, margin: '2px 0 0' },
 
-  sectionHeader: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: 700, color: color.ink, margin: 0 },
-  seeAll: { background: 'none', border: 'none', color: color.blue, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0, fontFamily: font.ui },
-  sessionCount: { fontSize: 12, color: color.inkFaint },
-
-  vitalsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8, marginBottom: 18 },
-  vitalTile: {
-    minWidth: 0, background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
-    border: `1px solid ${color.glassBorder}`, borderRadius: radius.md, padding: '12px 8px',
-    boxShadow: theme.shadow.glass, animation: 'fadeUp 0.5s ease both',
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
   },
-  vitalIconWrap: { width: 26, height: 26, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10, boxShadow: theme.shadow.embossOut },
-  vitalEmoji: { fontSize: 13, lineHeight: 1 },
-  vitalValue: { fontSize: 16, fontWeight: 800, color: color.ink, margin: 0, lineHeight: 1.1 },
-  vitalUnit: { fontSize: 10, fontWeight: 600, color: color.inkFaint, marginLeft: 2 },
-  vitalLabel: { fontSize: 10.5, color: color.inkFaint, margin: '2px 0 8px' },
 
-  scoreCard: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
-    border: `1px solid ${color.glassBorder}`, borderRadius: radius.lg, padding: '18px 20px', marginBottom: 18,
-    boxShadow: theme.shadow.glass, animation: 'fadeUp 0.5s ease both',
-  },
-  scoreLabel: { fontSize: 12.5, color: color.inkFaint, margin: '0 0 4px' },
-  scoreValue: { fontSize: 30, fontWeight: 800, color: color.ink, margin: 0, display: 'flex', alignItems: 'baseline', gap: 8 },
-  scoreExcellent: { fontSize: 13, fontWeight: 700, color: color.teal },
-  scoreSub: { fontSize: 12, color: color.inkFaint, margin: '4px 0 0' },
-  scoreRingWrap: { position: 'relative', width: 76, height: 76, flexShrink: 0, borderRadius: '50%', boxShadow: theme.shadow.embossOut },
-  scoreRingIcon: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 },
-
-  eyebrow: { fontSize: 11, fontWeight: 600, letterSpacing: 1.2, textTransform: 'uppercase', color: color.inkFaint, margin: '0 0 12px' },
-  medCard: {
-    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
-    border: `1px solid ${color.glassBorder}`, borderRadius: radius.lg,
-    padding: '18px 18px 6px', marginBottom: 18, boxShadow: theme.shadow.glass, animation: 'fadeUp 0.5s ease both',
-  },
-  doseRow: { display: 'flex', alignItems: 'center', gap: 14, padding: '8px 0 14px' },
-  doseRingWrap: { position: 'relative', width: 52, height: 52, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', boxShadow: theme.shadow.embossOut },
-  doseRingLabel: { position: 'absolute', fontSize: 9, fontWeight: 700, letterSpacing: 0.5 },
-  doseInfo: { flex: 1, minWidth: 0 },
-  doseName: { fontSize: 14, fontWeight: 600, color: color.ink, margin: 0 },
-  doseMeta: { fontSize: 12, color: color.inkFaint, margin: '2px 0 0' },
-  doseTime: { fontSize: 13.5, fontWeight: 700, fontFamily: font.mono, flexShrink: 0 },
-  courseWrap: { display: 'flex', alignItems: 'center', gap: 10, padding: '0 0 12px 66px', marginTop: -8 },
-  courseTrack: { flex: 1, height: 4, borderRadius: 2, background: color.hairlineStrong, overflow: 'hidden' },
-  courseFill: { height: '100%', background: color.blue, borderRadius: 2, transition: 'width 0.6s ease' },
-  courseLabel: { fontSize: 11, color: color.inkFaint, flexShrink: 0, fontFamily: font.mono },
-
-  histCard: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
-    border: `1px solid ${color.glassBorder}`, borderRadius: radius.md,
-    padding: '13px 14px', marginBottom: 8, cursor: 'pointer', animation: 'fadeUp 0.45s ease both',
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    border: `1px solid ${color.glassBorder}`,
+    background: color.glass,
+    color: color.ink,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
     boxShadow: theme.shadow.glass,
   },
-  histIcon: { width: 36, height: 36, borderRadius: 10, background: 'rgba(139,108,246,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 15, boxShadow: theme.shadow.embossOut },
-  cardBody: { flex: 1, minWidth: 0 },
-  cardTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 },
-  cardTitle: { fontSize: 13.5, fontWeight: 600, color: color.ink, margin: 0, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
-  activePill: {
-    fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: color.teal,
-    background: color.tealDim, borderRadius: radius.pill, padding: '2px 8px', flexShrink: 0,
-  },
-  cardDate: { fontSize: 11.5, color: color.inkFaint },
 
-  empty: { textAlign: 'center', padding: '30px 0' },
+  notificationBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 18,
+    height: 18,
+    padding: '0 5px',
+    borderRadius: 20,
+    background: color.coral,
+    color: '#fff',
+    border: `2px solid ${color.bgElevated || color.bg}`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 9,
+    fontWeight: 800,
+    lineHeight: 1,
+  },
+
+  greeting: {
+    marginBottom: 20,
+  },
+
+  greetingSmall: {
+    margin: 0,
+    fontSize: 14,
+    color: color.inkDim,
+  },
+
+  greetingName: {
+    margin: '3px 0 3px',
+    fontSize: 30,
+    lineHeight: 1.1,
+    letterSpacing: -0.7,
+    fontWeight: 800,
+    color: color.ink,
+  },
+
+  greetingSub: {
+    margin: 0,
+    fontSize: 13.5,
+    color: color.inkFaint,
+  },
+
+  aiHero: {
+    position: 'relative',
+    width: '100%',
+    minHeight: 205,
+    padding: 24,
+    marginBottom: 20,
+    overflow: 'hidden',
+    textAlign: 'left',
+    border: 'none',
+    borderRadius: radius.xl,
+    cursor: 'pointer',
+    color: '#fff',
+    background: `linear-gradient(135deg, ${color.heroFrom}, ${color.heroTo})`,
+    boxShadow: '0 14px 32px rgba(76,111,255,0.24)',
+    display: 'flex',
+    alignItems: 'center',
+  },
+
+  aiHeroAccent: {
+    position: 'absolute',
+    width: 190,
+    height: 190,
+    right: -55,
+    top: -70,
+    borderRadius: '50%',
+    background: 'rgba(255,255,255,0.12)',
+  },
+
+  aiHeroContent: {
+    position: 'relative',
+    zIndex: 2,
+    maxWidth: 520,
+  },
+
+  aiHeroLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 9.5,
+    fontWeight: 800,
+    letterSpacing: 1,
+    padding: '6px 9px',
+    borderRadius: 99,
+    background: 'rgba(255,255,255,0.16)',
+    border: '1px solid rgba(255,255,255,0.2)',
+    marginBottom: 13,
+  },
+
+  aiHeroTitle: {
+    margin: 0,
+    maxWidth: 380,
+    fontSize: 24,
+    lineHeight: 1.2,
+    fontWeight: 800,
+    letterSpacing: -0.5,
+  },
+
+  aiHeroText: {
+    margin: '8px 0 18px',
+    maxWidth: 390,
+    fontSize: 12.5,
+    lineHeight: 1.55,
+    color: 'rgba(255,255,255,0.82)',
+  },
+
+  aiHeroButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 14px',
+    borderRadius: 999,
+    background: 'rgba(10,18,38,0.84)',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+
+  aiHeroMark: {
+    position: 'absolute',
+    right: 28,
+    bottom: 28,
+    width: 66,
+    height: 66,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(255,255,255,0.12)',
+    border: '1px solid rgba(255,255,255,0.2)',
+  },
+
+  consultationBanner: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '14px 15px',
+    marginBottom: 20,
+    borderRadius: radius.lg,
+    border: `1px solid rgba(22,179,120,0.28)`,
+    background: color.glass,
+    color: color.ink,
+    textAlign: 'left',
+    cursor: 'pointer',
+    boxShadow: theme.shadow.glass,
+  },
+
+  liveIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.tealDim,
+    flexShrink: 0,
+  },
+
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: color.teal,
+    animation: 'pulseDot 1.8s infinite',
+  },
+
+  consultationTitle: {
+    margin: 0,
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: color.ink,
+  },
+
+  consultationSub: {
+    margin: '3px 0 0',
+    fontSize: 11.5,
+    color: color.inkFaint,
+  },
+
+  section: {
+    marginBottom: 24,
+  },
+
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 11,
+  },
+
+  eyebrow: {
+    margin: '0 0 4px',
+    fontSize: 10,
+    lineHeight: 1.2,
+    textTransform: 'uppercase',
+    letterSpacing: 1.1,
+    fontWeight: 800,
+    color: color.inkFaint,
+  },
+
+  sectionTitle: {
+    margin: 0,
+    fontSize: 17,
+    fontWeight: 750,
+    letterSpacing: -0.2,
+    color: color.ink,
+  },
+
+  textButton: {
+    padding: 0,
+    border: 'none',
+    background: 'none',
+    color: color.blue,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+
+  medicationCard: {
+    overflow: 'hidden',
+    borderRadius: radius.lg,
+    border: `1px solid ${color.glassBorder}`,
+    background: color.glass,
+    boxShadow: theme.shadow.glass,
+  },
+
+  medicationHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    padding: '16px 16px 14px',
+  },
+
+  medicationIcon: {
+    width: 38,
+    height: 38,
+    flexShrink: 0,
+    borderRadius: 11,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.blueDim,
+  },
+
+  medicationHeading: {
+    margin: 0,
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: color.ink,
+  },
+
+  medicationSubheading: {
+    margin: '3px 0 0',
+    fontSize: 11.5,
+    color: color.inkFaint,
+  },
+
+  dueBadge: {
+    minWidth: 22,
+    height: 22,
+    padding: '0 6px',
+    borderRadius: 20,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.coral,
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 800,
+  },
+
+  medicationDueBox: {
+    margin: '0 12px 10px',
+    padding: '3px 11px',
+    borderRadius: radius.md,
+    background: color.coralDim,
+    border: `1px solid rgba(235,91,91,0.14)`,
+  },
+
+  medicationRow: {
+    minHeight: 58,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    borderBottom: `1px solid rgba(235,91,91,0.1)`,
+  },
+
+  medicationStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: '50%',
+    background: color.coral,
+    flexShrink: 0,
+  },
+
+  medicationName: {
+    margin: 0,
+    fontSize: 13,
+    fontWeight: 700,
+    color: color.ink,
+  },
+
+  medicationDose: {
+    margin: '3px 0 0',
+    fontSize: 11,
+    color: color.inkDim,
+  },
+
+  takeNow: {
+    fontSize: 10.5,
+    fontWeight: 800,
+    color: color.coral,
+    whiteSpace: 'nowrap',
+  },
+
+  upcomingDose: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    margin: '0 12px 10px',
+    padding: '12px',
+    borderRadius: radius.md,
+    background: color.surfaceMuted,
+  },
+
+  clockCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.blueDim,
+    flexShrink: 0,
+  },
+
+  nextDoseLabel: {
+    margin: 0,
+    fontSize: 10.5,
+    color: color.inkFaint,
+  },
+
+  nextDoseName: {
+    margin: '2px 0 0',
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: color.ink,
+  },
+
+  nextDoseTime: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: color.blue,
+    whiteSpace: 'nowrap',
+  },
+
+  medicationFooter: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    border: 'none',
+    borderTop: `1px solid ${color.hairline}`,
+    background: 'transparent',
+    color: color.blue,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+
+  historyCard: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    padding: '13px',
+    marginBottom: 8,
+    border: `1px solid ${color.glassBorder}`,
+    borderRadius: radius.md,
+    background: color.glass,
+    color: color.ink,
+    textAlign: 'left',
+    cursor: 'pointer',
+    boxShadow: theme.shadow.glass,
+    animation: 'fadeUp 0.45s ease both',
+  },
+
+  historyIcon: {
+    width: 38,
+    height: 38,
+    flexShrink: 0,
+    borderRadius: 11,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.blueDim,
+  },
+
+  historyBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  historyTop: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 3,
+  },
+
+  historyTitle: {
+    flex: 1,
+    minWidth: 0,
+    margin: 0,
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
+    fontSize: 13,
+    fontWeight: 650,
+    color: color.ink,
+  },
+
+  historyDate: {
+    fontSize: 11,
+    color: color.inkFaint,
+  },
+
+  activeBadge: {
+    flexShrink: 0,
+    padding: '3px 7px',
+    borderRadius: 99,
+    background: color.tealDim,
+    color: color.teal,
+    fontSize: 9,
+    fontWeight: 800,
+  },
+
+  quickGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: 9,
+  },
+
+  quickCard: {
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: '13px 12px',
+    border: `1px solid ${color.glassBorder}`,
+    borderRadius: radius.md,
+    background: color.glass,
+    color: color.ink,
+    cursor: 'pointer',
+    textAlign: 'left',
+    boxShadow: theme.shadow.glass,
+  },
+
+  quickIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  quickLabel: {
+    fontSize: 11.5,
+    lineHeight: 1.25,
+    fontWeight: 700,
+  },
+
+  loadingStack: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+
   skeleton: {
-    height: 56, borderRadius: radius.md,
-    background: `linear-gradient(90deg, ${color.surfaceMuted} 25%, ${color.surfaceRaised} 50%, ${color.surfaceMuted} 75%)`,
-    backgroundSize: '400px 100%', animation: 'shimmer 1.6s infinite',
+    height: 64,
+    borderRadius: radius.md,
+    background: `linear-gradient(
+      90deg,
+      ${color.surfaceMuted} 25%,
+      ${color.surfaceRaised} 50%,
+      ${color.surfaceMuted} 75%
+    )`,
+    backgroundSize: '400px 100%',
+    animation: 'shimmer 1.6s infinite',
   },
 
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(16,18,32,0.4)', backdropFilter: 'blur(2px)', zIndex: 200 },
+  emptyCard: {
+    padding: '28px 20px',
+    textAlign: 'center',
+    borderRadius: radius.lg,
+    border: `1px solid ${color.glassBorder}`,
+    background: color.glass,
+    boxShadow: theme.shadow.glass,
+  },
+
+  emptyIcon: {
+    width: 46,
+    height: 46,
+    margin: '0 auto 12px',
+    borderRadius: 14,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.blueDim,
+  },
+
+  emptyTitle: {
+    margin: '0 0 5px',
+    fontSize: 14,
+    fontWeight: 700,
+    color: color.ink,
+  },
+
+  emptyText: {
+    maxWidth: 360,
+    margin: '0 auto',
+    fontSize: 12,
+    lineHeight: 1.55,
+    color: color.inkFaint,
+  },
+
+  /* NOTIFICATIONS */
+
+  notificationOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 300,
+    background: 'rgba(10,16,30,0.36)',
+    backdropFilter: 'blur(3px)',
+  },
+
+  notificationPanel: {
+    position: 'fixed',
+    zIndex: 301,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 'min(420px, 92vw)',
+    overflowY: 'auto',
+    padding: '22px 18px 30px',
+    background: color.bgElevated || color.bg,
+    borderLeft: `1px solid ${color.glassBorder}`,
+    boxShadow: '-18px 0 45px rgba(20,30,60,0.16)',
+    animation: 'panelIn 220ms ease both',
+  },
+
+  notificationPanelHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 22,
+  },
+
+  notificationTitle: {
+    margin: 0,
+    fontSize: 22,
+    fontWeight: 800,
+    color: color.ink,
+  },
+
+  closeButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    border: `1px solid ${color.glassBorder}`,
+    background: color.glass,
+    color: color.ink,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+
+  notificationList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+
+  notificationItem: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: '13px',
+    borderRadius: radius.md,
+    border: `1px solid ${color.glassBorder}`,
+    background: color.glass,
+    color: color.ink,
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+
+  notificationRead: {
+    opacity: 0.62,
+  },
+
+  notificationIcon: {
+    width: 38,
+    height: 38,
+    flexShrink: 0,
+    borderRadius: 11,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  notificationContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  notificationItemTop: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  notificationItemTitle: {
+    flex: 1,
+    margin: 0,
+    fontSize: 12.5,
+    fontWeight: 750,
+    color: color.ink,
+  },
+
+  unreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    background: color.blue,
+    flexShrink: 0,
+  },
+
+  notificationItemText: {
+    margin: '4px 0',
+    fontSize: 11.5,
+    lineHeight: 1.45,
+    color: color.inkDim,
+  },
+
+  notificationTime: {
+    fontSize: 10,
+    color: color.inkFaint,
+  },
+
+  notificationEmpty: {
+    padding: '70px 20px',
+    textAlign: 'center',
+  },
+
+  notificationEmptyIcon: {
+    width: 58,
+    height: 58,
+    margin: '0 auto 15px',
+    borderRadius: 18,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.tealDim,
+  },
+
+  /* POPUP */
+
+  popupOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 400,
+    background: 'rgba(10,16,30,0.42)',
+    backdropFilter: 'blur(3px)',
+  },
+
+  dosePopup: {
+    position: 'fixed',
+    zIndex: 401,
+    left: '50%',
+    bottom: 20,
+    width: 'min(440px, calc(100vw - 32px))',
+    padding: '18px 20px 20px',
+    borderRadius: 22,
+    background: color.glassStrong || color.bgElevated || color.bg,
+    border: `1px solid ${color.glassBorder}`,
+    boxShadow: '0 18px 50px rgba(15,25,55,0.25)',
+    transform: 'translateX(-50%)',
+    animation: 'popupIn 260ms ease both',
+  },
+
+  popupHandle: {
+    width: 34,
+    height: 4,
+    margin: '0 auto 18px',
+    borderRadius: 99,
+    background: color.hairlineStrong,
+  },
+
+  popupIcon: {
+    width: 48,
+    height: 48,
+    marginBottom: 13,
+    borderRadius: 15,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.blueDim,
+  },
+
+  popupTitle: {
+    margin: '0 0 7px',
+    fontSize: 20,
+    lineHeight: 1.25,
+    fontWeight: 800,
+    color: color.ink,
+  },
+
+  popupMedication: {
+    margin: 0,
+    fontSize: 14,
+    fontWeight: 700,
+    color: color.blue,
+  },
+
+  popupDose: {
+    margin: '4px 0 18px',
+    fontSize: 12,
+    color: color.inkFaint,
+  },
+
+  popupPrimary: {
+    width: '100%',
+    padding: '13px',
+    border: 'none',
+    borderRadius: radius.md,
+    background: color.blue,
+    color: '#fff',
+    fontSize: 13.5,
+    fontWeight: 750,
+    cursor: 'pointer',
+  },
+
+  popupSecondary: {
+    width: '100%',
+    padding: '11px',
+    border: 'none',
+    background: 'transparent',
+    color: color.inkFaint,
+    fontSize: 12.5,
+    cursor: 'pointer',
+  },
+
+  /* SHEETS */
+
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 200,
+    background: 'rgba(10,16,30,0.4)',
+    backdropFilter: 'blur(2px)',
+  },
+
   sheet: {
-    position: 'fixed', bottom: 0, left: 0, right: 0,
-    background: color.glassStrong, backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-    border: `1px solid ${color.glassBorder}`, borderBottom: 'none',
-    borderRadius: '24px 24px 0 0', padding: '20px 24px 40px',
-    zIndex: 201, animation: 'sheetUp 0.32s cubic-bezier(0.34,1.56,0.64,1) both', maxWidth: 480, margin: '0 auto',
-    boxShadow: '0 -12px 40px rgba(31,38,80,0.18)',
+    position: 'fixed',
+    zIndex: 201,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxWidth: 760,
+    margin: '0 auto',
+    padding: '18px 22px 34px',
+    borderRadius: '24px 24px 0 0',
+    border: `1px solid ${color.glassBorder}`,
+    borderBottom: 'none',
+    background: color.glassStrong || color.bgElevated || color.bg,
+    boxShadow: '0 -16px 45px rgba(20,30,60,0.18)',
+    animation: 'sheetUp 280ms ease both',
   },
-  sheetPill: { width: 36, height: 4, borderRadius: 2, background: color.hairlineStrong, margin: '0 auto 18px' },
-  sheetTitle: { fontSize: 19, fontWeight: 700, color: color.ink, margin: '0 0 8px' },
-  sheetSub: { fontSize: 13, color: color.inkDim, margin: '0 0 16px', lineHeight: 1.6 },
-  sheetPreview: { background: color.surfaceMuted, borderRadius: radius.sm, padding: '10px 14px', marginBottom: 18 },
-  sheetPreviewText: { fontSize: 13, color: color.inkDim, margin: 0, fontStyle: 'italic' },
-  sheetBtn: {
-    width: '100%', padding: '15px 0', background: color.blue, border: 'none', borderRadius: radius.md,
-    color: '#fff', fontSize: 14.5, fontWeight: 700, fontFamily: font.ui, cursor: 'pointer', marginBottom: 8,
-    boxShadow: '0 6px 16px rgba(76,111,255,0.35)',
-  },
-  sheetCancel: { width: '100%', padding: '12px 0', background: 'none', border: 'none', color: color.inkFaint, fontSize: 13.5, cursor: 'pointer', fontFamily: font.ui },
 
   menuSheet: {
-    position: 'fixed', bottom: 0, left: 0, right: 0,
-    background: color.glassStrong, backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-    border: `1px solid ${color.glassBorder}`, borderBottom: 'none',
-    borderRadius: '24px 24px 0 0', padding: '20px 24px 40px',
-    zIndex: 201, animation: 'sheetUp 0.32s cubic-bezier(0.34,1.56,0.64,1) both', maxWidth: 480, margin: '0 auto',
-    boxShadow: '0 -12px 40px rgba(31,38,80,0.18)',
+    position: 'fixed',
+    zIndex: 201,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxWidth: 760,
+    margin: '0 auto',
+    padding: '18px 22px 34px',
+    borderRadius: '24px 24px 0 0',
+    border: `1px solid ${color.glassBorder}`,
+    borderBottom: 'none',
+    background: color.glassStrong || color.bgElevated || color.bg,
+    boxShadow: '0 -16px 45px rgba(20,30,60,0.18)',
+    animation: 'sheetUp 280ms ease both',
   },
-  menuName: { fontSize: 18, fontWeight: 700, color: color.ink, margin: '0 0 2px' },
-  menuSub: { fontSize: 13, color: color.inkFaint, margin: '0 0 18px' },
+
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    margin: '0 auto 20px',
+    borderRadius: 99,
+    background: color.hairlineStrong,
+  },
+
+  profileHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    paddingBottom: 17,
+  },
+
+  profileAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: color.blueDim,
+  },
+
+  menuName: {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 800,
+    color: color.ink,
+  },
+
+  menuSub: {
+    margin: '3px 0 0',
+    fontSize: 12,
+    color: color.inkFaint,
+  },
+
   menuItem: {
-    display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none',
-    borderTop: `1px solid ${color.hairline}`, padding: '14px 2px', fontSize: 14.5, fontWeight: 500,
-    color: color.ink, cursor: 'pointer', fontFamily: font.ui,
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '14px 2px',
+    border: 'none',
+    borderTop: `1px solid ${color.hairline}`,
+    background: 'transparent',
+    color: color.ink,
+    fontSize: 13.5,
+    fontWeight: 600,
+    textAlign: 'left',
+    cursor: 'pointer',
+  },
+
+  sheetTitle: {
+    margin: '0 0 8px',
+    fontSize: 20,
+    fontWeight: 800,
+    color: color.ink,
+  },
+
+  sheetSub: {
+    margin: '0 0 16px',
+    fontSize: 13,
+    lineHeight: 1.55,
+    color: color.inkDim,
+  },
+
+  sheetPreview: {
+    marginBottom: 17,
+    padding: '12px 14px',
+    borderRadius: radius.md,
+    background: color.surfaceMuted,
+  },
+
+  sheetPreviewText: {
+    margin: 0,
+    fontSize: 12.5,
+    lineHeight: 1.5,
+    color: color.inkDim,
+    fontStyle: 'italic',
+  },
+
+  sheetPrimary: {
+    width: '100%',
+    padding: '14px',
+    marginBottom: 5,
+    border: 'none',
+    borderRadius: radius.md,
+    background: color.blue,
+    color: '#fff',
+    fontSize: 13.5,
+    fontWeight: 750,
+    cursor: 'pointer',
+    boxShadow: '0 7px 18px rgba(76,111,255,0.25)',
+  },
+
+  sheetCancel: {
+    width: '100%',
+    padding: '11px',
+    border: 'none',
+    background: 'transparent',
+    color: color.inkFaint,
+    fontSize: 12.5,
+    cursor: 'pointer',
   },
 };
