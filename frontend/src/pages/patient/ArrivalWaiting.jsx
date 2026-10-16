@@ -80,9 +80,9 @@ function Shell({ children, live }) {
         <div className="aw">
             <main className="aw-card" aria-live={live ? 'polite' : undefined}>{children}</main>
             <style>{`
-                .aw { min-height: 100vh; background: var(--cc-bg); display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
-                .aw-card { width: 100%; max-width: 440px; text-align: center; background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 20px; padding: 36px 24px 28px; box-shadow: var(--cc-shadow); display: flex; flex-direction: column; align-items: center; animation: fadeUp .25s ease both; }
-                .aw-icon { width: 72px; height: 72px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 18px; position: relative; }
+                .aw { min-height: 100vh; background: var(--cc-canvas); background-attachment: fixed; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+                .aw-card { width: 100%; max-width: 440px; text-align: center; background: var(--cc-glass-strong); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 24px; padding: 36px 24px 28px; display: flex; flex-direction: column; align-items: center; animation: fadeUp .25s ease both; }
+                .aw-icon { width: 76px; height: 76px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 18px; position: relative; box-shadow: var(--cc-clay); }
                 .aw-icon--success { background: var(--cc-success-soft); color: var(--cc-success); }
                 .aw-icon--wait { background: var(--cc-primary-soft); color: var(--cc-primary); }
                 .aw-icon--wait::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--cc-primary-border); animation: pulse-glow 2.2s ease-in-out infinite; }

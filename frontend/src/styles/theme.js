@@ -1,13 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────
 // CivCare shared design tokens (JS mirror of the CSS tokens in index.css).
 //
-// Direction: calm, clinical, high-legibility. Solid surfaces with hairline
-// borders, one action blue, and status colours reserved for meaning.
+// Direction: calm, clinical and premium. A soft aurora canvas, frosted glass
+// chrome, tactile clay accents, one action blue, and status colours reserved
+// for meaning.
 //
 // Every value is a CSS custom property, so inline styles automatically
-// follow the light/dark palette defined in index.css. Keys are kept stable
-// from the earlier theme so existing pages keep working; the old "glass",
-// "gradient" and "emboss" keys now resolve to solid, restrained equivalents.
+// follow the light/dark palette defined in index.css. "glass" keys are
+// frosted translucent surfaces, "emboss" keys are soft clay depth, and
+// bgGradient is the shared aurora canvas.
 //
 //   import { theme } from '../../styles/theme';
 // ─────────────────────────────────────────────────────────────────────────
@@ -17,20 +18,20 @@ const v = (name) => `var(--cc-${name})`;
 export const theme = {
   color: {
     bg:            v('bg'),
-    bgGradient:    v('bg'),
-    bgElevated:    v('surface'),
+    bgGradient:    v('canvas'),
+    bgElevated:    v('surface-solid'),
     surface:       v('surface'),
     surfaceMuted:  v('surface-2'),
     surfaceRaised: v('surface-3'),
     hairline:      v('border'),
     hairlineStrong:v('border-strong'),
 
-    // Former glass surfaces → solid
-    glass:        v('surface'),
-    glassStrong:  v('surface'),
-    glassBorder:  v('border'),
-    glassShadow:  v('shadow-sm'),
-    blur:         'none',
+    // Glass surfaces (frosted; pair with `blur` on fixed chrome)
+    glass:        v('glass'),
+    glassStrong:  v('glass-strong'),
+    glassBorder:  v('glass-border'),
+    glassShadow:  v('shadow'),
+    blur:         v('blur'),
 
     ink:      v('text'),
     inkDim:   v('muted'),
@@ -78,9 +79,10 @@ export const theme = {
     card:      v('shadow-sm'),
     raised:    v('shadow'),
     nav:       v('shadow-sm'),
-    glass:     v('shadow-sm'),
-    embossOut: 'none',
-    embossIn:  'none',
+    glass:     `${v('glass-edge')}, ${v('shadow')}`,
+    // Soft "clay" depth for icon bubbles, avatars and tactile buttons
+    embossOut: v('clay'),
+    embossIn:  v('clay-pressed'),
   },
   ease: {
     spring: 'cubic-bezier(0.2, 0, 0, 1)',

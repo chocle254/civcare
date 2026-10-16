@@ -233,8 +233,8 @@ export default function Analytics() {
       </main>
 
       <style>{`
-        .an { min-height: 100vh; background: var(--cc-bg); }
-        .an-head { background: var(--cc-surface); border-bottom: 1px solid var(--cc-border); }
+        .an { min-height: 100vh; background: var(--cc-canvas); background-attachment: fixed; }
+        .an-head { position: sticky; top: 0; z-index: 10; background: var(--cc-glass); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur); border-bottom: 1px solid var(--cc-border); }
         .an-headin { max-width: 1280px; margin: 0 auto; padding: 20px 24px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
         .an-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--cc-primary); }
         .an-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin: 2px 0; }
@@ -242,20 +242,20 @@ export default function Analytics() {
         .an-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
         .an-seg { display: flex; gap: 2px; padding: 3px; background: var(--cc-surface-3); border-radius: 9px; }
         .an-segbtn { min-height: 34px; padding: 4px 14px; border-radius: 7px; border: 1px solid transparent; background: none; font-size: 13.5px; font-weight: 600; color: var(--cc-muted); }
-        .an-segbtn.is-on { background: var(--cc-surface); color: var(--cc-text); border-color: var(--cc-border); box-shadow: var(--cc-shadow-sm); }
+        .an-segbtn.is-on { background: var(--cc-surface-solid); color: var(--cc-text); border-color: var(--cc-glass-border); box-shadow: var(--cc-clay); }
         .an-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--cc-border-strong); background: var(--cc-surface); color: var(--cc-text-2); font-size: 13.5px; font-weight: 600; }
         .an-btn:hover:not(:disabled) { background: var(--cc-surface-2); color: var(--cc-text); }
         .an-btn:disabled { opacity: .5; cursor: not-allowed; }
         .an-wrap { max-width: 1280px; margin: 0 auto; padding: 20px 24px 48px; }
-        .an-dash { background: var(--cc-bg); }
+        .an-dash { background: transparent; }
         .an-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
-        .an-stat { background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; box-shadow: var(--cc-shadow-sm); }
+        .an-stat { background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; }
         .an-stat span { font-size: 13px; font-weight: 600; color: var(--cc-muted); }
         .an-stat strong { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
         .an-stat small { font-size: 15px; color: var(--cc-muted); margin-left: 2px; }
         .an-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
         .an-span { grid-column: 1 / -1; }
-        .an-panel { background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 14px; padding: 16px 18px; box-shadow: var(--cc-shadow-sm); min-width: 0; }
+        .an-panel { background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 18px; padding: 16px 18px; min-width: 0; }
         .an-panel h2 { font-size: 15px; font-weight: 650; margin-bottom: 12px; }
         .an-chart { width: 100%; }
         .an-tablewrap { overflow-x: auto; max-height: 420px; overflow-y: auto; }

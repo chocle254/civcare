@@ -243,7 +243,7 @@ export default function DiagnosisHistory() {
 
         .history-page {
           min-height: 100vh;
-          background: #f5f7fa;
+          background: var(--cc-canvas); background-attachment: fixed;
           color: #172033;
           padding: 28px;
           font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -667,7 +667,7 @@ export default function DiagnosisHistory() {
 
         @media (prefers-color-scheme: dark) {
           .history-page {
-            background: #0e151d;
+            background: var(--cc-canvas); background-attachment: fixed;
             color: #e7edf5;
           }
 

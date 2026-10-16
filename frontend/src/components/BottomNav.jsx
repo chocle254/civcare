@@ -125,9 +125,11 @@ export default function BottomNav({ active }) {
           position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
           max-width: 520px; margin: 0 auto; width: 100%;
           display: flex; justify-content: space-around; align-items: stretch;
-          background: var(--cc-surface);
-          border-top: 1px solid var(--cc-border);
-          box-shadow: 0 -4px 16px rgba(16,24,40,0.04);
+          background: var(--cc-glass);
+          -webkit-backdrop-filter: var(--cc-blur);
+          backdrop-filter: var(--cc-blur);
+          border-top: 1px solid var(--cc-glass-border);
+          box-shadow: var(--cc-glass-edge), 0 -10px 30px -12px rgba(16,36,64,0.18);
           padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
         }
         @media (min-width: 521px) {
@@ -142,6 +144,7 @@ export default function BottomNav({ active }) {
         }
         .ccnav__btn:hover { color: var(--cc-text-2); }
         .ccnav__btn.is-active { color: var(--cc-primary); }
+        .ccnav__btn.is-active .ccnav__icon { filter: drop-shadow(0 4px 8px rgba(23,105,170,.35)); }
         .ccnav__icon { position: relative; display: inline-flex; }
         .ccnav__btn.is-active .ccnav__icon::after {
           content: ''; position: absolute; left: 50%; top: -7px; transform: translateX(-50%);
@@ -158,8 +161,9 @@ export default function BottomNav({ active }) {
         .ccnav__sheet {
           position: fixed; bottom: 0; left: 0; right: 0; z-index: 201;
           max-width: 520px; margin: 0 auto; max-height: 80vh; overflow-y: auto;
-          background: var(--cc-surface); border: 1px solid var(--cc-border); border-bottom: none;
-          border-radius: 20px 20px 0 0; box-shadow: var(--cc-shadow-lg);
+          background: var(--cc-glass-strong); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur);
+          border: 1px solid var(--cc-glass-border); border-bottom: none;
+          border-radius: 24px 24px 0 0; box-shadow: var(--cc-glass-edge), var(--cc-shadow-lg);
           padding: 10px 16px calc(20px + env(safe-area-inset-bottom));
           animation: ccSheetUp .24s cubic-bezier(0.2,0,0,1) both;
         }
@@ -182,7 +186,7 @@ export default function BottomNav({ active }) {
         .ccnav__itemicon {
           width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
           display: inline-flex; align-items: center; justify-content: center;
-          background: var(--cc-primary-soft); color: var(--cc-primary);
+          background: var(--cc-primary-soft); color: var(--cc-primary); box-shadow: var(--cc-clay);
         }
         .ccnav__item.is-danger .ccnav__itemicon { background: var(--cc-danger-soft); color: var(--cc-danger); }
         .ccnav__item.is-danger .ccnav__itemtitle { color: var(--cc-danger); }

@@ -25,10 +25,11 @@
 
   /* Surfaces */
   --cc-bg: #f4f6f9;
-  --cc-surface: #ffffff;
-  --cc-surface-2: #f7f9fb;
+  --cc-surface: rgba(255, 255, 255, 0.84);
+  --cc-surface-solid: #ffffff;
+  --cc-surface-2: rgba(247, 249, 251, 0.9);
   --cc-surface-3: #eef2f6;
-  --cc-border: #e1e6ed;
+  --cc-border: rgba(203, 213, 225, 0.7);
   --cc-border-strong: #cfd7e1;
 
   /* Text */
@@ -58,12 +59,28 @@
   --cc-info-soft: #edf1fb;
   --cc-info-border: #c5d1ee;
 
+  /* Depth: canvas, glass, clay */
+  --cc-canvas:
+    radial-gradient(900px 560px at 0% -10%, rgba(23, 105, 170, 0.13), transparent 62%),
+    radial-gradient(760px 520px at 105% 0%, rgba(20, 160, 150, 0.10), transparent 60%),
+    radial-gradient(820px 620px at 50% 115%, rgba(23, 105, 170, 0.08), transparent 60%),
+    linear-gradient(180deg, #f6f8fb 0%, #eef2f7 100%);
+  --cc-glass: rgba(255, 255, 255, 0.72);
+  --cc-glass-strong: rgba(255, 255, 255, 0.88);
+  --cc-glass-border: rgba(255, 255, 255, 0.75);
+  --cc-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --cc-blur: blur(18px) saturate(160%);
+  --cc-primary-grad: linear-gradient(180deg, #2580c6 0%, #1769aa 100%);
+  --cc-primary-glow: 0 8px 20px -8px rgba(23, 105, 170, 0.6);
+  --cc-clay: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 -2px 6px rgba(16, 24, 40, 0.04) inset, 0 6px 14px -6px rgba(16, 24, 40, 0.16);
+  --cc-clay-pressed: inset 0 2px 5px rgba(16, 24, 40, 0.12);
+
   /* Elevation */
-  --cc-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --cc-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 14px rgba(16, 24, 40, 0.05);
-  --cc-shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.14);
+  --cc-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 12px -4px rgba(16, 24, 40, 0.08);
+  --cc-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px -10px rgba(16, 36, 64, 0.16);
+  --cc-shadow-lg: 0 24px 56px -16px rgba(16, 36, 64, 0.28);
   --cc-focus: 0 0 0 3px rgba(23, 105, 170, 0.28);
-  --cc-overlay: rgba(15, 23, 36, 0.48);
+  --cc-overlay: rgba(15, 23, 36, 0.42);
 
   /* Shape & type */
   --cc-radius-sm: 8px;
@@ -130,10 +147,11 @@
   :root {
     color-scheme: dark;
     --cc-bg: #0e151d;
-    --cc-surface: #151e28;
-    --cc-surface-2: #121a23;
+    --cc-surface: rgba(23, 32, 43, 0.82);
+    --cc-surface-solid: #151e28;
+    --cc-surface-2: rgba(18, 26, 35, 0.9);
     --cc-surface-3: #1b2633;
-    --cc-border: #263443;
+    --cc-border: rgba(148, 163, 184, 0.16);
     --cc-border-strong: #334556;
     --cc-text: #eef3f8;
     --cc-text-2: #cfd8e3;
@@ -156,11 +174,24 @@
     --cc-info: #93aef0;
     --cc-info-soft: #18213a;
     --cc-info-border: #33467a;
-    --cc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --cc-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.2);
-    --cc-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+    --cc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px -4px rgba(0, 0, 0, 0.35);
+    --cc-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+    --cc-shadow-lg: 0 24px 56px -16px rgba(0, 0, 0, 0.65);
     --cc-focus: 0 0 0 3px rgba(105, 183, 229, 0.35);
-    --cc-overlay: rgba(3, 7, 12, 0.66);
+    --cc-overlay: rgba(3, 7, 12, 0.6);
+    --cc-canvas:
+      radial-gradient(900px 560px at 0% -10%, rgba(105, 183, 229, 0.14), transparent 62%),
+      radial-gradient(760px 520px at 105% 0%, rgba(60, 190, 170, 0.09), transparent 60%),
+      radial-gradient(820px 620px at 50% 115%, rgba(105, 183, 229, 0.07), transparent 60%),
+      linear-gradient(180deg, #0f1720 0%, #0b1118 100%);
+    --cc-glass: rgba(22, 31, 42, 0.66);
+    --cc-glass-strong: rgba(22, 31, 42, 0.86);
+    --cc-glass-border: rgba(255, 255, 255, 0.08);
+    --cc-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --cc-primary-grad: linear-gradient(180deg, #7cc2ea 0%, #5aaedf 100%);
+    --cc-primary-glow: 0 8px 22px -8px rgba(105, 183, 229, 0.55);
+    --cc-clay: 0 1px 0 rgba(255, 255, 255, 0.07) inset, 0 -2px 6px rgba(0, 0, 0, 0.25) inset, 0 6px 14px -6px rgba(0, 0, 0, 0.6);
+    --cc-clay-pressed: inset 0 2px 6px rgba(0, 0, 0, 0.45);
   }
 }
 
@@ -172,7 +203,9 @@ html {
 
 body {
   font-family: var(--cc-font);
-  background: var(--cc-bg);
+  background: var(--cc-canvas);
+  background-color: var(--cc-bg);
+  background-attachment: fixed;
   color: var(--cc-text);
   font-size: 15px;
   line-height: 1.55;
@@ -235,7 +268,8 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--cc-bg);
+  background: var(--cc-canvas);
+  background-attachment: fixed;
   position: relative;
 }
 
@@ -255,8 +289,11 @@ button {
 
 /* ── Top bar ── */
 .header {
-  background: var(--cc-surface);
-  border-bottom: 1px solid var(--cc-border);
+  background: var(--cc-glass);
+  -webkit-backdrop-filter: var(--cc-blur);
+  backdrop-filter: var(--cc-blur);
+  border-bottom: 1px solid var(--cc-glass-border);
+  box-shadow: 0 1px 0 var(--cc-border);
   color: var(--cc-text);
   padding: 12px 20px;
   min-height: 60px;
@@ -308,10 +345,10 @@ button {
   background: var(--cc-surface);
   border-radius: var(--cc-radius-lg);
   padding: 20px;
-  border: 1px solid var(--cc-border);
-  box-shadow: var(--cc-shadow-sm);
+  border: 1px solid var(--cc-glass-border);
+  box-shadow: var(--cc-glass-edge), var(--cc-shadow);
   margin-bottom: 16px;
-  animation: fadeUp 0.28s var(--cc-ease) both;
+  animation: fadeUp 0.32s var(--cc-ease) both;
 }
 
 .card__title {
@@ -362,7 +399,8 @@ button {
   font-size: 15px;
   font-family: var(--cc-font);
   color: var(--cc-text);
-  background: var(--cc-surface);
+  background: var(--cc-surface-solid);
+  box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.05);
   transition: border-color 0.15s var(--cc-ease), box-shadow 0.15s var(--cc-ease);
   outline: none;
 }
@@ -441,13 +479,19 @@ select.input {
 }
 
 .btn--primary {
-  background: var(--cc-primary);
+  background: var(--cc-primary-grad);
   color: var(--cc-on-primary);
-  box-shadow: var(--cc-shadow-sm);
+  border-color: rgba(0, 0, 0, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), var(--cc-primary-glow);
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--cc-primary-hover);
+  filter: brightness(1.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 12px 26px -10px rgba(23, 105, 170, 0.7);
+}
+
+.btn--primary:active:not(:disabled) {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.18);
 }
 
 .btn--success {
@@ -477,9 +521,10 @@ select.input {
 }
 
 .btn--outline {
-  background: var(--cc-surface);
+  background: var(--cc-glass-strong);
   color: var(--cc-text-2);
   border-color: var(--cc-border-strong);
+  box-shadow: var(--cc-clay);
 }
 
 .btn--outline:hover:not(:disabled) {
@@ -946,4 +991,42 @@ select.input {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ═══════════════════════════ CRASH SCREEN (ErrorBoundary) ═══════════════════════════ */
+
+.cc-crash { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--cc-bg); }
+.cc-crash__card { max-width: 420px; width: 100%; text-align: center; background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 20px; padding: 32px 24px; box-shadow: var(--cc-shadow); }
+.cc-crash__icon { display: inline-flex; width: 56px; height: 56px; border-radius: 50%; align-items: center; justify-content: center; background: var(--cc-warning-soft); color: var(--cc-warning); margin-bottom: 14px; }
+.cc-crash__card h1 { font-size: 19px; font-weight: 700; margin-bottom: 6px; }
+.cc-crash__card p { color: var(--cc-muted); font-size: 15px; margin-bottom: 20px; }
+.cc-crash__actions { display: flex; flex-direction: column; gap: 8px; }
+
+/* ═══════════════════════════ DEPTH UTILITIES ═══════════════════════════
+   Glass = translucent + blur. Reserved for fixed/sticky chrome (headers,
+   nav, sheets) where it reads as layering; blur on every scrolling card is
+   expensive on low-end Android, so cards get translucency + layered shadow.
+   Clay = soft tactile tiles and buttons.                                  */
+
+.cc-glass {
+  background: var(--cc-glass);
+  -webkit-backdrop-filter: var(--cc-blur);
+  backdrop-filter: var(--cc-blur);
+  border: 1px solid var(--cc-glass-border);
+  box-shadow: var(--cc-glass-edge), var(--cc-shadow);
+}
+
+.cc-clay {
+  background: linear-gradient(180deg, var(--cc-surface-solid), var(--cc-surface-2));
+  box-shadow: var(--cc-clay);
+  border: 1px solid var(--cc-glass-border);
+}
+
+.cc-lift { transition: transform .2s var(--cc-ease), box-shadow .2s var(--cc-ease), border-color .2s var(--cc-ease); }
+@media (hover: hover) {
+  .cc-lift:hover { transform: translateY(-2px); box-shadow: var(--cc-glass-edge), var(--cc-shadow-lg); }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --cc-glass: var(--cc-surface-solid); --cc-glass-strong: var(--cc-surface-solid); }
 }

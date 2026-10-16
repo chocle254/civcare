@@ -255,25 +255,26 @@ export default function DoctorLogin() {
       </main>
 
       <style>{`
-        .dl { min-height: 100vh; display: grid; grid-template-columns: minmax(320px, 440px) 1fr; background: var(--cc-bg); }
+        .dl { min-height: 100vh; display: grid; grid-template-columns: minmax(320px, 440px) 1fr; background: var(--cc-canvas); background-attachment: fixed; }
         .dl-intro {
-          background: var(--cc-primary); color: #fff; padding: 40px 40px 32px;
+          background: radial-gradient(520px 420px at 110% -10%, rgba(126,200,240,.45), transparent 60%), radial-gradient(480px 380px at -20% 110%, rgba(40,190,170,.35), transparent 60%), linear-gradient(160deg, #1a73b8 0%, #12578e 60%, #0f4775 100%); color: #fff; padding: 40px 40px 32px; overflow: hidden;
           display: flex; flex-direction: column; justify-content: space-between; gap: 32px;
           position: sticky; top: 0; height: 100vh;
         }
-        @media (prefers-color-scheme: dark) { .dl-intro { background: #12324a; } }
+        @media (prefers-color-scheme: dark) { .dl-intro { filter: brightness(.82); } }
         .dl-intro h2 { font-size: 26px; line-height: 1.25; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 24px; max-width: 340px; }
         .dl-intro ul { list-style: none; display: flex; flex-direction: column; gap: 16px; }
-        .dl-intro li { display: flex; gap: 12px; font-size: 15px; line-height: 1.5; color: rgba(255,255,255,0.88); }
+        .dl-intro li { display: flex; gap: 12px; font-size: 15px; line-height: 1.5; color: rgba(255,255,255,0.92); padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); }
         .dl-intro li svg { flex-shrink: 0; margin-top: 2px; }
         .dl-introfoot { font-size: 13px; color: rgba(255,255,255,0.65); }
         .dl-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
-        .dl-mark { width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.16); color: #fff; }
+        .dl-mark { width: 38px; height: 38px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,.28); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; }
         .dl-brand--mobile { display: none; color: var(--cc-text); margin-bottom: 28px; }
         .dl-brand--mobile .dl-mark { background: var(--cc-primary); color: var(--cc-on-primary); }
         .dl-brand--mobile small { display: block; font-size: 12px; font-weight: 500; color: var(--cc-muted); }
-        .dl-main { display: flex; justify-content: center; align-items: flex-start; padding: 64px 24px 48px; }
-        .dl-wrap { width: 100%; max-width: 440px; }
+        .dl-main { display: flex; justify-content: center; align-items: flex-start; padding: 56px 24px 48px; }
+        .dl-wrap { width: 100%; max-width: 460px; background: var(--cc-glass-strong); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 22px; padding: 32px 28px; }
+        @media (max-width: 480px) { .dl-wrap { padding: 24px 18px; border-radius: 18px; } }
         .dl-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
         .dl-sub { color: var(--cc-muted); font-size: 15px; margin-bottom: 20px; }
         .dl-tabs { display: flex; gap: 4px; padding: 4px; background: var(--cc-surface-3); border-radius: 10px; margin-bottom: 20px; }
@@ -300,7 +301,7 @@ export default function DoctorLogin() {
           .dl { grid-template-columns: 1fr; }
           .dl-intro { display: none; }
           .dl-brand--mobile { display: flex; }
-          .dl-main { padding: 32px 16px 40px; }
+          .dl-main { padding: 24px 12px 32px; }
         }
       `}</style>
     </div>

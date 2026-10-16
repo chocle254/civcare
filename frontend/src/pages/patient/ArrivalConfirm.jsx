@@ -337,7 +337,7 @@ export default function ArrivalConfirm() {
 const s = {
   page: {
     minHeight: '100vh',
-    background: '#f5f7fb',
+    background: 'var(--cc-canvas)', backgroundAttachment: 'fixed',
     color: '#162033',
     fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     paddingBottom: 118,

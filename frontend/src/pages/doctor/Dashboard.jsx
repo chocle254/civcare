@@ -723,16 +723,16 @@ export default function Dashboard() {
 
 // ─── Styles ──────────────────────────────────────────────
 const CSS = `
-  .dd { display: flex; min-height: 100vh; background: var(--cc-bg); color: var(--cc-text); }
+  .dd { display: flex; min-height: 100vh; background: var(--cc-canvas); background-attachment: fixed; color: var(--cc-text); }
 
   /* Sidebar */
   .dd-side {
     width: 248px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
-    background: var(--cc-surface); border-right: 1px solid var(--cc-border);
+    background: var(--cc-glass); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur); border-right: 1px solid var(--cc-glass-border); box-shadow: 1px 0 0 var(--cc-border);
     display: flex; flex-direction: column; gap: 24px; padding: 20px 14px;
   }
   .dd-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
-  .dd-brandmark { width: 34px; height: 34px; border-radius: 9px; background: var(--cc-primary); color: var(--cc-on-primary); display: inline-flex; align-items: center; justify-content: center; }
+  .dd-brandmark { width: 36px; height: 36px; border-radius: 11px; background: var(--cc-primary-grad); box-shadow: inset 0 1px 0 rgba(255,255,255,.25), var(--cc-primary-glow); color: var(--cc-on-primary); display: inline-flex; align-items: center; justify-content: center; }
   .dd-brandname { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
   .dd-brandsub { font-size: 12px; color: var(--cc-muted); }
   .dd-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
@@ -742,12 +742,12 @@ const CSS = `
     color: var(--cc-text-2); font-size: 14px; font-weight: 500;
   }
   .dd-navbtn:hover { background: var(--cc-surface-2); color: var(--cc-text); }
-  .dd-navbtn.is-active { background: var(--cc-primary-soft); color: var(--cc-primary); font-weight: 600; }
+  .dd-navbtn.is-active { background: var(--cc-primary-soft); color: var(--cc-primary); font-weight: 600; box-shadow: var(--cc-clay); }
   .dd-count { margin-left: auto; min-width: 22px; padding: 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 600; text-align: center; background: var(--cc-surface-3); color: var(--cc-text-2); }
   .dd-navbtn.is-active .dd-count { background: var(--cc-primary); color: var(--cc-on-primary); }
   .dd-me { border-top: 1px solid var(--cc-border); padding-top: 16px; display: flex; flex-direction: column; gap: 14px; }
   .dd-meid { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
-  .dd-avatar { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--cc-primary-soft); color: var(--cc-primary); font-weight: 700; font-size: 13px; }
+  .dd-avatar { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--cc-primary-soft); color: var(--cc-primary); box-shadow: var(--cc-clay); font-weight: 700; font-size: 13px; }
   .dd-mename { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dd-mesub { font-size: 12px; color: var(--cc-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dd-status { border: none; padding: 0 6px; }
@@ -776,7 +776,7 @@ const CSS = `
   .dd-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .dd-head {
     position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 16px 28px; background: var(--cc-bg); border-bottom: 1px solid var(--cc-border);
+    padding: 16px 28px; background: var(--cc-glass); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur); border-bottom: 1px solid var(--cc-border);
   }
   .dd-crumb { font-size: 13px; color: var(--cc-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dd-title { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25; }
@@ -799,7 +799,8 @@ const CSS = `
 
   /* Stats */
   .dd-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
-  .dd-stat { background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; box-shadow: var(--cc-shadow-sm); }
+  .dd-stat { background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; position: relative; overflow: hidden; }
+  .dd-stat::after { content: ''; position: absolute; right: -24px; top: -24px; width: 88px; height: 88px; border-radius: 50%; background: radial-gradient(circle, var(--cc-primary-soft), transparent 70%); pointer-events: none; }
   .dd-stat--danger { border-color: var(--cc-danger-border); background: var(--cc-danger-soft); }
   .dd-stat--danger .dd-statvalue, .dd-stat--danger .dd-statlabel { color: var(--cc-danger); }
   .dd-statlabel { font-size: 13px; font-weight: 600; color: var(--cc-muted); }
@@ -809,7 +810,7 @@ const CSS = `
   /* Panels */
   .dd-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
   .dd-aside { display: flex; flex-direction: column; gap: 16px; }
-  .dd-panel { background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 14px; box-shadow: var(--cc-shadow-sm); overflow: hidden; }
+  .dd-panel { background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 18px; overflow: hidden; }
   .dd-panelhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--cc-border); }
   .dd-panelhead h2, .dd-sectionhead h2 { font-size: 15px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
   .dd-panelmeta { font-size: 12.5px; color: var(--cc-muted); }
@@ -822,7 +823,7 @@ const CSS = `
   .dd-empty { text-align: center; padding: 40px 20px; }
   .dd-empty h3 { font-size: 15px; font-weight: 650; margin: 10px 0 4px; }
   .dd-empty p { font-size: 14px; color: var(--cc-muted); max-width: 320px; margin: 0 auto; }
-  .dd-emptyicon { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; background: var(--cc-success-soft); color: var(--cc-success); }
+  .dd-emptyicon { box-shadow: var(--cc-clay); display: inline-flex; width: 52px; height: 52px; border-radius: 50%; align-items: center; justify-content: center; background: var(--cc-success-soft); color: var(--cc-success); }
 
   /* Table */
   .dd-tablewrap { overflow-x: auto; }
@@ -831,7 +832,7 @@ const CSS = `
   .dd-table td { padding: 12px 14px; border-bottom: 1px solid var(--cc-border); vertical-align: middle; }
   .dd-table tr:last-child td { border-bottom: none; }
   .dd-row { cursor: pointer; transition: background .12s ease; }
-  .dd-row:hover { background: var(--cc-surface-2); }
+  .dd-row:hover { background: var(--cc-primary-soft); }
   .dd-row td:first-child { box-shadow: inset 3px 0 0 var(--dd-edge, transparent); }
   .dd-row--danger { --dd-edge: var(--cc-danger); }
   .dd-row--warning { --dd-edge: var(--cc-warning); }
@@ -898,9 +899,9 @@ const CSS = `
   }
   .dd-btn--sm { min-height: 34px; padding: 6px 12px; font-size: 13px; }
   .dd-btn--md { min-height: 42px; padding: 9px 16px; font-size: 14px; }
-  .dd-btn--primary { background: var(--cc-primary); color: var(--cc-on-primary); }
+  .dd-btn--primary { background: var(--cc-primary-grad); color: var(--cc-on-primary); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), var(--cc-primary-glow); }
   .dd-btn--primary:hover:not(:disabled) { background: var(--cc-primary-hover); }
-  .dd-btn--ghost { background: var(--cc-surface); color: var(--cc-text-2); border-color: var(--cc-border-strong); }
+  .dd-btn--ghost { background: var(--cc-glass-strong); color: var(--cc-text-2); border-color: var(--cc-border-strong); box-shadow: var(--cc-clay); }
   .dd-btn--ghost:hover:not(:disabled) { background: var(--cc-surface-2); color: var(--cc-text); }
   .dd-btn--done { background: var(--cc-success-soft); color: var(--cc-success); border-color: var(--cc-success-border); }
   .dd-btn:disabled { cursor: default; }

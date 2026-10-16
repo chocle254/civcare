@@ -838,7 +838,7 @@ export default function HospitalSelect() {
 
           min-height: 100vh;
           width: 100%;
-          background: var(--hs-bg);
+          background: var(--cc-canvas); background-attachment: fixed;
           color: var(--hs-text);
           font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           overflow-x: hidden;

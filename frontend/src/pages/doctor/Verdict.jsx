@@ -214,7 +214,7 @@ export default function Verdict() {
       </form>
 
       <style>{`
-        .vd { min-height: 100vh; background: var(--cc-bg); }
+        .vd { min-height: 100vh; background: var(--cc-canvas); background-attachment: fixed; }
         .vd-wrap { max-width: 1080px; margin: 0 auto; padding: 20px 20px 48px; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
         .vd-full { grid-column: 1 / -1; margin-bottom: 0; }
         .vd-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -229,7 +229,7 @@ export default function Verdict() {
         .vd-segopt { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-height: 40px; border-radius: 7px; font-size: 14px; font-weight: 600; color: var(--cc-muted); cursor: pointer; border: 1px solid transparent; }
         .vd-segopt input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
         .vd-segopt:has(input:focus-visible) { outline: 2px solid var(--cc-primary); outline-offset: 1px; }
-        .vd-segopt.is-on { background: var(--cc-surface); border-color: var(--cc-border); box-shadow: var(--cc-shadow-sm); }
+        .vd-segopt.is-on { background: var(--cc-surface-solid); border-color: var(--cc-glass-border); box-shadow: var(--cc-clay); }
         .vd-segopt--mild.is-on { color: var(--cc-success); }
         .vd-segopt--moderate.is-on { color: var(--cc-warning); }
         .vd-segopt--severe.is-on { color: var(--cc-danger); }

@@ -408,7 +408,7 @@ export default function Medications() {
 
         .meds-page {
           min-height: 100vh;
-          background: var(--meds-bg, #f5f7fb);
+          background: var(--cc-canvas); background-attachment: fixed;
           color: var(--meds-text, #162033);
           padding-bottom: 110px;
         }

@@ -260,11 +260,11 @@ function TopBar({ onBack, title }) {
 }
 
 const CSS = `
-  .ac-page { min-height: 100vh; background: var(--cc-bg); }
+  .ac-page { min-height: 100vh; background: var(--cc-canvas); background-attachment: fixed; }
   .ac-wrap { max-width: 1040px; margin: 0 auto; padding: 24px 20px 48px; }
   .ac-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
   .ac-col { display: flex; flex-direction: column; gap: 16px; }
-  .ac-card { background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 14px; padding: 20px; box-shadow: var(--cc-shadow-sm); }
+  .ac-card { background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 18px; padding: 20px; }
   .ac-patient { display: flex; align-items: center; gap: 14px; }
   .ac-name { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
   .ac-phone { display: inline-flex; align-items: center; gap: 6px; color: var(--cc-primary); font-family: var(--cc-mono); font-size: 14px; text-decoration: none; margin-top: 2px; }
@@ -301,18 +301,18 @@ const CSS = `
   .ac-callname { font-weight: 650; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ac-callsub { display: flex; align-items: center; gap: 6px; font-family: var(--cc-mono); font-size: 12.5px; color: rgba(232,237,243,0.7); font-variant-numeric: tabular-nums; }
   .ac-live { width: 7px; height: 7px; border-radius: 50%; background: #ef5a5a; animation: pulse-glow 1.6s ease-in-out infinite; }
-  .ac-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06); color: #e8edf3; font-size: 13.5px; font-weight: 600; }
+  .ac-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: #e8edf3; font-size: 13.5px; font-weight: 600; }
   .ac-chip:hover, .ac-chip.is-on { background: rgba(255,255,255,0.14); }
   .ac-stage { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px; position: relative; }
   .ac-video { position: relative; flex: 1; min-width: 0; border-radius: 14px; overflow: hidden; background: #000; border: 1px solid rgba(255,255,255,0.08); }
   .ac-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
   .ac-overlay { display: none; }
-  .ac-report { width: 360px; flex-shrink: 0; overflow-y: auto; background: var(--cc-surface); color: var(--cc-text); border-radius: 14px; padding: 16px 18px; border: 1px solid var(--cc-border); animation: fadeIn .18s ease both; }
+  .ac-report { width: 360px; flex-shrink: 0; overflow-y: auto; background: var(--cc-surface-solid); color: var(--cc-text); border-radius: 14px; padding: 16px 18px; border: 1px solid var(--cc-border); animation: fadeIn .18s ease both; }
   .ac-reporthead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
   .ac-reporthead h2 { font-size: 16px; font-weight: 700; }
   .ac-iconbtn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--cc-border); background: var(--cc-surface); color: var(--cc-muted); display: inline-flex; align-items: center; justify-content: center; }
   .ac-controls { display: flex; justify-content: center; padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(255,255,255,0.08); }
-  .ac-end { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 22px; border-radius: 999px; border: none; background: #d64545; color: #fff; font-weight: 650; font-size: 15px; }
+  .ac-end { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 22px; border-radius: 999px; border: none; background: linear-gradient(180deg, #e25555, #c63c3c); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 10px 24px -8px rgba(214,69,69,.7); color: #fff; font-weight: 650; font-size: 15px; }
   .ac-end:hover:not(:disabled) { background: #c03838; }
   .ac-end:disabled { opacity: .7; }
   .ac-confirm { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center; max-width: 720px; }

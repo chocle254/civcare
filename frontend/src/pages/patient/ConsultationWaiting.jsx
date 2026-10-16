@@ -146,16 +146,16 @@ export default function ConsultationWaiting() {
 }
 
 const CSS = `
-  .cw { min-height: 100vh; background: var(--cc-bg); }
+  .cw { min-height: 100vh; background: var(--cc-canvas); background-attachment: fixed; }
   .cw-wrap { max-width: 520px; margin: 0 auto; padding: 24px 16px 40px; display: flex; flex-direction: column; gap: 16px; }
-  .cw-hero { text-align: center; background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 16px; padding: 28px 20px 24px; box-shadow: var(--cc-shadow-sm); }
-  .cw-heroicon { display: inline-flex; width: 64px; height: 64px; border-radius: 50%; align-items: center; justify-content: center; background: var(--cc-primary-soft); color: var(--cc-primary); margin-bottom: 14px; position: relative; }
+  .cw-hero { text-align: center; background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 22px; padding: 30px 20px 26px; }
+  .cw-heroicon { display: inline-flex; width: 68px; height: 68px; border-radius: 50%; align-items: center; justify-content: center; background: var(--cc-primary-soft); color: var(--cc-primary); margin-bottom: 14px; position: relative; box-shadow: var(--cc-clay); }
   .cw-hero:not(.is-ready) .cw-heroicon::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--cc-primary-border); animation: pulse-glow 1.8s ease-in-out infinite; }
   .cw-hero.is-ready .cw-heroicon { background: var(--cc-success-soft); color: var(--cc-success); }
   .cw-hero h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 6px; }
   .cw-hero p { color: var(--cc-muted); font-size: 15px; line-height: 1.55; max-width: 380px; margin: 0 auto; }
   .cw-join { margin-top: 20px; min-height: 52px; font-size: 16px; }
-  .cw-steps { list-style: none; background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 16px; padding: 8px 18px; }
+  .cw-steps { list-style: none; background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 18px; padding: 8px 18px; }
   .cw-step { display: flex; gap: 12px; padding: 12px 0; position: relative; }
   .cw-step + .cw-step { border-top: 1px solid var(--cc-border); }
   .cw-stepmark { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 700; border: 2px solid var(--cc-border-strong); color: var(--cc-faint); background: var(--cc-surface); }

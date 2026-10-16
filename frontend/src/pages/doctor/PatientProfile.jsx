@@ -321,9 +321,9 @@ function Bar({ onBack, children }) {
 }
 
 const CSS = `
-  .pp { min-height: 100vh; background: var(--cc-bg); padding-bottom: 96px; }
+  .pp { min-height: 100vh; background: var(--cc-canvas); background-attachment: fixed; padding-bottom: 96px; }
   .pp-wrap { max-width: 1120px; margin: 0 auto; padding: 20px 20px 24px; }
-  .pp-id { background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; box-shadow: var(--cc-shadow-sm); display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: center; justify-content: space-between; }
+  .pp-id { background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 18px; padding: 18px 20px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: center; justify-content: space-between; }
   .pp-idmain { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .pp-idmain h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; }
   .pp-iddl { display: flex; flex-wrap: wrap; gap: 12px 28px; }
@@ -335,7 +335,7 @@ const CSS = `
   .pp-flag p { color: var(--cc-text); font-size: 14px; white-space: pre-line; margin-top: 2px; }
   .pp-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
   .pp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .pp-card { background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 14px; padding: 18px 20px; box-shadow: var(--cc-shadow-sm); }
+  .pp-card { background: var(--cc-surface); border: 1px solid var(--cc-glass-border); box-shadow: var(--cc-glass-edge), var(--cc-shadow); border-radius: 18px; padding: 18px 20px; }
   .pp-h { font-size: 15px; font-weight: 650; margin-bottom: 14px; }
   .pp-ai { background: var(--cc-primary-soft); border: 1px solid var(--cc-primary-border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
   .pp-ailabel { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--cc-primary); margin-bottom: 4px; }
@@ -368,15 +368,15 @@ const CSS = `
   .pp-note { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; color: var(--cc-muted); margin-top: 4px; }
   .pp-note svg { flex-shrink: 0; margin-top: 2px; }
   .pp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 9px 16px; border-radius: 8px; border: 1px solid transparent; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background .15s ease, border-color .15s ease; }
-  .pp-btn--primary { background: var(--cc-primary); color: var(--cc-on-primary); }
+  .pp-btn--primary { background: var(--cc-primary-grad); color: var(--cc-on-primary); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), var(--cc-primary-glow); }
   .pp-btn--primary:hover { background: var(--cc-primary-hover); }
   .pp-btn--secondary { background: var(--cc-primary-soft); color: var(--cc-primary); border-color: var(--cc-primary-border); }
   .pp-btn--secondary:hover:not(:disabled) { border-color: var(--cc-primary); }
   .pp-btn--done { background: var(--cc-success-soft); color: var(--cc-success); border-color: var(--cc-success-border); cursor: default; }
-  .pp-btn--ghost { background: var(--cc-surface); color: var(--cc-text-2); border-color: var(--cc-border-strong); }
+  .pp-btn--ghost { background: var(--cc-glass-strong); color: var(--cc-text-2); border-color: var(--cc-border-strong); box-shadow: var(--cc-clay); }
   .pp-btn--ghost:hover, .pp-btn--ghost.is-on { border-color: var(--cc-primary); color: var(--cc-primary); }
   .pp-btn--ghost.is-on { background: var(--cc-primary-soft); }
-  .pp-actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--cc-surface); border-top: 1px solid var(--cc-border); box-shadow: 0 -4px 16px rgba(16,24,40,0.05); padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); }
+  .pp-actions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--cc-glass); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur); border-top: 1px solid var(--cc-glass-border); box-shadow: 0 -4px 16px rgba(16,24,40,0.05); padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); }
   .pp-actionsin { max-width: 1080px; margin: 0 auto; display: flex; gap: 10px; align-items: center; }
   .pp-empty { text-align: center; padding: 48px 16px; background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 14px; }
   .pp-empty h2 { font-size: 17px; margin: 12px 0 4px; }

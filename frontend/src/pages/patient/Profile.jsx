@@ -6,6 +6,14 @@ import { theme } from '../../styles/theme';
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
 
+// Endpoints return either a bare list or a wrapper object ({ verdicts: [...] }).
+// Always hand the UI an array so a shape change can never crash the page.
+const asList = (data, key) => {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data[key])) return data[key];
+  return [];
+};
+
 const isUrlLike = (str) => /^https?:\/\//i.test((str || '').trim());
 const cardTitle = (session) => {
   const raw = session.symptoms_summary || session.ai_assessment || '';
@@ -51,9 +59,9 @@ export default function Profile() {
         axios.get(`${API}/prescriptions/active/${patient.id}`),
         axios.get(`${API}/triage/sessions/${patient.id}`),
       ]);
-      if (vRes.status === 'fulfilled') setVerdicts(vRes.value.data || []);
-      if (pRes.status === 'fulfilled') setPrescriptions(pRes.value.data || []);
-      if (sRes.status === 'fulfilled') setSessions(sRes.value.data || []);
+      if (vRes.status === 'fulfilled') setVerdicts(asList(vRes.value.data, 'verdicts'));
+      if (pRes.status === 'fulfilled') setPrescriptions(asList(pRes.value.data, 'prescriptions'));
+      if (sRes.status === 'fulfilled') setSessions(asList(sRes.value.data, 'sessions'));
     } catch (e) {
       console.error(e);
     } finally {
@@ -175,7 +183,7 @@ export default function Profile() {
         ${theme.fontImport}
         * { box-sizing: border-box; }
         button { font-family: inherit; }
-        button:focus-visible { outline: 2px solid ${color.gold}; outline-offset: 2px; }
+        button:focus-visible { outline: 2px solid ${color.blue}; outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
       `}</style>
     </div>
@@ -183,7 +191,7 @@ export default function Profile() {
 }
 
 const s = {
-  page: { minHeight: '100vh', background: color.bg, color: color.ink, fontFamily: font.ui },
+  page: { minHeight: '100vh', background: color.bgGradient, backgroundAttachment: 'fixed', color: color.ink, fontFamily: font.ui },
   main: { maxWidth: 560, margin: '0 auto', padding: '44px 20px 0' },
   header: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 },
   backBtn: {
@@ -195,19 +203,19 @@ const s = {
   logoutBtn: { background: 'none', border: 'none', color: color.inkFaint, fontSize: 13, cursor: 'pointer' },
 
   snapshot: {
-    background: color.surface, border: `1px solid ${color.hairline}`, borderRadius: radius.lg,
-    padding: 20, marginBottom: 20,
+    background: color.glassStrong, border: `1px solid ${color.glassBorder}`, borderRadius: radius.xl,
+    boxShadow: theme.shadow.glass, padding: 20, marginBottom: 20,
   },
   snapshotTop: { display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 },
   avatarLg: {
-    width: 52, height: 52, borderRadius: '50%', background: color.gold, color: color.bg,
+    width: 56, height: 56, borderRadius: '50%', background: `linear-gradient(160deg, ${color.heroFrom}, ${color.heroTo})`, color: '#fff', boxShadow: theme.shadow.embossOut,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     fontFamily: font.display, fontWeight: 600, fontSize: 20, flexShrink: 0,
   },
   name: { fontSize: 17, fontWeight: 600, margin: 0, fontFamily: font.display },
   phone: { fontSize: 13, color: color.inkFaint, margin: '2px 0 0' },
   chipsGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
-  chip: { background: color.surfaceRaised, borderRadius: radius.sm, padding: '10px 12px' },
+  chip: { background: color.surfaceMuted, borderRadius: radius.md, padding: '10px 12px', boxShadow: theme.shadow.embossOut },
   chipLabel: { fontSize: 10.5, letterSpacing: 0.5, textTransform: 'uppercase', color: color.inkFaint, margin: '0 0 4px' },
   chipValue: { fontSize: 14, fontWeight: 500, color: color.ink, margin: 0 },
 
@@ -216,11 +224,11 @@ const s = {
     background: 'none', border: 'none', color: color.inkFaint, fontSize: 13.5, fontWeight: 500,
     padding: '8px 4px', cursor: 'pointer', borderBottom: '2px solid transparent', marginBottom: -2,
   },
-  tabBtnActive: { color: color.gold, borderBottom: `2px solid ${color.gold}` },
+  tabBtnActive: { color: color.blue, borderBottom: `2px solid ${color.blue}` },
 
   emptyText: { fontSize: 13, color: color.inkFaint, padding: '20px 0' },
   entryCard: {
-    background: color.surface, border: `1px solid ${color.hairline}`, borderRadius: radius.md,
+    background: color.surface, border: `1px solid ${color.glassBorder}`, borderRadius: radius.lg, boxShadow: theme.shadow.glass,
     padding: '14px 16px', marginBottom: 10,
   },
   entryTop: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },

@@ -1,5 +1,6 @@
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
 import Register       from './pages/patient/Register';
 import Chat           from './pages/patient/Chat';
 import HospitalSelect from './pages/patient/HospitalSelect';
@@ -22,9 +23,15 @@ import DiagnosisHistory from './pages/patient/DiagnosisHistory';
 import Analytics from './pages/analytics/Analytics';
 
 
+function GuardedRoutes({ children }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <GuardedRoutes>
       <Routes>
         {/* Patient */}
         <Route path="/"                    element={<Register />} />
@@ -51,6 +58,7 @@ export default function App() {
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+      </GuardedRoutes>
     </BrowserRouter>
   );
 }
