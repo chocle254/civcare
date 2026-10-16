@@ -95,7 +95,7 @@ export default function ArrivalConfirm() {
       fitSelectedRoutes: true,
       showAlternatives: false,
       lineOptions: {
-        styles: [{ color: '#00d4aa', opacity: 0.8, weight: 5 }]
+        styles: [{ color: '#1769aa', opacity: 0.85, weight: 5 }]
       },
       createMarker: function (i, wp, nWps) {
         if (i === 0) return window.L.marker(wp.latLng).bindPopup("You are here");
@@ -208,7 +208,7 @@ export default function ArrivalConfirm() {
                 )}
                 {sessionData.assessment.severity && (
                   <div style={s.summaryItem}>
-                    <span style={s.summaryKey}>Severity</span>
+                    <span style={s.summaryKey}>How bad it feels (your rating)</span>
                     <span style={s.summaryVal}>{sessionData.assessment.severity}/10</span>
                   </div>
                 )}
@@ -337,198 +337,358 @@ export default function ArrivalConfirm() {
 const s = {
   page: {
     minHeight: '100vh',
-    background: '#f5f7fa',
-    color: '#14212f',
-    fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    paddingBottom: 132
+    background: '#f5f7fb',
+    color: '#162033',
+    fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    paddingBottom: 118,
   },
-  main: { maxWidth: 980, margin: '0 auto' },
+
+  main: {
+    width: 'min(1080px, calc(100% - 32px))',
+    margin: '0 auto',
+  },
+
   header: {
+    padding: '24px 0 22px',
     display: 'flex',
     alignItems: 'flex-start',
-    gap: 16,
-    padding: '34px 24px 20px',
-    background: '#f5f7fa'
+    gap: 12,
   },
+
   back: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     flexShrink: 0,
-    borderRadius: 14,
-    border: '1px solid #dce4ec',
-    background: '#fff',
-    color: '#203040',
+    borderRadius: 12,
+    border: '1px solid #e5e9f0',
+    background: '#ffffff',
+    color: '#65748b',
     cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 2px 8px rgba(25,45,65,.05)'
+    display: 'grid',
+    placeItems: 'center',
+    boxShadow: '0 2px 8px rgba(25,42,70,.04)',
   },
-  backIcon: { fontSize: 29, lineHeight: .8, marginTop: -3 },
-  headerText: { flex: 1 },
+
+  backIcon: {
+    fontSize: 27,
+    lineHeight: 1,
+    marginTop: -2,
+  },
+
+  headerText: {
+    minWidth: 0,
+    flex: 1,
+  },
+
   eyebrow: {
-    margin: '2px 0 6px',
+    margin: '1px 0 6px',
+    color: '#1769e0',
     fontSize: 10,
     fontWeight: 800,
-    letterSpacing: 1.35,
-    color: '#1769aa'
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
+
   title: {
     margin: 0,
-    fontSize: 'clamp(24px, 4vw, 32px)',
-    lineHeight: 1.15,
-    letterSpacing: -.7,
+    fontSize: 'clamp(27px, 5vw, 38px)',
+    lineHeight: 1.08,
+    letterSpacing: '-.9px',
     fontWeight: 800,
-    color: '#14212f'
+    color: '#162033',
   },
-  sub: { margin: '7px 0 0', color: '#6b7b8c', fontSize: 14, lineHeight: 1.5 },
-  content: { padding: '4px 24px 28px' },
+
+  sub: {
+    margin: '9px 0 0',
+    maxWidth: 620,
+    color: '#68778d',
+    fontSize: 13,
+    lineHeight: 1.6,
+  },
+
+  content: {
+    display: 'grid',
+    gap: 14,
+    paddingBottom: 20,
+  },
 
   destinationCard: {
-    background: '#fff',
-    border: '1px solid #e2e8ef',
+    background: '#ffffff',
+    border: '1px solid #e5e9f0',
     borderRadius: 20,
-    padding: 22,
-    boxShadow: '0 8px 28px rgba(30,55,80,.06)',
-    marginBottom: 16
+    padding: 20,
+    boxShadow: '0 5px 18px rgba(25,42,70,.035)',
   },
-  destinationTop: { display: 'flex', alignItems: 'center', gap: 14 },
-  facilityIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    flexShrink: 0,
-    background: '#eaf4fb',
-    color: '#1769aa',
+
+  destinationTop: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 28,
-    fontWeight: 500
+    gap: 13,
   },
-  destinationMeta: { minWidth: 0, flex: 1 },
+
+  facilityIcon: {
+    width: 46,
+    height: 46,
+    flexShrink: 0,
+    borderRadius: 14,
+    display: 'grid',
+    placeItems: 'center',
+    background: '#edf5ff',
+    color: '#1769e0',
+    fontSize: 25,
+    fontWeight: 500,
+  },
+
+  destinationMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+
   cardLabel: {
     margin: 0,
+    color: '#748196',
     fontSize: 10,
-    lineHeight: 1.2,
-    letterSpacing: 1.25,
     fontWeight: 800,
-    color: '#8291a0',
-    textTransform: 'uppercase'
+    letterSpacing: .85,
+    textTransform: 'uppercase',
   },
+
   hospitalName: {
     margin: '5px 0 3px',
-    fontSize: 19,
+    color: '#162033',
+    fontSize: 17,
     lineHeight: 1.3,
-    fontWeight: 750,
-    color: '#182635'
+    fontWeight: 800,
+    overflowWrap: 'anywhere',
   },
-  location: { margin: 0, color: '#738292', fontSize: 13 },
+
+  location: {
+    margin: 0,
+    color: '#748196',
+    fontSize: 12,
+    lineHeight: 1.45,
+  },
+
   readyPill: {
     flexShrink: 0,
-    padding: '6px 9px',
+    padding: '5px 9px',
     borderRadius: 999,
-    background: '#edf8f3',
-    color: '#187653',
+    background: '#e8f7f1',
+    color: '#168463',
     fontSize: 9,
     fontWeight: 800,
-    letterSpacing: .8
+    letterSpacing: .7,
   },
+
   destinationDetails: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: '1fr 1px 1fr',
     alignItems: 'stretch',
-    marginTop: 20,
-    paddingTop: 17,
-    borderTop: '1px solid #edf0f3'
+    gap: 18,
+    marginTop: 18,
+    paddingTop: 16,
+    borderTop: '1px solid #edf0f4',
   },
-  detail: { flex: 1, display: 'flex', flexDirection: 'column', gap: 5 },
-  detailDivider: { width: 1, background: '#e7edf2', margin: '0 18px' },
-  detailLabel: { fontSize: 9, letterSpacing: 1, fontWeight: 800, color: '#93a0ad' },
-  detailValue: { fontSize: 13, fontWeight: 700, color: '#334454' },
+
+  detail: {
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 5,
+  },
+
+  detailDivider: {
+    width: 1,
+    background: '#e5e9f0',
+  },
+
+  detailLabel: {
+    color: '#748196',
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: .55,
+  },
+
+  detailValue: {
+    color: '#26344a',
+    fontSize: 13,
+    fontWeight: 800,
+    overflowWrap: 'anywhere',
+  },
 
   summaryCard: {
-    background: '#fff',
-    border: '1px solid #e2e8ef',
+    background: '#ffffff',
+    border: '1px solid #e5e9f0',
     borderRadius: 20,
-    padding: 22,
-    boxShadow: '0 8px 28px rgba(30,55,80,.05)',
-    marginBottom: 16
+    padding: 20,
+    boxShadow: '0 5px 18px rgba(25,42,70,.035)',
   },
-  sectionHeading: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
-  sectionTitle: { margin: '5px 0 0', fontSize: 17, fontWeight: 750, color: '#1c2a38' },
-  summaryIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
-    background: '#edf8f3',
-    color: '#187653',
+
+  sectionHeading: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 800
+    justifyContent: 'space-between',
+    gap: 14,
   },
-  helper: { margin: '11px 0 17px', color: '#7b8997', fontSize: 12.5, lineHeight: 1.55 },
-  summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 },
+
+  sectionTitle: {
+    margin: '5px 0 0',
+    color: '#162033',
+    fontSize: 17,
+    lineHeight: 1.25,
+    fontWeight: 800,
+    letterSpacing: '-.2px',
+  },
+
+  summaryIcon: {
+    width: 36,
+    height: 36,
+    flexShrink: 0,
+    borderRadius: 12,
+    display: 'grid',
+    placeItems: 'center',
+    background: '#e8f7f1',
+    color: '#168463',
+    fontSize: 15,
+    fontWeight: 800,
+  },
+
+  helper: {
+    margin: '10px 0 16px',
+    color: '#748196',
+    fontSize: 12,
+    lineHeight: 1.6,
+  },
+
+  summaryGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: 10,
+  },
+
   summaryItem: {
     minWidth: 0,
     padding: '12px 13px',
-    background: '#f7f9fb',
-    border: '1px solid #edf1f4',
+    background: '#f7f9fc',
+    border: '1px solid #edf0f4',
     borderRadius: 13,
     display: 'flex',
     flexDirection: 'column',
-    gap: 5
+    gap: 5,
   },
-  summaryKey: { color: '#8996a3', fontSize: 10.5, fontWeight: 600 },
-  summaryVal: { color: '#263746', fontSize: 13, fontWeight: 650, overflowWrap: 'anywhere' },
+
+  summaryKey: {
+    color: '#748196',
+    fontSize: 10.5,
+    fontWeight: 700,
+  },
+
+  summaryVal: {
+    color: '#26344a',
+    fontSize: 12.5,
+    lineHeight: 1.45,
+    fontWeight: 700,
+    overflowWrap: 'anywhere',
+  },
 
   mapCard: {
-    background: '#fff',
-    border: '1px solid #e2e8ef',
+    background: '#ffffff',
+    border: '1px solid #e5e9f0',
     borderRadius: 20,
-    padding: 22,
-    boxShadow: '0 8px 28px rgba(30,55,80,.05)'
+    padding: 20,
+    boxShadow: '0 5px 18px rgba(25,42,70,.035)',
   },
-  mapHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14 },
+
+  mapHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 14,
+  },
+
   mapStatus: {
-    padding: '6px 9px',
+    flexShrink: 0,
+    padding: '5px 8px',
     borderRadius: 999,
-    background: '#f1f5f8',
-    color: '#718090',
+    background: '#f1f4f8',
+    color: '#748196',
     fontSize: 9,
     fontWeight: 800,
-    letterSpacing: .7
+    letterSpacing: .6,
   },
+
   mapButton: {
     width: '100%',
-    border: '1px solid #dfe7ee',
-    background: '#f8fafc',
+    minHeight: 68,
+    border: '1px solid #e5e9f0',
     borderRadius: 15,
-    padding: '14px 15px',
+    background: '#f7f9fc',
+    padding: '12px 14px',
     display: 'flex',
     alignItems: 'center',
     gap: 12,
-    color: '#263746',
+    color: '#26344a',
     textAlign: 'left',
-    cursor: 'pointer'
+    cursor: 'pointer',
   },
+
   mapButtonIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
-    background: '#eaf4fb',
-    color: '#1769aa',
+    width: 40,
+    height: 40,
+    flexShrink: 0,
+    borderRadius: 12,
+    display: 'grid',
+    placeItems: 'center',
+    background: '#edf5ff',
+    color: '#1769e0',
+    fontSize: 20,
+  },
+
+  chevron: {
+    marginLeft: 'auto',
+    color: '#8a97a8',
+    fontSize: 24,
+    lineHeight: 1,
+  },
+
+  mapViewport: {
+    height: 330,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    background: '#e9eef3',
+    border: '1px solid #e1e7ee',
+  },
+
+  map: {
+    width: '100%',
+    height: '100%',
+  },
+
+  mapLoader: {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 20,
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 21,
-    flexShrink: 0
+    gap: 9,
+    background: 'rgba(255,255,255,.9)',
+    color: '#68778d',
+    fontSize: 12,
   },
-  chevron: { marginLeft: 'auto', fontSize: 24, color: '#8291a0' },
-  mapViewport: { height: 330, borderRadius: 16, overflow: 'hidden', position: 'relative', background: '#e9eef2', border: '1px solid #dfe7ee' },
-  map: { width: '100%', height: '100%' },
-  mapLoader: { position: 'absolute', inset: 0, zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.88)', color: '#687887', fontSize: 12 },
-  errorBox: { marginTop: 16, padding: '12px 14px', borderRadius: 13, background: '#fff2f2', border: '1px solid #f3cccc', color: '#b43a3a', fontSize: 12.5, fontWeight: 600 },
+
+  errorBox: {
+    padding: '12px 14px',
+    borderRadius: 13,
+    background: '#fff3f3',
+    border: '1px solid #f0cccc',
+    color: '#b43a3a',
+    fontSize: 12,
+    lineHeight: 1.5,
+    fontWeight: 600,
+  },
 
   actionBar: {
     position: 'fixed',
@@ -536,40 +696,64 @@ const s = {
     right: 0,
     bottom: 0,
     zIndex: 100,
-    padding: '14px 24px 20px',
-    background: 'rgba(255,255,255,.94)',
-    borderTop: '1px solid #dfe6ed',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)'
+    padding: '12px 16px 16px',
+    background: 'rgba(255,255,255,.96)',
+    borderTop: '1px solid #e5e9f0',
+    boxShadow: '0 -6px 22px rgba(25,42,70,.06)',
+    backdropFilter: 'blur(14px)',
+    WebkitBackdropFilter: 'blur(14px)',
   },
+
   actionInner: {
-    maxWidth: 980,
+    width: 'min(1080px, 100%)',
     margin: '0 auto',
     display: 'flex',
     alignItems: 'center',
-    gap: 22
+    gap: 16,
   },
-  actionCopy: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 },
-  actionDot: { width: 9, height: 9, borderRadius: '50%', background: '#1769aa', flexShrink: 0 },
-  actionCopy: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 },
+
+  actionCopy: {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  actionDot: {
+    width: 8,
+    height: 8,
+    flexShrink: 0,
+    borderRadius: '50%',
+    background: '#1769e0',
+  },
+
   btnPrimary: {
-    minWidth: 210,
+    minWidth: 205,
+    minHeight: 44,
     border: 0,
-    borderRadius: 13,
-    padding: '14px 18px',
-    background: '#1769aa',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 750,
+    borderRadius: 11,
+    padding: '0 16px',
+    background: '#1769e0',
+    color: '#ffffff',
+    fontSize: 12.5,
+    fontWeight: 800,
     cursor: 'pointer',
-    boxShadow: '0 7px 18px rgba(23,105,170,.22)',
+    boxShadow: '0 7px 18px rgba(23,105,224,.18)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10
+    gap: 9,
   },
-  btnDisabled: { opacity: .65, cursor: 'wait' },
-  buttonArrow: { fontSize: 18, lineHeight: 1 },
-  actionCopy: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 },
-  actionCopyText: { minWidth: 0 },
+
+  btnDisabled: {
+    opacity: .6,
+    cursor: 'wait',
+  },
+
+  buttonArrow: {
+    fontSize: 17,
+    lineHeight: 1,
+  },
 };
+

@@ -1,21 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { registerDoctor, loginDoctor } from '../../api/auth';
-
-function EyeIcon({ show }) {
-  return show ? (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-      <line x1="1" y1="1" x2="23" y2="23" />
-    </svg>
-  ) : (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
+import Icon from '../../components/Icons';
 
 export default function DoctorLogin() {
   const navigate = useNavigate();
@@ -81,180 +67,246 @@ export default function DoctorLogin() {
     finally { setLoading(false); }
   };
 
-  const handleKey = (e) => { if (e.key === 'Enter') mode === 'login' ? handleLogin() : handleRegister(); };
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (loading) return;
+    mode === 'login' ? handleLogin() : handleRegister();
+  };
+
+  const switchMode = (m) => { setMode(m); setError(''); };
+
+  const natIdToggle = (
+    <button
+      type="button"
+      className="dl-eye"
+      onClick={() => setShowNatId((v) => !v)}
+      aria-label={showNatId ? 'Hide National ID' : 'Show National ID'}
+      aria-pressed={showNatId}
+    >
+      {showNatId ? <Icon.EyeOff size={18} /> : <Icon.Eye size={18} />}
+    </button>
+  );
 
   return (
-    <div style={s.page}>
-      <div style={s.orb1} /><div style={s.orb2} />
-
-      <div style={s.center}>
-        {/* Brand */}
-        <div style={s.brand}>
-          <div style={s.brandMark}>C</div>
-          <div>
-            <p style={s.brandName}>CivCare</p>
-            <p style={s.brandSub}>Doctor Portal</p>
-          </div>
+    <div className="dl">
+      <aside className="dl-intro" aria-hidden="true">
+        <div className="dl-brand">
+          <span className="dl-mark"><Icon.Heart size={20} /></span>
+          <span>CivCare</span>
         </div>
+        <div>
+          <h2>Your triage queue, ready when you are.</h2>
+          <ul>
+            <li><Icon.Users size={18} /> Patients arrive pre-assessed and sorted by clinical priority.</li>
+            <li><Icon.Video size={18} /> Run paid online consultations from the same workspace.</li>
+            <li><Icon.Clock size={18} /> Set your shift and breaks; waiting patients are redirected when you step away.</li>
+          </ul>
+        </div>
+        <p className="dl-introfoot">Clinician portal</p>
+      </aside>
 
-        {/* Card */}
-        <div style={s.card}>
-          {/* Mode toggle */}
-          <div style={s.toggle}>
-            {['login', 'register'].map(m => (
-              <button key={m} style={{ ...s.toggleBtn, ...(mode === m ? s.toggleActive : {}) }}
-                onClick={() => { setMode(m); setError(''); }}>
-                {m === 'login' ? 'Sign In' : 'Register'}
+      <main className="dl-main">
+        <div className="dl-wrap">
+          <div className="dl-brand dl-brand--mobile">
+            <span className="dl-mark"><Icon.Heart size={20} /></span>
+            <span>CivCare <small>Clinician portal</small></span>
+          </div>
+
+          <h1 className="dl-title">{mode === 'login' ? 'Sign in' : 'Create your clinician account'}</h1>
+          <p className="dl-sub">
+            {mode === 'login'
+              ? 'Use your KMPDB licence number and National ID.'
+              : 'You will sign in with your KMPDB licence number and National ID.'}
+          </p>
+
+          <div className="dl-tabs" role="tablist" aria-label="Account">
+            {['login', 'register'].map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                className={`dl-tab${mode === m ? ' is-on' : ''}`}
+                onClick={() => switchMode(m)}
+              >
+                {m === 'login' ? 'Sign in' : 'Register'}
               </button>
             ))}
           </div>
 
-          {error && <div style={s.errorBox}>{error}</div>}
-
-          {/* LOGIN */}
-          {mode === 'login' && (
-            <>
-              <Field label="KMPDB License Number">
-                <input style={s.input} name="kmpdb_license" placeholder="e.g. MED/001/2020"
-                  value={loginForm.kmpdb_license} onChange={handleLoginChange} onKeyDown={handleKey} />
-              </Field>
-              <Field label="National ID Number">
-                <div style={s.passwordWrap}>
-                  <input style={{ ...s.input, paddingRight: 44 }} name="national_id"
-                    type={showNatId ? 'text' : 'password'}
-                    placeholder="Your personal National ID"
-                    value={loginForm.national_id} onChange={handleLoginChange} onKeyDown={handleKey} />
-                  <button style={s.eyeBtn} onClick={() => setShowNatId(v => !v)}>
-                    <EyeIcon show={showNatId} />
-                  </button>
-                </div>
-              </Field>
-              <button style={{ ...s.btn, ...(loading ? s.btnDisabled : {}) }} onClick={handleLogin} disabled={loading}>
-                {loading ? 'Signing in…' : 'Sign In →'}
-              </button>
-              <p style={s.switchText}>First time here?{' '}
-                <span style={s.switchLink} onClick={() => { setMode('register'); setError(''); }}>Register your account</span>
-              </p>
-            </>
+          {error && (
+            <div className="alert alert--error" role="alert">
+              <Icon.Alert size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{error}</span>
+            </div>
           )}
 
-          {/* REGISTER */}
-          {mode === 'register' && (
-            <>
-              <div style={s.infoBox}>
-                Your KMPDB license + National ID will be used to log in. Keep them safe.
-              </div>
-              {[
-                { label: 'Full Name *', name: 'full_name', placeholder: 'Dr. Jane Wanjiru' },
-                { label: 'Phone Number *', name: 'phone_number', placeholder: '+254712345678' },
-                { label: 'KMPDB License *', name: 'kmpdb_license', placeholder: 'e.g. MED/001/2020' },
-                { label: 'Consultation Fee (KES)', name: 'consultation_fee', placeholder: 'e.g. 500', type: 'number' },
-              ].map(f => (
-                <Field key={f.name} label={f.label}>
-                  <input style={s.input} name={f.name} placeholder={f.placeholder} type={f.type || 'text'}
-                    value={regForm[f.name]} onChange={handleRegChange} />
-                </Field>
-              ))}
-              <Field label="Specialisation *">
-                <select style={s.select} name="specialisation"
-                  value={regForm.specialisation} onChange={handleRegChange}>
-                  <option value="">Select specialisation</option>
-                  {SPECIALISATIONS.map(sp => (
-                    <option key={sp} value={sp}>{sp}</option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Hospital *">
-                <select style={s.select} name="hospital_name"
-                  value={regForm.hospital_name} onChange={handleRegChange}>
-                  <option value="">Select your hospital</option>
-                  {hospitals.map(h => (
-                    <option key={h.id} value={h.name}>{h.name}</option>
-                  ))}
-                </select>
-              </Field>
-
-              {/* National ID with eye toggle */}
-              <Field label="National ID Number *">
-                <div style={s.passwordWrap}>
-                  <input style={{ ...s.input, paddingRight: 44 }} name="national_id"
-                    type={showNatId ? 'text' : 'password'}
-                    placeholder="Your personal National ID"
-                    value={regForm.national_id} onChange={handleRegChange} />
-                  <button style={s.eyeBtn} onClick={() => setShowNatId(v => !v)}>
-                    <EyeIcon show={showNatId} />
-                  </button>
+          <form onSubmit={handleSubmit} noValidate>
+            {mode === 'login' && (
+              <>
+                <div className="form-group">
+                  <label className="label" htmlFor="dl-licence">KMPDB licence number</label>
+                  <input id="dl-licence" className="input" name="kmpdb_license" placeholder="e.g. MED/001/2020"
+                    autoComplete="username" autoCapitalize="characters"
+                    value={loginForm.kmpdb_license} onChange={handleLoginChange} />
                 </div>
-              </Field>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
-                <Field label="Shift Start">
-                  <input style={s.input} name="shift_start" type="time" value={regForm.shift_start} onChange={handleRegChange} />
-                </Field>
-                <Field label="Shift End">
-                  <input style={s.input} name="shift_end" type="time" value={regForm.shift_end} onChange={handleRegChange} />
-                </Field>
-              </div>
-              <button style={{ ...s.btn, ...(loading ? s.btnDisabled : {}) }} onClick={handleRegister} disabled={loading}>
-                {loading ? 'Registering…' : 'Register & Enter Dashboard →'}
-              </button>
-              <p style={s.switchText}>Already registered?{' '}
-                <span style={s.switchLink} onClick={() => { setMode('login'); setError(''); }}>Sign in here</span>
-              </p>
-            </>
-          )}
+                <div className="form-group">
+                  <label className="label" htmlFor="dl-natid">National ID number</label>
+                  <div className="dl-pw">
+                    <input id="dl-natid" className="input" name="national_id" inputMode="numeric"
+                      type={showNatId ? 'text' : 'password'} autoComplete="current-password"
+                      value={loginForm.national_id} onChange={handleLoginChange} />
+                    {natIdToggle}
+                  </div>
+                </div>
+                <button type="submit" className="btn btn--primary" disabled={loading}>
+                  {loading && <span className="dl-spin" aria-hidden="true" />}
+                  {loading ? 'Signing in…' : 'Sign in'}
+                </button>
+                <p className="dl-switch">
+                  First time here?{' '}
+                  <button type="button" className="dl-link" onClick={() => switchMode('register')}>Register your account</button>
+                </p>
+              </>
+            )}
+
+            {mode === 'register' && (
+              <>
+                <fieldset className="dl-set">
+                  <legend>About you</legend>
+                  <div className="form-group">
+                    <label className="label" htmlFor="dl-name">Full name <Req /></label>
+                    <input id="dl-name" className="input" name="full_name" placeholder="Dr. Jane Wanjiru" autoComplete="name"
+                      value={regForm.full_name} onChange={handleRegChange} />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="dl-phone">Phone number <Req /></label>
+                    <input id="dl-phone" className="input" name="phone_number" type="tel" placeholder="+254712345678" autoComplete="tel"
+                      value={regForm.phone_number} onChange={handleRegChange} />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="dl-natid-r">National ID number <Req /></label>
+                    <div className="dl-pw">
+                      <input id="dl-natid-r" className="input" name="national_id" inputMode="numeric"
+                        type={showNatId ? 'text' : 'password'} autoComplete="new-password"
+                        value={regForm.national_id} onChange={handleRegChange} />
+                      {natIdToggle}
+                    </div>
+                  </div>
+                </fieldset>
+
+                <fieldset className="dl-set">
+                  <legend>Practice</legend>
+                  <div className="form-group">
+                    <label className="label" htmlFor="dl-licence-r">KMPDB licence number <Req /></label>
+                    <input id="dl-licence-r" className="input" name="kmpdb_license" placeholder="e.g. MED/001/2020" autoCapitalize="characters"
+                      value={regForm.kmpdb_license} onChange={handleRegChange} />
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="dl-hospital">Hospital <Req /></label>
+                    <select id="dl-hospital" className="input" name="hospital_name" value={regForm.hospital_name} onChange={handleRegChange}>
+                      <option value="">{hospitals.length ? 'Select your hospital' : 'Loading hospitals…'}</option>
+                      {hospitals.map((h) => <option key={h.id} value={h.name}>{h.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="dl-spec">Specialisation</label>
+                    <select id="dl-spec" className="input" name="specialisation" value={regForm.specialisation} onChange={handleRegChange}>
+                      <option value="">Select specialisation</option>
+                      {SPECIALISATIONS.map((sp) => <option key={sp} value={sp}>{sp}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="dl-fee">Online consultation fee (KES)</label>
+                    <input id="dl-fee" className="input" name="consultation_fee" type="number" min="0" inputMode="numeric" placeholder="e.g. 500"
+                      value={regForm.consultation_fee} onChange={handleRegChange} />
+                  </div>
+                  <div className="dl-row">
+                    <div className="form-group">
+                      <label className="label" htmlFor="dl-ss">Shift start</label>
+                      <input id="dl-ss" className="input" name="shift_start" type="time" value={regForm.shift_start} onChange={handleRegChange} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label" htmlFor="dl-se">Shift end</label>
+                      <input id="dl-se" className="input" name="shift_end" type="time" value={regForm.shift_end} onChange={handleRegChange} />
+                    </div>
+                  </div>
+                </fieldset>
+
+                <button type="submit" className="btn btn--primary" disabled={loading}>
+                  {loading && <span className="dl-spin" aria-hidden="true" />}
+                  {loading ? 'Creating account…' : 'Create account'}
+                </button>
+                <p className="dl-switch">
+                  Already registered?{' '}
+                  <button type="button" className="dl-link" onClick={() => switchMode('login')}>Sign in</button>
+                </p>
+              </>
+            )}
+          </form>
+
+          <div className="dl-foot">
+            <p><Icon.Shield size={15} /> Doctor accounts are verified against KMPDB records.</p>
+            <button type="button" className="dl-link dl-link--muted" onClick={() => navigate('/')}>
+              <Icon.ChevronLeft size={16} /> Patient sign-in
+            </button>
+          </div>
         </div>
-
-        <p style={s.footer}>Doctor accounts are verified against KMPDB records.</p>
-        <button style={s.patientLink} onClick={() => navigate('/')}>← Patient side</button>
-      </div>
+      </main>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
-        @keyframes orb{0%,100%{transform:scale(1) translate(-50%,-50%);opacity:0.6}50%{transform:scale(1.1) translate(-50%,-50%);opacity:1}}
-        input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(1)opacity(0.3);}
-        select option { background: #0d0d1a; color: #f0f0ff; }
-        select option:checked { background: rgba(0,212,170,0.2); }
-        select:focus { border-color: #00d4aa; box-shadow: 0 0 0 3px rgba(0,212,170,0.15); }
-        input:focus { border-color: #00d4aa; box-shadow: 0 0 0 3px rgba(0,212,170,0.15); }
+        .dl { min-height: 100vh; display: grid; grid-template-columns: minmax(320px, 440px) 1fr; background: var(--cc-bg); }
+        .dl-intro {
+          background: var(--cc-primary); color: #fff; padding: 40px 40px 32px;
+          display: flex; flex-direction: column; justify-content: space-between; gap: 32px;
+          position: sticky; top: 0; height: 100vh;
+        }
+        @media (prefers-color-scheme: dark) { .dl-intro { background: #12324a; } }
+        .dl-intro h2 { font-size: 26px; line-height: 1.25; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 24px; max-width: 340px; }
+        .dl-intro ul { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+        .dl-intro li { display: flex; gap: 12px; font-size: 15px; line-height: 1.5; color: rgba(255,255,255,0.88); }
+        .dl-intro li svg { flex-shrink: 0; margin-top: 2px; }
+        .dl-introfoot { font-size: 13px; color: rgba(255,255,255,0.65); }
+        .dl-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+        .dl-mark { width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.16); color: #fff; }
+        .dl-brand--mobile { display: none; color: var(--cc-text); margin-bottom: 28px; }
+        .dl-brand--mobile .dl-mark { background: var(--cc-primary); color: var(--cc-on-primary); }
+        .dl-brand--mobile small { display: block; font-size: 12px; font-weight: 500; color: var(--cc-muted); }
+        .dl-main { display: flex; justify-content: center; align-items: flex-start; padding: 64px 24px 48px; }
+        .dl-wrap { width: 100%; max-width: 440px; }
+        .dl-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
+        .dl-sub { color: var(--cc-muted); font-size: 15px; margin-bottom: 20px; }
+        .dl-tabs { display: flex; gap: 4px; padding: 4px; background: var(--cc-surface-3); border-radius: 10px; margin-bottom: 20px; }
+        .dl-tab { flex: 1; min-height: 38px; border: 1px solid transparent; background: none; border-radius: 7px; font-size: 14px; font-weight: 600; color: var(--cc-muted); }
+        .dl-tab:hover { color: var(--cc-text); }
+        .dl-tab.is-on { background: var(--cc-surface); color: var(--cc-text); border-color: var(--cc-border); box-shadow: var(--cc-shadow-sm); }
+        .dl-set { border: none; margin-bottom: 8px; }
+        .dl-set legend { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cc-muted); margin-bottom: 12px; }
+        .dl-set + .dl-set { border-top: 1px solid var(--cc-border); padding-top: 20px; }
+        .dl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .dl-pw { position: relative; }
+        .dl-pw .input { padding-right: 48px; }
+        .dl-eye { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 42px; height: 40px; border: none; background: none; color: var(--cc-muted); display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; }
+        .dl-eye:hover { color: var(--cc-text); }
+        .dl-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; }
+        .dl-switch { text-align: center; font-size: 14px; color: var(--cc-muted); margin-top: 16px; }
+        .dl-link { background: none; border: none; padding: 2px; color: var(--cc-primary); font-weight: 600; font-size: inherit; display: inline-flex; align-items: center; gap: 4px; }
+        .dl-link:hover { text-decoration: underline; }
+        .dl-link--muted { color: var(--cc-muted); font-weight: 500; font-size: 14px; }
+        .dl-req { color: var(--cc-danger); }
+        .dl-foot { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--cc-border); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .dl-foot p { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--cc-muted); text-align: center; }
+        @media (max-width: 900px) {
+          .dl { grid-template-columns: 1fr; }
+          .dl-intro { display: none; }
+          .dl-brand--mobile { display: flex; }
+          .dl-main { padding: 32px 16px 40px; }
+        }
       `}</style>
     </div>
   );
 }
 
-function Field({ label, children }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <p style={s.label}>{label}</p>
-      {children}
-    </div>
-  );
+function Req() {
+  return <span className="dl-req" aria-label="required">*</span>;
 }
-
-const s = {
-  page: { minHeight: '100vh', background: '#080810', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit',sans-serif", position: 'relative', overflowX: 'hidden' },
-  orb1: { position: 'fixed', top: '10%', left: '15%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle,rgba(0,212,170,0.12),transparent 70%)', filter: 'blur(60px)', pointerEvents: 'none', zIndex: 0, animation: 'orb 8s ease-in-out infinite', transform: 'translate(-50%,-50%)' },
-  orb2: { position: 'fixed', bottom: '10%', right: '10%', width: 350, height: 350, borderRadius: '50%', background: 'radial-gradient(circle,rgba(77,143,255,0.1),transparent 70%)', filter: 'blur(60px)', pointerEvents: 'none', zIndex: 0 },
-  center: { width: '100%', maxWidth: 440, padding: '24px 16px', position: 'relative', zIndex: 10 },
-  brand: { display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28, justifyContent: 'center' },
-  brandMark: { width: 44, height: 44, borderRadius: 14, background: 'linear-gradient(135deg,#00d4aa,#4d8fff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20, color: '#fff', boxShadow: '0 4px 20px rgba(0,212,170,0.4)' },
-  brandName: { fontFamily: "'Outfit',sans-serif", fontSize: 20, fontWeight: 800, color: '#fff', margin: 0, letterSpacing: -0.3 },
-  brandSub: { fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: 0 },
-  card: { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 24, padding: '28px 24px', boxShadow: '0 20px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)' },
-  toggle: { display: 'flex', background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4, marginBottom: 24 },
-  toggleBtn: { flex: 1, padding: '10px 0', border: 'none', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer', background: 'transparent', color: 'rgba(255,255,255,0.4)', fontFamily: "'Outfit',sans-serif", transition: 'all 0.2s' },
-  toggleActive: { background: 'rgba(0,212,170,0.15)', color: '#00d4aa', boxShadow: '0 2px 12px rgba(0,212,170,0.2)', border: '1px solid rgba(0,212,170,0.25)' },
-  errorBox: { background: 'rgba(255,61,90,0.1)', border: '1px solid rgba(255,61,90,0.25)', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#ff4d6d', marginBottom: 18, lineHeight: 1.55 },
-  infoBox: { background: 'rgba(77,143,255,0.08)', border: '1px solid rgba(77,143,255,0.2)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 18, lineHeight: 1.6 },
-  label: { fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', margin: '0 0 7px', letterSpacing: 0.5 },
-  input: { width: '100%', padding: '12px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 14, color: '#fff', fontFamily: "'Outfit',sans-serif", outline: 'none', transition: 'border-color 0.2s, box-shadow 0.2s', boxSizing: 'border-box' },
-  select: { width: '100%', padding: '12px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 14, color: '#fff', fontFamily: "'Outfit',sans-serif", outline: 'none', transition: 'border-color 0.2s, box-shadow 0.2s', boxSizing: 'border-box', appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer', backgroundImage: `url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%238888aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center', paddingRight: 36 },
-  passwordWrap: { position: 'relative' },
-  eyeBtn: { position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.35)', display: 'flex', alignItems: 'center', padding: 4, transition: 'color 0.2s' },
-  btn: { width: '100%', padding: '14px 0', background: 'linear-gradient(135deg,#00d4aa,#4d8fff)', border: 'none', borderRadius: 14, color: '#fff', fontSize: 15, fontWeight: 700, fontFamily: "'Outfit',sans-serif", cursor: 'pointer', marginTop: 4, letterSpacing: 0.3, boxShadow: '0 6px 24px rgba(0,212,170,0.35)', transition: 'opacity 0.2s, transform 0.15s' },
-  btnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
-  switchText: { textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.3)', marginTop: 18 },
-  switchLink: { color: '#00d4aa', fontWeight: 600, cursor: 'pointer' },
-  footer: { textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 16 },
-  patientLink: { display: 'block', margin: '10px auto 0', background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: 13, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" },
-};

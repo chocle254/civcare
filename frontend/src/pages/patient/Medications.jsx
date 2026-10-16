@@ -439,7 +439,7 @@ export default function Medications() {
           display: grid;
           place-items: center;
           color: white;
-          background: linear-gradient(145deg, #1769e0, #0754c8);
+          background: #1769aa;
           box-shadow: 0 8px 20px rgba(23, 105, 224, .2);
         }
 

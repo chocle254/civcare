@@ -32,7 +32,7 @@ export default function OTPVerify() {
     <div className="page">
       <div className="header">
         <div>
-          <div className="header__logo">CivTech Care</div>
+          <div className="header__logo">CivCare</div>
           <div className="header__sub">Verify Your Number</div>
         </div>
       </div>

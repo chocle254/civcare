@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Icon from '../../components/Icons';
 import { useNavigate } from 'react-router-dom';
 import { triggerMpesa, triggerAirtel } from '../../api/payment';
 
@@ -42,11 +43,11 @@ export default function Payment() {
     return (
       <div className="page">
         <div className="header">
-          <div className="header__logo">CivTech Care</div>
+          <div className="header__logo">CivCare</div>
         </div>
         <div className="container">
           <div className="card" style={{ marginTop: 40, textAlign: 'center' }}>
-            <div style={{ fontSize: 56, marginBottom: 16 }}>📞</div>
+            <span style={{ display: 'inline-flex', width: 56, height: 56, borderRadius: '50%', alignItems: 'center', justifyContent: 'center', background: 'var(--cc-success-soft)', color: 'var(--cc-success)', marginBottom: 16 }}><Icon.Phone size={26} /></span>
             <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
               Payment Confirmed
             </p>
@@ -81,7 +82,7 @@ export default function Payment() {
     <div className="page">
       <div className="header">
         <div>
-          <div className="header__logo">CivTech Care</div>
+          <div className="header__logo">CivCare</div>
           <div className="header__sub">Payment</div>
         </div>
       </div>
@@ -114,10 +115,13 @@ export default function Payment() {
           {error && <div className="alert alert--error">{error}</div>}
 
           {/* M-Pesa */}
-          <div
+          <button
+            type="button"
+            aria-pressed={method === 'mpesa'}
             onClick={() => setMethod('mpesa')}
             style={{
-              border: `2px solid ${method === 'mpesa' ? 'var(--green)' : 'var(--gray-200)'}`,
+              width: '100%', textAlign: 'left', color: 'var(--cc-text)',
+              border: `2px solid ${method === 'mpesa' ? 'var(--cc-primary)' : 'var(--cc-border)'}`,
               borderRadius: 'var(--radius)',
               padding: 16,
               cursor: 'pointer',
@@ -125,7 +129,7 @@ export default function Payment() {
               display: 'flex',
               alignItems: 'center',
               gap: 12,
-              background: method === 'mpesa' ? '#d4edda' : 'var(--white)',
+              background: method === 'mpesa' ? 'var(--cc-primary-soft)' : 'var(--cc-surface)',
             }}
           >
             <div style={{
@@ -142,22 +146,25 @@ export default function Payment() {
               </p>
             </div>
             {method === 'mpesa' && (
-              <span style={{ marginLeft: 'auto', color: 'var(--green)', fontWeight: 700 }}>✓</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--cc-primary)', display: 'inline-flex' }}><Icon.CheckCircle size={20} /></span>
             )}
-          </div>
+          </button>
 
           {/* Airtel Money */}
-          <div
+          <button
+            type="button"
+            aria-pressed={method === 'airtel'}
             onClick={() => setMethod('airtel')}
             style={{
-              border: `2px solid ${method === 'airtel' ? 'var(--red)' : 'var(--gray-200)'}`,
+              width: '100%', textAlign: 'left', color: 'var(--cc-text)',
+              border: `2px solid ${method === 'airtel' ? 'var(--cc-primary)' : 'var(--cc-border)'}`,
               borderRadius: 'var(--radius)',
               padding: 16,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: 12,
-              background: method === 'airtel' ? '#fde8e8' : 'var(--white)',
+              background: method === 'airtel' ? 'var(--cc-primary-soft)' : 'var(--cc-surface)',
             }}
           >
             <div style={{
@@ -176,7 +183,7 @@ export default function Payment() {
             {method === 'airtel' && (
               <span style={{ marginLeft: 'auto', color: 'var(--red)', fontWeight: 700 }}>✓</span>
             )}
-          </div>
+          </button>
         </div>
 
         <button

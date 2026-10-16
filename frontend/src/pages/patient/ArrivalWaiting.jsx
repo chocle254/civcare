@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Icon from '../../components/Icons';
 
 export default function ArrivalWaiting() {
     const navigate = useNavigate();
     const patient = JSON.parse(localStorage.getItem('civtech_patient') || '{}');
-    console.log('PATIENT IN WAITING:', patient);
     const appointmentId = localStorage.getItem('civtech_appointment_id');
     const [callStatus, setCallStatus] = useState(null); // null | { doctor_name, room }
     const [completed, setCompleted] = useState(false); // NEW
@@ -30,176 +30,72 @@ export default function ArrivalWaiting() {
         return () => clearInterval(interval);
     }, [appointmentId]);
 
+    const firstName = patient.name?.split(' ')[0];
+
     // ── CONSULTATION COMPLETE ──
     if (completed && !callStatus) {
         return (
-            <div style={s.page}>
-                <div style={{
-                    width: 90, height: 90, borderRadius: '50%',
-                    background: 'linear-gradient(135deg,#06d6a0,#00d4aa)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 44, marginBottom: 28,
-                }}>✓</div>
-                <h1 style={s.title}>You're All Set</h1>
-                <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 36, lineHeight: 1.7 }}>
-                    Your consultation is complete. Your prescriptions<br />are ready in the Medications tab.
-                </p>
-                <button onClick={() => navigate('/medications')} style={s.btn}>
-                    View My Medications
+            <Shell>
+                <span className="aw-icon aw-icon--success" aria-hidden="true"><Icon.CheckCircle size={32} /></span>
+                <h1 className="aw-title">You're all set</h1>
+                <p className="aw-text">Your consultation is complete. Any prescriptions from your doctor are in your Medications.</p>
+                <button type="button" className="btn btn--primary aw-btn" onClick={() => navigate('/medications')}>
+                    <Icon.Pill size={18} /> View my medications
                 </button>
-            </div>
+            </Shell>
         );
     }
 
     // ── DOCTOR IS READY ──
     if (callStatus) {
         return (
-            <div style={s.page}>
-                <style>{`
-          @keyframes pulseRing {
-            0%   { transform: scale(1);   opacity: 0.8; }
-            100% { transform: scale(2);   opacity: 0; }
-          }
-          @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to   { opacity: 1; transform: translateY(0); }
-          }
-        `}</style>
-
-                <div style={{ position: 'relative', marginBottom: 36 }}>
-                    {[1, 2, 3].map(i => (
-                        <div key={i} style={{
-                            position: 'absolute', top: '50%', left: '50%',
-                            transform: 'translate(-50%,-50%)',
-                            width: 100, height: 100, borderRadius: '50%',
-                            background: 'rgba(0,212,170,0.2)',
-                            animation: `pulseRing 2s ease-out ${i * 0.5}s infinite`,
-                        }} />
-                    ))}
-                    <div style={{
-                        width: 100, height: 100, borderRadius: '50%',
-                        background: 'linear-gradient(135deg,#00d4aa,#4d8fff)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 44, position: 'relative', zIndex: 10,
-                        boxShadow: '0 0 40px rgba(0,212,170,0.5)',
-                    }}>
-                        🩺
-                    </div>
+            <Shell live>
+                <span className="aw-eyebrow"><Icon.Bell size={16} /> It's your turn</span>
+                <h1 className="aw-title">{callStatus.doctor_name || 'Your doctor'} is ready to see you</h1>
+                <div className="aw-room">
+                    <span>Please go to</span>
+                    <strong>{callStatus.room || 'the consultation room'}</strong>
                 </div>
-
-                <p style={{ fontSize: 12, letterSpacing: 3, color: '#00d4aa', fontWeight: 700, marginBottom: 10, animation: 'fadeUp 0.5s ease both' }}>
-                    THE DOCTOR IS READY
-                </p>
-
-                <h1 style={{ ...s.title, animation: 'fadeUp 0.5s ease 0.1s both' }}>
-                    {callStatus.doctor_name || 'Your Doctor'}
-                </h1>
-
-                <div style={{
-                    background: 'rgba(0,212,170,0.08)',
-                    border: '1px solid rgba(0,212,170,0.25)',
-                    borderRadius: 18, padding: '20px 32px',
-                    marginBottom: 32, animation: 'fadeUp 0.5s ease 0.2s both',
-                }}>
-                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, marginBottom: 6 }}>PROCEED TO</p>
-                    <p style={{ fontSize: 36, fontWeight: 800, color: '#00d4aa', fontFamily: "'Syne',sans-serif", margin: 0 }}>
-                        {callStatus.room}
-                    </p>
-                </div>
-
-                <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', marginBottom: 40, animation: 'fadeUp 0.5s ease 0.3s both' }}>
-                    Please make your way to {callStatus.room} now.
-                </p>
-
-                <button onClick={() => navigate('/medications')} style={s.btn}>
-                    View My Medications
-                </button>
-            </div>
+                <p className="aw-text">Show this screen to the staff if you need directions.</p>
+            </Shell>
         );
     }
 
     // ── WAITING ──
     return (
-        <div style={s.page}>
-            <style>{`
-        @keyframes breathe {
-          0%,100% { transform: scale(1);    box-shadow: 0 0 0 0   rgba(0,212,170,0.4); }
-          50%     { transform: scale(1.07); box-shadow: 0 0 0 18px rgba(0,212,170,0); }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-      `}</style>
-
-            <div style={{ position: 'relative', marginBottom: 32 }}>
-                <div style={{
-                    position: 'absolute', top: -12, left: -12,
-                    width: 104, height: 104, borderRadius: '50%',
-                    border: '2px dashed rgba(0,212,170,0.25)',
-                    animation: 'spin 8s linear infinite',
-                }} />
-                <div style={{
-                    width: 80, height: 80, borderRadius: '50%',
-                    background: 'rgba(0,212,170,0.12)',
-                    border: '2px solid rgba(0,212,170,0.35)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 34, animation: 'breathe 2.5s ease-in-out infinite',
-                }}>
-                    🏥
-                </div>
-            </div>
-
-            <h1 style={s.title}>You're Checked In</h1>
-
-            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.5)', marginBottom: 8, lineHeight: 1.7 }}>
-                Welcome, <strong style={{ color: '#fff' }}>{patient.name?.split(' ')[0]}</strong>.
-                Please take a seat.
-            </p>
-            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', marginBottom: 32, lineHeight: 1.7 }}>
-                The doctor will call you when they're ready.<br />
-                This screen will update automatically.
-            </p>
-
-            <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '10px 20px', borderRadius: 20, marginBottom: 40,
-                background: 'rgba(0,212,170,0.08)',
-                border: '1px solid rgba(0,212,170,0.2)',
-            }}>
-                <div style={{
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: '#00d4aa', boxShadow: '0 0 8px #00d4aa',
-                    animation: 'breathe 1.5s ease-in-out infinite',
-                }} />
-                <span style={{ fontSize: 12, color: '#00d4aa', fontWeight: 600 }}>
-                    Waiting for doctor...
-                </span>
-            </div>
-
-            <button onClick={() => navigate('/medications')} style={{ ...s.btn, background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }}>
-                View My Medications
+        <Shell live>
+            <span className="aw-icon aw-icon--wait" aria-hidden="true"><Icon.Hospital size={30} /></span>
+            <h1 className="aw-title">You're checked in{firstName ? `, ${firstName}` : ''}</h1>
+            <p className="aw-text">Please take a seat. Your doctor will call you when they're ready. This screen updates automatically.</p>
+            <span className="aw-status"><span className="aw-dot" aria-hidden="true" /> Waiting to be called</span>
+            <button type="button" className="btn btn--outline aw-btn" onClick={() => navigate('/medications')}>
+                View my medications
             </button>
-        </div>
+        </Shell>
     );
 }
 
-const s = {
-    page: {
-        minHeight: '100vh', background: '#000',
-        fontFamily: "'DM Sans', sans-serif",
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: 24, textAlign: 'center',
-    },
-    title: {
-        fontFamily: "'Syne', sans-serif",
-        fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 16,
-    },
-    btn: {
-        width: '100%', maxWidth: 320, padding: '16px 0',
-        background: 'linear-gradient(135deg,#1a4fff,#0070f3)',
-        border: 'none', borderRadius: 14, color: '#fff',
-        fontSize: 15, fontWeight: 600, cursor: 'pointer',
-    },
-};
+function Shell({ children, live }) {
+    return (
+        <div className="aw">
+            <main className="aw-card" aria-live={live ? 'polite' : undefined}>{children}</main>
+            <style>{`
+                .aw { min-height: 100vh; background: var(--cc-bg); display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+                .aw-card { width: 100%; max-width: 440px; text-align: center; background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 20px; padding: 36px 24px 28px; box-shadow: var(--cc-shadow); display: flex; flex-direction: column; align-items: center; animation: fadeUp .25s ease both; }
+                .aw-icon { width: 72px; height: 72px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 18px; position: relative; }
+                .aw-icon--success { background: var(--cc-success-soft); color: var(--cc-success); }
+                .aw-icon--wait { background: var(--cc-primary-soft); color: var(--cc-primary); }
+                .aw-icon--wait::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--cc-primary-border); animation: pulse-glow 2.2s ease-in-out infinite; }
+                .aw-eyebrow { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; background: var(--cc-success-soft); color: var(--cc-success); font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+                .aw-title { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.3; margin-bottom: 10px; }
+                .aw-text { color: var(--cc-muted); font-size: 15px; line-height: 1.55; max-width: 340px; }
+                .aw-room { width: 100%; margin: 10px 0 16px; padding: 18px 16px; border-radius: 14px; background: var(--cc-primary-soft); border: 1px solid var(--cc-primary-border); display: flex; flex-direction: column; gap: 2px; }
+                .aw-room span { font-size: 13px; font-weight: 600; color: var(--cc-muted); }
+                .aw-room strong { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; color: var(--cc-primary); line-height: 1.15; word-break: break-word; }
+                .aw-status { display: inline-flex; align-items: center; gap: 8px; margin: 20px 0 4px; font-size: 14px; font-weight: 600; color: var(--cc-text-2); }
+                .aw-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cc-primary); animation: pulse-glow 1.6s ease-in-out infinite; }
+                .aw-btn { margin-top: 24px; }
+            `}</style>
+        </div>
+    );
+}

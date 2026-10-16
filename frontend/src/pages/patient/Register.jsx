@@ -221,9 +221,10 @@ export default function Register() {
           --cc-text: #142033;
           --cc-muted: #66758a;
           --cc-faint: #94a3b8;
-          --cc-primary: #2563eb;
-          --cc-primary-dark: #1d4ed8;
-          --cc-primary-soft: #eff6ff;
+          --cc-primary: #1769aa;
+          --cc-primary-dark: #12578e;
+          --cc-primary-soft: #eaf3fa;
+          --cc-on-primary: #ffffff;
           --cc-teal: #0f9f86;
           --cc-danger: #c93545;
           --cc-danger-bg: #fff1f2;
@@ -235,7 +236,7 @@ export default function Register() {
           background:
             radial-gradient(
               800px 500px at 0% 0%,
-              rgba(37, 99, 235, 0.07),
+              rgba(23, 105, 170, 0.07),
               transparent 60%
             ),
             radial-gradient(
@@ -280,8 +281,8 @@ export default function Register() {
           display: grid;
           place-items: center;
           color: #fff;
-          background: linear-gradient(145deg, #2563eb, #1747b8);
-          box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
+          background: #1769aa;
+          box-shadow: 0 8px 20px rgba(23, 105, 170, 0.22);
         }
 
         .cc-brand-name {
@@ -562,8 +563,8 @@ export default function Register() {
 
         .cc-input-wrap input:focus,
         .cc-input-wrap select:focus {
-          border-color: rgba(37, 99, 235, 0.55);
-          box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.09);
+          border-color: rgba(23, 105, 170, 0.55);
+          box-shadow: 0 0 0 4px rgba(23, 105, 170, 0.09);
         }
 
         .cc-input-wrap select {
@@ -587,13 +588,13 @@ export default function Register() {
           margin-top: 6px;
           border: 0;
           border-radius: 13px;
-          background: linear-gradient(135deg, var(--cc-primary), #174fc5);
-          color: #fff;
+          background: var(--cc-primary);
+          color: var(--cc-on-primary);
           font: inherit;
           font-size: 13px;
           font-weight: 800;
           cursor: pointer;
-          box-shadow: 0 9px 22px rgba(37, 99, 235, 0.2);
+          box-shadow: 0 9px 22px rgba(23, 105, 170, 0.2);
           transition:
             transform 160ms ease,
             box-shadow 160ms ease,
@@ -602,7 +603,7 @@ export default function Register() {
 
         .cc-submit:hover:not(:disabled) {
           transform: translateY(-1px);
-          box-shadow: 0 12px 26px rgba(37, 99, 235, 0.25);
+          box-shadow: 0 12px 26px rgba(23, 105, 170, 0.25);
         }
 
         .cc-submit:active:not(:disabled) {
@@ -773,9 +774,10 @@ export default function Register() {
             --cc-text: #edf4ff;
             --cc-muted: #9aacbf;
             --cc-faint: #6f8299;
-            --cc-primary: #5b8cff;
-            --cc-primary-dark: #4678ed;
-            --cc-primary-soft: #122542;
+            --cc-primary: #69b7e5;
+            --cc-primary-dark: #86c6ec;
+            --cc-primary-soft: #11293a;
+            --cc-on-primary: #08131d;
             --cc-teal: #39c6ad;
             --cc-danger: #ff7a89;
             --cc-danger-bg: rgba(190, 40, 60, 0.13);
@@ -786,7 +788,7 @@ export default function Register() {
             background:
               radial-gradient(
                 800px 500px at 0% 0%,
-                rgba(37, 99, 235, 0.12),
+                rgba(23, 105, 170, 0.12),
                 transparent 60%
               ),
               radial-gradient(

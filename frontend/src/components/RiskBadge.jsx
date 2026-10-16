@@ -1,7 +1,7 @@
 const RISK_CONFIG = {
-  critical: { label: '🔴 Critical', cls: 'badge--critical' },
-  moderate: { label: '🟡 Moderate', cls: 'badge--moderate' },
-  low:      { label: '🟢 Low',      cls: 'badge--low'      },
+  critical: { label: 'Critical', cls: 'badge--critical' },
+  moderate: { label: 'Moderate', cls: 'badge--moderate' },
+  low:      { label: 'Low',      cls: 'badge--low'      },
 };
 
 export default function RiskBadge({ risk }) {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Icon from '../../components/Icons';
 import { useNavigate } from 'react-router-dom';
 import { rateConsultation } from '../../api/consultation';
 
@@ -34,20 +35,20 @@ export default function RateExperience() {
     return (
       <div className="page">
         <div className="header">
-          <div className="header__logo">CivTech Care</div>
+          <div className="header__logo">CivCare</div>
         </div>
         <div className="container">
           <div className="card" style={{ marginTop: 40, textAlign: 'center' }}>
-            <div style={{ fontSize: 56, marginBottom: 16 }}>🙏</div>
+            <span style={{ display: 'inline-flex', width: 56, height: 56, borderRadius: '50%', alignItems: 'center', justifyContent: 'center', background: 'var(--cc-success-soft)', color: 'var(--cc-success)', marginBottom: 16 }}><Icon.Heart size={26} /></span>
             <p style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
               Thank You
             </p>
             <p style={{ color: 'var(--gray-600)', marginBottom: 24 }}>
-              Your feedback helps us improve CivTech for everyone.
+              Your feedback helps us improve CivCare for everyone.
               We hope you feel better soon.
             </p>
             <button className="btn btn--primary" onClick={() => navigate('/chat')}>
-              Back to Home
+              Done
             </button>
           </div>
         </div>
@@ -59,7 +60,7 @@ export default function RateExperience() {
     <div className="page">
       <div className="header">
         <div>
-          <div className="header__logo">CivTech Care</div>
+          <div className="header__logo">CivCare</div>
           <div className="header__sub">Rate Your Experience</div>
         </div>
       </div>
@@ -74,23 +75,30 @@ export default function RateExperience() {
           </p>
 
           {/* Star Rating */}
-          <div className="stars" style={{ justifyContent: 'center', marginBottom: 24 }}>
+          <div className="stars" style={{ justifyContent: 'center', marginBottom: 24 }}
+            role="radiogroup" aria-label="Rate your consultation, 1 to 5 stars" onMouseLeave={() => setHover(0)}>
             {[1, 2, 3, 4, 5].map((star) => (
-              <span
+              <button
                 key={star}
+                type="button"
+                role="radio"
+                aria-checked={rating === star}
+                aria-label={`${star} star${star > 1 ? 's' : ''}`}
                 className={`star ${star <= (hover || rating) ? 'filled' : ''}`}
                 onClick={() => setRating(star)}
                 onMouseEnter={() => setHover(star)}
-                onMouseLeave={() => setHover(0)}
+                onFocus={() => setHover(star)}
+                onBlur={() => setHover(0)}
               >
                 ★
-              </span>
+              </button>
             ))}
           </div>
 
           <div className="form-group" style={{ textAlign: 'left' }}>
-            <label className="label">Additional comments (optional)</label>
+            <label className="label" htmlFor="rate-feedback">Additional comments (optional)</label>
             <textarea
+              id="rate-feedback"
               className="input"
               placeholder="Tell us about your experience..."
               value={feedback}
@@ -104,7 +112,7 @@ export default function RateExperience() {
             onClick={handleSubmit}
             disabled={rating === 0 || loading}
           >
-            {loading ? 'Submitting...' : 'Submit Rating'}
+            {loading ? 'Submitting…' : 'Submit rating'}
           </button>
 
           <button

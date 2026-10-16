@@ -13,21 +13,27 @@ export default function StarRating({ value, onChange, showLabel = true }) {
 
   return (
     <div>
-      <div className="stars">
+      <div className="stars" role="radiogroup" aria-label="Rating, 1 to 5 stars" onMouseLeave={() => setHover(0)}>
         {[1, 2, 3, 4, 5].map((star) => (
-          <span
+          <button
             key={star}
+            type="button"
+            role="radio"
+            aria-checked={value === star}
+            aria-label={`${star} star${star > 1 ? 's' : ''}: ${LABELS[star]}`}
             className={`star ${star <= (hover || value) ? 'filled' : ''}`}
             onClick={() => onChange(star)}
             onMouseEnter={() => setHover(star)}
-            onMouseLeave={() => setHover(0)}
+            onFocus={() => setHover(star)}
+            onBlur={() => setHover(0)}
           >
             ★
-          </span>
+          </button>
         ))}
       </div>
       {showLabel && (hover || value) > 0 && (
         <p
+          aria-live="polite"
           style={{
             fontSize:   13,
             color:      'var(--blue)',

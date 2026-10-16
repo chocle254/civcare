@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { completeConsultation } from '../../api/consultation';
 import { startVideo } from '../../api/video';
 import client from '../../api/client';
+import Icon from '../../components/Icons';
 
 const initials = (name) => (name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 const fmtTimer = (sec) => {
@@ -23,6 +24,8 @@ export default function ActiveConsult() {
   const [ending,  setEnding]  = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -48,11 +51,12 @@ export default function ActiveConsult() {
 
   const handleStart = async () => {
     setStarting(true);
+    setError('');
     try {
       const res = await startVideo({ consultation_id: id, doctor_id: doctor.id });
       setRoomUrl(res.data.room_url);
     } catch (e) {
-      alert(e?.response?.data?.detail || 'Could not start the video call.');
+      setError(e?.response?.data?.detail || 'Could not start the video call. Please try again.');
     } finally {
       setStarting(false);
     }
@@ -72,229 +76,264 @@ export default function ActiveConsult() {
     navigate(`/doctor/verdict/${id}`);
   };
 
+  const meds = consult?.current_medications?.length ? consult.current_medications.join(', ') : 'None recorded';
+
   if (loading) return (
-    <div className="page">
-      <div className="header"><div className="header__logo">CivTech Care</div></div>
-      <div className="loader"><div className="spinner" /></div>
+    <div className="ac-page">
+      <TopBar onBack={() => navigate('/doctor/dashboard')} title="Online consultation" />
+      <div className="ac-wrap">
+        <div className="cc-skeleton" style={{ height: 120, marginBottom: 12 }} />
+        <div className="cc-skeleton" style={{ height: 180 }} />
+      </div>
+      <style>{CSS}</style>
     </div>
   );
 
   if (!consult) return (
-    <div className="page">
-      <div className="header"><div className="header__logo">CivCare</div></div>
-      <div className="container">
-        <div className="alert alert--error" style={{ marginTop: 24 }}>Consultation not found.</div>
-        <button className="btn btn--outline" onClick={() => navigate('/doctor/dashboard')}>Back to Queue</button>
+    <div className="ac-page">
+      <TopBar onBack={() => navigate('/doctor/dashboard')} title="Online consultation" />
+      <div className="ac-wrap">
+        <div className="ac-empty">
+          <span className="ac-emptyicon"><Icon.Alert size={24} /></span>
+          <h2>Consultation not found</h2>
+          <p>It may have been completed or cancelled. Return to your queue to see current requests.</p>
+          <button type="button" className="btn btn--primary" style={{ width: 'auto' }} onClick={() => navigate('/doctor/dashboard')}>Back to dashboard</button>
+        </div>
       </div>
+      <style>{CSS}</style>
     </div>
+  );
+
+  const report = (
+    <>
+      <section className="ac-block">
+        <h3>Reason for consultation</h3>
+        <p className="ac-prose">{consult.symptoms_summary || 'No summary provided.'}</p>
+      </section>
+      <div className="ac-facts">
+        <div className={`ac-fact${consult.allergies ? ' ac-fact--warn' : ''}`}>
+          <span>Allergies</span>
+          <strong>{consult.allergies || 'None on record'}</strong>
+        </div>
+        <div className="ac-fact">
+          <span>Current medication</span>
+          <strong>{meds}</strong>
+        </div>
+      </div>
+      <dl className="ac-dl">
+        <div><dt>Phone</dt><dd><a href={`tel:${consult.patient_phone}`}>{consult.patient_phone}</a></dd></div>
+        <div><dt>Fee</dt><dd>KES {consult.fee_amount}</dd></div>
+      </dl>
+    </>
   );
 
   // ── IN-CALL VIEW ──
   if (roomUrl) {
     return (
-      <div style={vs.callPage}>
-        {/* Top bar — patient identity + live timer + report access */}
-        <div style={vs.callBar}>
-          <div style={vs.callBarLeft}>
-            <div style={vs.avatarCircle}>{initials(consult.patient_name)}</div>
+      <div className={`ac-call${reportOpen ? ' has-report' : ''}`}>
+        <header className="ac-callbar">
+          <div className="ac-who">
+            <div className="ac-avatar" aria-hidden="true">{initials(consult.patient_name)}</div>
             <div style={{ minWidth: 0 }}>
-              <div style={vs.callName}>{consult.patient_name}</div>
-              <div style={vs.callSub}><span style={vs.liveDot} />{fmtTimer(elapsed)} · Live consultation</div>
+              <div className="ac-callname">{consult.patient_name}</div>
+              <div className="ac-callsub">
+                <span className="ac-live" aria-hidden="true" />
+                <span aria-label={`Call duration ${fmtTimer(elapsed)}`}>{fmtTimer(elapsed)}</span>
+                <span aria-hidden="true">·</span> Live
+              </div>
             </div>
           </div>
-          <button style={vs.reportChip} className="cc-press" onClick={() => setReportOpen(true)}>
-            📋 Report
+          <button type="button" className={`ac-chip${reportOpen ? ' is-on' : ''}`} onClick={() => setReportOpen((o) => !o)} aria-expanded={reportOpen} aria-controls="ac-report">
+            <Icon.File size={16} /> Patient brief
           </button>
-        </div>
+        </header>
 
-        {/* Video surface */}
-        <div style={vs.videoWrap}>
-          <iframe
-            title="Video consultation"
-            src={roomUrl}
-            allow="camera; microphone; fullscreen; speaker; display-capture; autoplay"
-            style={vs.iframe}
-          />
-        </div>
+        <div className="ac-stage">
+          <div className="ac-video">
+            <iframe
+              title="Video consultation"
+              src={roomUrl}
+              allow="camera; microphone; fullscreen; speaker; display-capture; autoplay"
+            />
+          </div>
 
-        {/* Floating end-call FAB, phone-app style */}
-        <div style={vs.fabWrap}>
-          <button style={vs.endFab} className="cc-press" onClick={handleEndCall} disabled={ending} aria-label="End call">
-            {ending ? '···' : '📵'}
-          </button>
-          <span style={vs.endFabLabel}>{ending ? 'Ending…' : 'End & write verdict'}</span>
-        </div>
-
-        {/* Report drawer — pulls up the AI-gathered symptom report mid-call
-            without leaving or interrupting the video. */}
-        {reportOpen && (
-          <>
-            <div style={vs.overlay} onClick={() => setReportOpen(false)} />
-            <div style={vs.reportSheet}>
-              <div style={vs.sheetPill} />
-              <div style={vs.sheetHeader}>
-                <p style={vs.sheetTitle}>Patient Report</p>
-                <button style={vs.closeBtn} className="cc-press" onClick={() => setReportOpen(false)} aria-label="Close">✕</button>
-              </div>
-
-              <div style={vs.reportBlock}>
-                <p style={vs.reportLabel}>Reason for Consultation</p>
-                <p style={vs.reportText}>{consult.symptoms_summary || '—'}</p>
-              </div>
-
-              <div style={vs.reportGrid}>
-                <div style={vs.reportCell}>
-                  <p style={vs.reportLabel}>Allergies</p>
-                  <p style={vs.reportValue}>{consult.allergies || 'None on record'}</p>
+          {reportOpen && (
+            <>
+              <div className="ac-overlay" onClick={() => setReportOpen(false)} aria-hidden="true" />
+              <aside id="ac-report" className="ac-report" aria-label="Patient brief">
+                <div className="ac-reporthead">
+                  <h2>Patient brief</h2>
+                  <button type="button" className="ac-iconbtn" onClick={() => setReportOpen(false)} aria-label="Close patient brief">
+                    <Icon.Close size={18} />
+                  </button>
                 </div>
-                <div style={vs.reportCell}>
-                  <p style={vs.reportLabel}>Current Meds</p>
-                  <p style={vs.reportValue}>{consult.current_medications?.join(', ') || 'None'}</p>
-                </div>
-              </div>
+                {report}
+              </aside>
+            </>
+          )}
+        </div>
 
-              <div style={vs.reportBlock}>
-                <p style={vs.reportLabel}>Contact</p>
-                <p style={vs.reportText}>📞 {consult.patient_phone}</p>
-              </div>
-
-              <div style={vs.reportBlock}>
-                <p style={vs.reportLabel}>Fee</p>
-                <p style={vs.reportText}>KES {consult.fee_amount}</p>
+        <footer className="ac-controls">
+          {!confirmEnd ? (
+            <button type="button" className="ac-end" onClick={() => setConfirmEnd(true)} disabled={ending}>
+              <Icon.PhoneOff size={20} /> End consultation
+            </button>
+          ) : (
+            <div className="ac-confirm" role="alertdialog" aria-labelledby="ac-confirm-text">
+              <p id="ac-confirm-text">End the call and continue to your verdict? Payment is released when you finish.</p>
+              <div className="ac-confirmbtns">
+                <button type="button" className="ac-keep" onClick={() => setConfirmEnd(false)} disabled={ending}>Keep talking</button>
+                <button type="button" className="ac-end" onClick={handleEndCall} disabled={ending} autoFocus>
+                  {ending ? <span className="ac-spin" aria-hidden="true" /> : <Icon.PhoneOff size={18} />}
+                  {ending ? 'Ending…' : 'End & write verdict'}
+                </button>
               </div>
             </div>
-          </>
-        )}
+          )}
+        </footer>
 
-        <style>{`
-          .cc-press { transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }
-          .cc-press:active { transform: scale(0.94); }
-          @keyframes vcSheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-          @keyframes vcFadeIn { from{opacity:0} to{opacity:1} }
-          @keyframes vcPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,77,109,0.5)} 50%{box-shadow:0 0 0 6px rgba(255,77,109,0)} }
-          @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-        `}</style>
+        <style>{CSS}</style>
       </div>
     );
   }
 
   // ── PRE-CALL VIEW (patient brief) ──
   return (
-    <div className="page">
-      <div className="header">
-        <div>
-          <div className="header__logo">CivTech Care</div>
-          <div className="header__sub">Online Consultation</div>
-        </div>
-      </div>
+    <div className="ac-page">
+      <TopBar onBack={() => navigate('/doctor/dashboard')} title="Online consultation" />
 
-      <div className="container" style={{ paddingTop: 20 }}>
-        <div className="card">
-          <p className="card__title">Patient</p>
-          <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 4 }}>{consult.patient_name}</p>
-          <p style={{ fontSize: 14, color: 'var(--gray-600)', marginBottom: 12 }}>📞 {consult.patient_phone}</p>
-          <div style={{ background: 'var(--blue-light)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--gray-600)' }}>
-            Start the secure video call below. You can also phone the patient directly on their number.
-          </div>
-        </div>
-
-        <div className="card">
-          <p className="card__title">Reason for Consultation</p>
-          <p style={{ fontSize: 14, color: 'var(--gray-600)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-            {consult.symptoms_summary || '—'}
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
-            <div style={{ background: 'var(--gray-100)', borderRadius: 6, padding: 10 }}>
-              <p style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 4 }}>ALLERGIES</p>
-              <p style={{ fontSize: 13, fontWeight: 600 }}>{consult.allergies || 'None on record'}</p>
+      <div className="ac-wrap ac-grid">
+        <div className="ac-col">
+          <section className="ac-card">
+            <div className="ac-patient">
+              <div className="ac-avatar ac-avatar--lg" aria-hidden="true">{initials(consult.patient_name)}</div>
+              <div style={{ minWidth: 0 }}>
+                <h1 className="ac-name">{consult.patient_name}</h1>
+                <a className="ac-phone" href={`tel:${consult.patient_phone}`}><Icon.Phone size={15} /> {consult.patient_phone}</a>
+              </div>
             </div>
-            <div style={{ background: 'var(--gray-100)', borderRadius: 6, padding: 10 }}>
-              <p style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 4 }}>CURRENT MEDS</p>
-              <p style={{ fontSize: 13 }}>{consult.current_medications?.join(', ') || 'None'}</p>
+          </section>
+
+          <section className="ac-card">{report}</section>
+        </div>
+
+        <aside className="ac-col">
+          <section className="ac-card ac-start">
+            <h2>Ready to begin?</h2>
+            <p>Start a secure video room. The patient joins from their CivCare app. If video fails, you can phone them directly.</p>
+            {error && (
+              <div className="alert alert--error" role="alert">
+                <Icon.Alert size={18} style={{ flexShrink: 0, marginTop: 1 }} /><span>{error}</span>
+              </div>
+            )}
+            <button type="button" className="btn btn--primary" onClick={handleStart} disabled={starting}>
+              {starting ? <span className="ac-spin" aria-hidden="true" /> : <Icon.Video size={18} />}
+              {starting ? 'Starting video…' : 'Start video consultation'}
+            </button>
+            <div className="ac-fee">
+              <span>Consultation fee</span>
+              <strong>KES {consult.fee_amount}</strong>
             </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <p className="card__title">Payment</p>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: 'var(--gray-600)', fontSize: 14 }}>Consultation Fee</span>
-            <strong style={{ fontSize: 16 }}>KES {consult.fee_amount}</strong>
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 10 }}>
-            Payment is released when you end the call and submit your verdict.
-          </p>
-        </div>
-
-        <button className="btn btn--primary" onClick={handleStart} disabled={starting} style={{ marginBottom: 12 }}>
-          {starting ? 'Starting video…' : '🎥 Start Video Consultation'}
-        </button>
-        <button className="btn btn--ghost" onClick={() => navigate('/doctor/dashboard')}>Back to Queue</button>
+            <p className="ac-note">Payment is released when you end the call and submit your verdict.</p>
+          </section>
+        </aside>
       </div>
+      <style>{CSS}</style>
     </div>
   );
 }
 
-const vs = {
-  callPage: {
-    position: 'relative', height: '100vh', width: '100%', overflow: 'hidden',
-    background: 'radial-gradient(1200px 800px at 20% -10%, rgba(79,70,229,0.18), transparent 60%), var(--bg)',
-    display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif",
-  },
+function TopBar({ onBack, title }) {
+  return (
+    <header className="header">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        <button type="button" className="cc-back" onClick={onBack} aria-label="Back to dashboard">
+          <Icon.ChevronLeft size={20} />
+        </button>
+        <div>
+          <div className="header__logo">{title}</div>
+          <div className="header__sub">CivCare clinician portal</div>
+        </div>
+      </div>
+    </header>
+  );
+}
 
-  callBar: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-    padding: '14px 16px', flexShrink: 0, zIndex: 5,
-    background: 'rgba(13,13,26,0.72)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-    borderBottom: '1px solid var(--border)',
-  },
-  callBarLeft: { display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 },
-  avatarCircle: {
-    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-    background: 'var(--accent-bg)', border: '1px solid var(--accent-bd)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    color: 'var(--accent-light)', fontWeight: 700, fontSize: 13,
-  },
-  callName: { color: 'var(--text)', fontWeight: 700, fontSize: 14, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' },
-  callSub: { display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', fontSize: 11.5, marginTop: 2, fontFamily: "'IBM Plex Mono', monospace" },
-  liveDot: { width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', animation: 'vcPulse 1.8s ease-in-out infinite', display: 'inline-block' },
-  reportChip: {
-    flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
-    background: 'var(--surface-hi)', border: '1px solid var(--border-hi)', borderRadius: 999,
-    color: 'var(--text)', fontSize: 12.5, fontWeight: 700, padding: '9px 14px', cursor: 'pointer',
-  },
+const CSS = `
+  .ac-page { min-height: 100vh; background: var(--cc-bg); }
+  .ac-wrap { max-width: 1040px; margin: 0 auto; padding: 24px 20px 48px; }
+  .ac-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+  .ac-col { display: flex; flex-direction: column; gap: 16px; }
+  .ac-card { background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 14px; padding: 20px; box-shadow: var(--cc-shadow-sm); }
+  .ac-patient { display: flex; align-items: center; gap: 14px; }
+  .ac-name { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .ac-phone { display: inline-flex; align-items: center; gap: 6px; color: var(--cc-primary); font-family: var(--cc-mono); font-size: 14px; text-decoration: none; margin-top: 2px; }
+  .ac-avatar { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; background: var(--cc-primary-soft); color: var(--cc-primary); font-weight: 700; font-size: 13px; }
+  .ac-avatar--lg { width: 52px; height: 52px; font-size: 17px; }
+  .ac-block h3, .ac-fact span, .ac-dl dt { font-size: 12px; font-weight: 600; color: var(--cc-muted); }
+  .ac-block h3 { margin-bottom: 6px; }
+  .ac-prose { font-size: 15px; line-height: 1.6; color: var(--cc-text); white-space: pre-wrap; }
+  .ac-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+  .ac-fact { padding: 10px 12px; border-radius: 10px; background: var(--cc-surface-2); border: 1px solid var(--cc-border); display: flex; flex-direction: column; gap: 2px; }
+  .ac-fact strong { font-size: 14px; font-weight: 600; }
+  .ac-fact--warn { background: var(--cc-warning-soft); border-color: var(--cc-warning-border); }
+  .ac-fact--warn span, .ac-fact--warn strong { color: var(--cc-warning); }
+  .ac-dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ac-dl dd { font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .ac-dl a { color: var(--cc-primary); text-decoration: none; font-family: var(--cc-mono); font-weight: 500; }
+  .ac-start { position: sticky; top: 84px; }
+  .ac-start h2 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .ac-start > p { font-size: 14px; color: var(--cc-muted); margin-bottom: 16px; line-height: 1.5; }
+  .ac-fee { display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--cc-border); font-size: 14px; color: var(--cc-muted); }
+  .ac-fee strong { font-size: 17px; color: var(--cc-text); }
+  .ac-note { font-size: 12.5px; color: var(--cc-muted); margin-top: 6px; }
+  .ac-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite; }
+  .ac-empty { text-align: center; padding: 48px 16px; background: var(--cc-surface); border: 1px solid var(--cc-border); border-radius: 14px; }
+  .ac-empty h2 { font-size: 17px; margin: 12px 0 4px; }
+  .ac-empty p { color: var(--cc-muted); font-size: 14px; max-width: 360px; margin: 0 auto 18px; }
+  .ac-emptyicon { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; background: var(--cc-warning-soft); color: var(--cc-warning); }
 
-  videoWrap: { position: 'relative', flex: 1, minHeight: 0, margin: '10px 12px', borderRadius: 20, overflow: 'hidden', border: '1px solid var(--border)', boxShadow: 'var(--shadow)' },
-  iframe: { position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' },
+  /* In-call — a deliberately dark, neutral stage so video is the focus */
+  .ac-call { height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: #0d1117; color: #e8edf3; overflow: hidden; }
+  .ac-callbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .ac-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .ac-call .ac-avatar { background: rgba(105,183,229,0.16); color: #9fd2f0; }
+  .ac-callname { font-weight: 650; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ac-callsub { display: flex; align-items: center; gap: 6px; font-family: var(--cc-mono); font-size: 12.5px; color: rgba(232,237,243,0.7); font-variant-numeric: tabular-nums; }
+  .ac-live { width: 7px; height: 7px; border-radius: 50%; background: #ef5a5a; animation: pulse-glow 1.6s ease-in-out infinite; }
+  .ac-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06); color: #e8edf3; font-size: 13.5px; font-weight: 600; }
+  .ac-chip:hover, .ac-chip.is-on { background: rgba(255,255,255,0.14); }
+  .ac-stage { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px; position: relative; }
+  .ac-video { position: relative; flex: 1; min-width: 0; border-radius: 14px; overflow: hidden; background: #000; border: 1px solid rgba(255,255,255,0.08); }
+  .ac-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+  .ac-overlay { display: none; }
+  .ac-report { width: 360px; flex-shrink: 0; overflow-y: auto; background: var(--cc-surface); color: var(--cc-text); border-radius: 14px; padding: 16px 18px; border: 1px solid var(--cc-border); animation: fadeIn .18s ease both; }
+  .ac-reporthead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .ac-reporthead h2 { font-size: 16px; font-weight: 700; }
+  .ac-iconbtn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--cc-border); background: var(--cc-surface); color: var(--cc-muted); display: inline-flex; align-items: center; justify-content: center; }
+  .ac-controls { display: flex; justify-content: center; padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid rgba(255,255,255,0.08); }
+  .ac-end { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 10px 22px; border-radius: 999px; border: none; background: #d64545; color: #fff; font-weight: 650; font-size: 15px; }
+  .ac-end:hover:not(:disabled) { background: #c03838; }
+  .ac-end:disabled { opacity: .7; }
+  .ac-confirm { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center; max-width: 720px; }
+  .ac-confirm p { font-size: 14px; color: rgba(232,237,243,0.85); flex: 1 1 260px; }
+  .ac-confirmbtns { display: flex; gap: 8px; }
+  .ac-keep { min-height: 48px; padding: 10px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #e8edf3; font-weight: 600; }
+  .ac-keep:hover { background: rgba(255,255,255,0.08); }
 
-  fabWrap: { position: 'absolute', left: 0, right: 0, bottom: 22, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, zIndex: 6, pointerEvents: 'none' },
-  endFab: {
-    pointerEvents: 'auto', width: 60, height: 60, borderRadius: '50%',
-    background: 'linear-gradient(135deg,#ff4d6d,#d62246)', border: '3px solid rgba(255,255,255,0.15)',
-    color: '#fff', fontSize: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 10px 28px rgba(255,77,109,0.45)',
-  },
-  endFabLabel: { pointerEvents: 'none', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', background: 'rgba(13,13,26,0.7)', padding: '4px 10px', borderRadius: 999, backdropFilter: 'blur(8px)' },
-
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(4,4,10,0.55)', backdropFilter: 'blur(2px)', zIndex: 20, animation: 'vcFadeIn 0.2s ease both' },
-  reportSheet: {
-    position: 'fixed', left: 0, right: 0, bottom: 0, maxWidth: 480, margin: '0 auto', boxSizing: 'border-box',
-    background: 'var(--bg-elevated)', border: '1px solid var(--border-hi)', borderBottom: 'none',
-    borderRadius: '24px 24px 0 0', padding: '14px 20px calc(24px + env(safe-area-inset-bottom))',
-    zIndex: 21, animation: 'vcSheetUp 0.3s var(--spring) both', maxHeight: '72vh', overflowY: 'auto',
-    boxShadow: '0 -20px 50px rgba(0,0,0,0.5)',
-  },
-  sheetPill: { width: 36, height: 4, borderRadius: 2, background: 'var(--border-hi)', margin: '0 auto 16px' },
-  sheetHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  sheetTitle: { fontSize: 17, fontWeight: 800, color: 'var(--text)', margin: 0 },
-  closeBtn: {
-    width: 30, height: 30, borderRadius: '50%', background: 'var(--surface-hi)', border: '1px solid var(--border-hi)',
-    color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-  },
-  reportBlock: { marginBottom: 16 },
-  reportGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 },
-  reportCell: { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px' },
-  reportLabel: { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: 'var(--text-muted)', margin: '0 0 5px' },
-  reportText: { fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' },
-  reportValue: { fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0 },
-};
+  @media (max-width: 860px) {
+    .ac-grid { grid-template-columns: 1fr; }
+    .ac-start { position: static; }
+    .ac-wrap { padding: 16px 16px 40px; }
+  }
+  @media (max-width: 900px) {
+    .ac-overlay { display: block; position: fixed; inset: 0; background: var(--cc-overlay); z-index: 20; animation: fadeIn .18s ease both; }
+    .ac-report { position: fixed; left: 0; right: 0; bottom: 0; width: auto; max-height: 75vh; z-index: 21; border-radius: 18px 18px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom)); animation: slideUp .22s ease both; }
+    .ac-stage { padding: 8px; }
+  }
+  @media (max-width: 420px) {
+    .ac-facts, .ac-dl { grid-template-columns: 1fr; }
+    .ac-confirmbtns { width: 100%; }
+    .ac-confirmbtns > * { flex: 1; padding: 10px 12px; }
+  }
+`;

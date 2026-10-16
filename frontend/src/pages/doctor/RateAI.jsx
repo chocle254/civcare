@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../../api/client';
+import Icon from '../../components/Icons';
 
 export default function RateAI() {
   const { id }   = useParams();   // appointment id
@@ -52,10 +53,12 @@ export default function RateAI() {
         </div>
         <div className="container">
           <div className="card" style={{ marginTop: 40, textAlign: 'center' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🧠</div>
-            <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
-              Rating Submitted
-            </p>
+            <span style={{ display: 'inline-flex', width: 56, height: 56, borderRadius: '50%', alignItems: 'center', justifyContent: 'center', background: 'var(--cc-success-soft)', color: 'var(--cc-success)', marginBottom: 14 }}>
+              <Icon.CheckCircle size={28} />
+            </span>
+            <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+              Rating submitted
+            </h1>
             <p style={{ color: 'var(--gray-600)', marginBottom: 24 }}>
               Thank you. Your feedback is used to improve the AI triage
               accuracy for future patients.
@@ -64,7 +67,7 @@ export default function RateAI() {
               className="btn btn--primary"
               onClick={() => navigate('/doctor/dashboard')}
             >
-              Back to Queue
+              Back to dashboard
             </button>
           </div>
         </div>
@@ -75,43 +78,44 @@ export default function RateAI() {
   return (
     <div className="page">
       <div className="header">
-        <div>
-          <div className="header__logo">CivCare</div>
-          <div className="header__sub">Rate AI Triage Accuracy</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button type="button" className="cc-back" onClick={() => navigate(-1)} aria-label="Back">
+            <Icon.ChevronLeft size={20} />
+          </button>
+          <div>
+            <div className="header__logo">Rate AI triage</div>
+            <div className="header__sub">CivCare clinician portal</div>
+          </div>
         </div>
-        <button
-          className="btn btn--ghost btn--sm"
-          style={{ width: 'auto' }}
-          onClick={() => navigate(-1)}
-        >
-          ← Back
-        </button>
       </div>
 
       <div className="container" style={{ paddingTop: 24 }}>
         <div className="card">
-          <p className="card__title">AI Triage Rating</p>
+          <h1 style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>How accurate was the AI triage?</h1>
           <p style={{ fontSize: 14, color: 'var(--gray-600)', marginBottom: 20 }}>
-            How accurate was the AI's preliminary assessment compared
-            to your clinical findings? Your rating trains the model to
-            be more accurate for future patients.
+            Compare the AI's preliminary assessment with your clinical findings.
           </p>
 
-          {error && <div className="alert alert--error">{error}</div>}
+          {error && <div className="alert alert--error" role="alert">{error}</div>}
 
           {/* ── Stars ── */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-            <div className="stars">
+            <div className="stars" role="radiogroup" aria-label="AI triage accuracy, 1 to 5 stars" onMouseLeave={() => setHover(0)}>
               {[1, 2, 3, 4, 5].map((star) => (
-                <span
+                <button
                   key={star}
+                  type="button"
+                  role="radio"
+                  aria-checked={rating === star}
+                  aria-label={`${star} star${star > 1 ? 's' : ''}: ${labels[star]}`}
                   className={`star ${star <= (hover || rating) ? 'filled' : ''}`}
                   onClick={() => setRating(star)}
                   onMouseEnter={() => setHover(star)}
-                  onMouseLeave={() => setHover(0)}
+                  onFocus={() => setHover(star)}
+                  onBlur={() => setHover(0)}
                 >
                   ★
-                </span>
+                </button>
               ))}
             </div>
           </div>
@@ -131,10 +135,11 @@ export default function RateAI() {
 
           {/* ── Comment ── */}
           <div className="form-group">
-            <label className="label">
+            <label className="label" htmlFor="rate-ai-comment">
               What did the AI get wrong? (optional)
             </label>
             <textarea
+              id="rate-ai-comment"
               className="input"
               placeholder="Describe any inaccuracies in the AI's triage assessment..."
               value={comment}
@@ -148,7 +153,7 @@ export default function RateAI() {
             onClick={handleSubmit}
             disabled={loading || rating === 0}
           >
-            {loading ? 'Submitting...' : 'Submit AI Rating'}
+            {loading ? 'Submitting…' : 'Submit rating'}
           </button>
 
           <button
@@ -169,10 +174,9 @@ export default function RateAI() {
             color: 'var(--gray-600)',
           }}
         >
-          <strong style={{ color: 'var(--blue)' }}>How this helps:</strong>{' '}
-          Every rating you submit is fed back into the AI training pipeline.
-          Over time the AI learns from doctor corrections and becomes more
-          accurate at predicting risk scores and assessments.
+          <strong style={{ color: 'var(--blue)' }}>Why we ask:</strong>{' '}
+          Ratings are recorded with each case so the team can measure how well
+          AI triage matches clinician judgement and improve it over time.
         </div>
       </div>
     </div>

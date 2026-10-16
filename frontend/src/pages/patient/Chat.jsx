@@ -2,23 +2,24 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { sendMessage } from '../../api/triage';
 import { theme } from '../../styles/theme';
+import Icon from '../../components/Icons';
 
 const { color, font, radius } = theme;
 
 // What CivCare's AI can actually help with — shown on the landing screen.
 const QUICK_ACTIONS = [
   {
-    emoji: '🚨', title: 'Emergency Care', sub: 'Immediate triage & nearest ER',
+    icon: 'Alert', title: 'Emergency Care', sub: 'Immediate triage & nearest ER',
     prompt: "I think I'm having a medical emergency and need help right away.",
     tint: color.coral, tintDim: color.coralDim,
   },
   {
-    emoji: '🩺', title: 'Symptom Checker', sub: 'Describe how you feel, get guided next steps',
+    icon: 'Stethoscope', title: 'Symptom Checker', sub: 'Describe how you feel, get guided next steps',
     prompt: "I'd like to describe my symptoms and get some guidance.",
     tint: color.blue, tintDim: color.blueDim,
   },
   {
-    emoji: '💊', title: 'Medication Guidance', sub: 'Dosage, interactions & reminders',
+    icon: 'Pill', title: 'Medication Guidance', sub: 'Dosage, interactions & reminders',
     prompt: 'I have a question about a medication I\'m taking.',
     tint: color.mint, tintDim: color.mintDim,
   },
@@ -193,8 +194,8 @@ export default function Chat() {
     <div style={s.page}>
       {/* ── HEADER ── */}
       <div style={s.header}>
-        <button style={s.backBtn} className="cc-press" onClick={() => navigate('/dashboard')}>
-          <span style={s.backEmoji}>←</span>
+        <button style={s.backBtn} className="cc-press" onClick={() => navigate('/dashboard')} aria-label="Back to home">
+          <Icon.ChevronLeft size={20} />
         </button>
         <div style={s.headerCenter}>
           <div style={s.verdictBadge}>
@@ -202,14 +203,14 @@ export default function Chat() {
             <span style={s.verdictText}>CivCare AI</span>
           </div>
         </div>
-        <button style={s.headerInfo} className="cc-press" aria-label="Info">ⓘ</button>
+        <span style={{ width: 36, flexShrink: 0 }} aria-hidden="true" />
       </div>
 
       {showLanding ? (
         /* ── LANDING: greeting + quick actions ── */
         <div style={s.landing}>
           <div style={s.landingAvatarRing}>
-            <div style={s.landingAvatar} className="cc-float">✨</div>
+            <div style={s.landingAvatar}><Icon.Sparkle size={30} /></div>
           </div>
           <p style={s.landingHey}>Hey, {firstName}</p>
           <h1 style={s.landingTitle}>How I can <span style={{ color: color.blue }}>help you?</span></h1>
@@ -221,7 +222,7 @@ export default function Chat() {
                 key={a.title} style={{ ...s.actionCard, animationDelay: `${i * 0.07}s` }}
                 className="cc-press" onClick={() => handleQuickAction(a)}
               >
-                <span style={{ ...s.actionIcon, background: a.tintDim }}>{a.emoji}</span>
+                <span style={{ ...s.actionIcon, background: a.tintDim, color: a.tint }}>{(() => { const A = Icon[a.icon]; return <A size={20} />; })()}</span>
                 <span style={s.actionText}>
                   <span style={s.actionTitle}>{a.title}</span>
                   <span style={s.actionSub}>{a.sub}</span>
@@ -244,7 +245,7 @@ export default function Chat() {
 
             if (msg.role === 'ai') return (
               <div key={i} style={s.rowLeft}>
-                <div style={s.aiBadge}>✨</div>
+                <div style={s.aiBadge}><Icon.Sparkle size={15} /></div>
                 <div style={s.bubbleAi}>{msg.content}</div>
               </div>
             );
@@ -253,14 +254,14 @@ export default function Chat() {
               const med = msg.content;
               return (
                 <div key={i} style={s.rowLeft}>
-                  <div style={s.aiBadge}>⚕️</div>
+                  <div style={s.aiBadge}><Icon.Pill size={15} /></div>
                   <div style={{
                     ...s.bubbleAi,
                     background: med.clash_detected ? color.coralDim : color.tealDim,
                     border: `1px solid ${med.clash_detected ? 'rgba(255,101,132,0.3)' : 'rgba(22,179,120,0.3)'}`,
                   }}>
                     <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: color.ink }}>
-                      {med.clash_detected ? '⚠️ Medication Warning' : '✅ Medication OK'}
+                      {med.clash_detected ? 'Medication warning' : 'No interaction found'}
                     </p>
                     <p style={{ fontSize: 13, color: color.inkDim }}>{med.recommendation}</p>
                   </div>
@@ -271,7 +272,7 @@ export default function Chat() {
             if (msg.role === 'action' && (msg.content === 'hospital' || msg.content === 'hospital_fallback' || msg.content === 'route_hospital_card')) {
               return (
                 <div key={i} style={s.rowLeft}>
-                  <div style={s.aiBadge}>🏥</div>
+                  <div style={s.aiBadge}><Icon.Hospital size={15} /></div>
                   <div style={s.bubbleAi}>
                     <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: color.ink }}>Hospital Care Recommended</p>
                     <p style={{ fontSize: 13, marginBottom: 10, color: color.inkDim }}>We recommend visiting a hospital for further evaluation.</p>
@@ -286,7 +287,7 @@ export default function Chat() {
             if (msg.role === 'action' && msg.content === 'consultation') {
               return (
                 <div key={i} style={s.rowLeft}>
-                  <div style={s.aiBadge}>👨‍⚕️</div>
+                  <div style={s.aiBadge}><Icon.Stethoscope size={15} /></div>
                   <div style={s.bubbleAi}>
                     <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: color.ink }}>Speak to a Doctor Online</p>
                     <p style={{ fontSize: 13, marginBottom: 10, color: color.inkDim }}>A doctor is available right now from wherever you are.</p>
@@ -304,7 +305,7 @@ export default function Chat() {
           {/* ── Typing indicator ── */}
           {isTyping && (
             <div style={s.rowLeft}>
-              <div style={s.aiBadge}>✨</div>
+              <div style={s.aiBadge}><Icon.Sparkle size={15} /></div>
               <div style={s.typingBubble}>
                 <span style={s.typingDot} />
                 <span style={{ ...s.typingDot, animationDelay: '0.15s' }} />
@@ -332,8 +333,9 @@ export default function Chat() {
           className="cc-press"
           onClick={() => handleSend()}
           disabled={!input.trim() || isTyping || disabled}
+          aria-label="Send message"
         >
-          {input.trim() ? '↑' : '🎙️'}
+          <Icon.ArrowRight size={18} />
         </button>
       </div>
 
@@ -395,9 +397,9 @@ const s = {
   landing: { flex: 1, overflowY: 'auto', padding: '28px 20px 20px' },
   landingAvatarRing: {
     width: 68, height: 68, borderRadius: '50%', marginBottom: 18,
-    background: `linear-gradient(135deg, ${color.heroFrom}, ${color.heroTo})`,
+    background: color.blue,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 10px 24px rgba(76,111,255,0.3), inset 0 1px 0 rgba(255,255,255,0.3)',
+    boxShadow: theme.shadow.card,
   },
   landingAvatar: { fontSize: 28 },
   landingHey: { fontSize: 15, color: color.inkDim, margin: '0 0 2px' },
@@ -423,9 +425,9 @@ const s = {
   rowRight: { display: 'flex', justifyContent: 'flex-end', animation: 'bubbleIn 0.25s ease both' },
   rowLeft: { display: 'flex', alignItems: 'flex-end', gap: 8, animation: 'bubbleIn 0.25s ease both', flexWrap: 'wrap' },
   bubblePatient: {
-    maxWidth: '72%', background: `linear-gradient(135deg, ${color.heroFrom}, ${color.blueDeep})`,
+    maxWidth: '72%', background: color.blue,
     borderRadius: '18px 18px 4px 18px', padding: '11px 15px', fontSize: 14, lineHeight: 1.5,
-    color: '#fff', boxShadow: '0 4px 14px rgba(76,111,255,0.3)',
+    color: color.onPrimary, boxShadow: theme.shadow.card,
   },
   aiBadge: {
     width: 28, height: 28, borderRadius: '50%',
@@ -443,9 +445,9 @@ const s = {
   },
   typingDot: { width: 7, height: 7, borderRadius: '50%', background: color.inkFaint, display: 'inline-block', animation: 'typing 1.2s ease-in-out infinite' },
   actionBtn: {
-    background: `linear-gradient(135deg, ${color.heroFrom}, ${color.blueDeep})`, border: 'none', borderRadius: 10,
-    color: '#fff', fontSize: 13, fontWeight: 700, padding: '9px 16px', cursor: 'pointer', fontFamily: font.ui,
-    boxShadow: '0 4px 12px rgba(76,111,255,0.3)',
+    background: color.blue, border: 'none', borderRadius: 10,
+    color: color.onPrimary, fontSize: 13, fontWeight: 700, padding: '9px 16px', cursor: 'pointer', fontFamily: font.ui,
+    boxShadow: theme.shadow.card,
   },
 
   // ── Input ──
@@ -466,9 +468,9 @@ const s = {
   },
   sendBtn: {
     width: 40, height: 40, borderRadius: '50%',
-    background: `linear-gradient(135deg, ${color.heroFrom}, ${color.blueDeep})`,
-    border: 'none', color: '#fff', fontSize: 16, cursor: 'pointer',
+    background: color.blue,
+    border: 'none', color: color.onPrimary, fontSize: 16, cursor: 'pointer',
     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    boxShadow: '0 4px 12px rgba(76,111,255,0.35)',
+    boxShadow: theme.shadow.card,
   },
 };

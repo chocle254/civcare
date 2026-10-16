@@ -1,10 +1,13 @@
 export default function Modal({ title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', danger = false }) {
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title || 'Dialog'}
       style={{
         position:       'fixed',
         inset:          0,
-        background:     'rgba(0,0,0,0.5)',
+        background:     'var(--cc-overlay)',
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
@@ -19,7 +22,8 @@ export default function Modal({ title, message, onConfirm, onCancel, confirmText
           padding:      24,
           maxWidth:     380,
           width:        '100%',
-          boxShadow:    '0 8px 32px rgba(0,0,0,0.2)',
+          boxShadow:    'var(--cc-shadow-lg)',
+          border:       '1px solid var(--cc-border)',
         }}
       >
         {title && (

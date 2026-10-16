@@ -18,6 +18,9 @@ function Icon({ name, size = 20, stroke = 'currentColor', strokeWidth = 1.9 }) {
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke,
+    // Theme colours are CSS variables; inline style resolves var() reliably
+    // where the SVG presentation attribute may not.
+    style: { stroke },
     strokeWidth,
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
@@ -1396,7 +1399,7 @@ const s = {
     cursor: 'pointer',
     color: '#fff',
     background: `linear-gradient(135deg, ${color.heroFrom}, ${color.heroTo})`,
-    boxShadow: '0 14px 32px rgba(76,111,255,0.24)',
+    boxShadow: theme.shadow.card,
     display: 'flex',
     alignItems: 'center',
   },
@@ -2086,7 +2089,7 @@ const s = {
     border: 'none',
     borderRadius: radius.md,
     background: color.blue,
-    color: '#fff',
+    color: color.onPrimary,
     fontSize: 13.5,
     fontWeight: 750,
     cursor: 'pointer',
@@ -2236,11 +2239,11 @@ const s = {
     border: 'none',
     borderRadius: radius.md,
     background: color.blue,
-    color: '#fff',
+    color: color.onPrimary,
     fontSize: 13.5,
     fontWeight: 750,
     cursor: 'pointer',
-    boxShadow: '0 7px 18px rgba(76,111,255,0.25)',
+    boxShadow: theme.shadow.card,
   },
 
   sheetCancel: {

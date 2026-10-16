@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { theme } from '../../styles/theme';
 import BottomNav from '../../components/BottomNav';
+import Icon from '../../components/Icons';
 
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
 
 const SPEC = {
   'General Practitioner': { tint: color.blue,  tintDim: color.blueDim },
-  'Internal Medicine':    { tint: color.violet, tintDim: 'rgba(139,108,246,0.12)' },
+  'Internal Medicine':    { tint: color.violet, tintDim: color.violetDim },
   'Emergency Medicine':   { tint: color.coral, tintDim: color.coralDim },
   'Paediatrics':          { tint: color.mint,  tintDim: color.mintDim },
   'Gynaecology':          { tint: color.pink,  tintDim: color.pinkDim },
@@ -89,17 +90,15 @@ export default function Consultation() {
         {/* Search */}
         <div style={s.searchRow}>
           <div style={s.searchBar}>
-            <span style={s.searchEmoji}>🔍</span>
+            <span style={{ color: color.inkFaint, display: 'inline-flex' }}><Icon.Search size={17} /></span>
             <input
+              aria-label="Search doctors or specialties"
               style={s.searchInput}
               placeholder="Search doctors, specialties..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <button style={s.filterBtn} className="cc-press" aria-label="Filter">
-            <span style={s.searchEmoji}>⚙️</span>
-          </button>
         </div>
 
         {/* Filter chips */}
@@ -117,7 +116,7 @@ export default function Consultation() {
 
           {!loading && filtered.length === 0 && (
             <div style={s.empty}>
-              <p style={{ fontSize: 34, margin: '0 0 8px' }}>🩺</p>
+              <p style={{ margin: '0 0 8px', color: color.inkFaint }}><Icon.Stethoscope size={32} /></p>
               <p style={{ color: color.inkFaint, fontSize: 13.5, margin: 0 }}>No doctors match right now.</p>
             </div>
           )}
@@ -126,8 +125,6 @@ export default function Consultation() {
             const spec = specTint(doc.specialisation);
             const busy = selected === doc.id;
             const name = doc.full_name || doc.name || 'Doctor';
-            const rating = doc.ai_accuracy_rating ? doc.ai_accuracy_rating.toFixed(1) : '—';
-            const accuracy = doc.ai_accuracy || Math.round((doc.ai_accuracy_rating || 4.8) * 20);
             return (
               <div key={doc.id} style={{ ...s.card, animationDelay: `${i * 0.06}s` }} className="cc-cardhover">
                 <div style={s.avatarWrap}>
@@ -138,17 +135,16 @@ export default function Consultation() {
                 <div style={s.info}>
                   <div style={s.nameRow}>
                     <p style={s.docName}>Dr. {name.replace(/^Dr\.?\s*/i, '')}</p>
-                    <span style={s.ratingChip}>⭐ {rating}</span>
                   </div>
                   <p style={{ ...s.docSpec, color: spec.tint }}>{doc.specialisation || 'General Practitioner'}</p>
                   {doc.hospital_name && (
-                    <p style={s.docHosp}>🏥 {doc.hospital_name}</p>
+                    <p style={{ ...s.docHosp, display: 'flex', alignItems: 'center', gap: 4 }}><Icon.Hospital size={14} /> {doc.hospital_name}</p>
                   )}
-                  <p style={s.docAccuracy}>✅ {accuracy}% AI Accuracy</p>
+                  <p style={{ ...s.docAccuracy, display: 'flex', alignItems: 'center', gap: 4 }}><Icon.CheckCircle size={14} /> Available now</p>
                 </div>
 
                 <button
-                  style={{ ...s.feeBtn, background: busy ? color.surfaceMuted : spec.tint, color: busy ? color.inkFaint : '#fff' }}
+                  style={{ ...s.feeBtn, background: busy ? color.surfaceMuted : spec.tint, color: busy ? color.inkFaint : color.onPrimary }}
                   className="cc-press"
                   onClick={() => handleConsult(doc)}
                   disabled={!!selected}
@@ -203,7 +199,7 @@ const s = {
   backEmoji: { fontSize: 17, lineHeight: 1, color: color.ink },
   livePill: {
     display: 'flex', alignItems: 'center', gap: 6, background: color.tealDim,
-    border: '1px solid rgba(22,179,120,0.3)', borderRadius: radius.pill, padding: '6px 13px',
+    border: `1px solid ${color.tealDim}`, borderRadius: radius.pill, padding: '6px 13px',
     fontSize: 12.5, color: color.teal, fontWeight: 700,
   },
   liveDot: { width: 7, height: 7, borderRadius: '50%', background: color.teal, animation: 'pulse 1.8s ease-in-out infinite' },
@@ -233,7 +229,7 @@ const s = {
     borderRadius: radius.pill, color: color.inkDim, fontSize: 12.5, fontWeight: 600, padding: '8px 16px',
     cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: font.ui, flexShrink: 0,
   },
-  filterActive: { background: color.blue, color: '#fff', border: '1px solid transparent', boxShadow: '0 6px 14px rgba(76,111,255,0.35)' },
+  filterActive: { background: color.blue, color: color.onPrimary, border: '1px solid transparent', boxShadow: theme.shadow.card },
 
   list: {},
   card: {
@@ -254,7 +250,7 @@ const s = {
   docHosp: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: color.inkFaint, margin: '0 0 4px' },
   docAccuracy: { fontSize: 11.5, color: color.teal, fontWeight: 600, margin: 0 },
 
-  feeBtn: { minWidth: 74, padding: '10px 8px', border: 'none', borderRadius: radius.md, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: font.ui, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, boxShadow: '0 6px 14px rgba(76,111,255,0.22)' },
+  feeBtn: { minWidth: 74, padding: '10px 8px', border: 'none', borderRadius: radius.md, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: font.ui, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, boxShadow: theme.shadow.card },
   feeCurrency: { fontSize: 10, opacity: 0.85, fontWeight: 600 },
   feeAmount: { fontSize: 14 },
 

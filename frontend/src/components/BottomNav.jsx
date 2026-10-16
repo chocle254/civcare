@@ -1,30 +1,30 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { theme } from '../styles/theme';
+import Icon from './Icons';
 
-const { color, font, radius } = theme;
 const API = process.env.REACT_APP_API_URL;
 
 const TABS = [
-  { id: 'home',   label: 'Home',        path: '/dashboard',   emoji: '🏠' },
-  { id: 'meds',   label: 'Medications', path: '/medications', emoji: '💊' },
-  { id: 'assistant', label: 'AI Assistant', path: '/chat',     emoji: '✨' },
-  { id: 'doctor', label: 'Find a Doctor', path: '/consultation', emoji: '🩺', badge: 'doctors' },
-  { id: 'more',   label: 'More',        emoji: '⋯' },
+  { id: 'home',      label: 'Home',        path: '/dashboard',    icon: 'Home' },
+  { id: 'meds',      label: 'Medications', path: '/medications',  icon: 'Pill' },
+  { id: 'assistant', label: 'Assistant',   path: '/chat',         icon: 'Sparkle' },
+  { id: 'doctor',    label: 'Doctors',     path: '/consultation', icon: 'Stethoscope', badge: 'doctors' },
+  { id: 'more',      label: 'More',        icon: 'Grid' },
 ];
 
 const MORE_ITEMS = [
-  { emoji: '🏥', title: 'Hospitals Nearby', sub: 'Find care near you', path: '/hospitals' },
-  { emoji: '📋', title: 'Diagnosis History',sub: 'Past consultations', path: '/diagnosis-history' },
-  { emoji: '👤', title: 'Profile',          sub: 'Your details',       path: '/profile' },
-  { emoji: '🚪', title: 'Sign Out',         sub: 'Log out of CivCare', action: 'logout' },
+  { icon: 'Hospital', title: 'Hospitals nearby',  sub: 'Find care near you',     path: '/hospitals' },
+  { icon: 'History',  title: 'Diagnosis history', sub: 'Past consultations',     path: '/diagnosis-history' },
+  { icon: 'Profile',  title: 'Profile',           sub: 'Your details',           path: '/profile' },
+  { icon: 'Logout',   title: 'Sign out',          sub: 'Log out of CivCare',     action: 'logout', danger: true },
 ];
 
 export default function BottomNav({ active }) {
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const [doctorCount, setDoctorCount] = useState(null);
+  const sheetRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -33,6 +33,14 @@ export default function BottomNav({ active }) {
       .catch(() => {});
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setMoreOpen(false); };
+    window.addEventListener('keydown', onKey);
+    sheetRef.current?.querySelector('button')?.focus();
+    return () => window.removeEventListener('keydown', onKey);
+  }, [moreOpen]);
 
   const handleTab = (t) => {
     if (t.id === 'more') { setMoreOpen(true); return; }
@@ -47,18 +55,30 @@ export default function BottomNav({ active }) {
 
   return (
     <>
-      <nav className="cc-bottomnav" style={s.bar}>
+      <nav className="ccnav" aria-label="Primary">
         {TABS.map((t) => {
           const isActive = t.id === active || (t.id === 'more' && moreOpen);
           const showBadge = t.badge === 'doctors' && doctorCount != null && doctorCount > 0;
+          const TabIcon = Icon[t.icon];
           return (
-            <button key={t.id} style={s.btn} className="cc-navbtn" onClick={() => handleTab(t)}>
-              {isActive && <span style={s.activeBubble} />}
-              <span style={s.emojiWrap}>
-                <span style={{ ...s.emoji, opacity: isActive ? 1 : 0.55, transform: isActive ? 'scale(1.12)' : 'scale(1)' }}>{t.emoji}</span>
-                {showBadge && <span style={s.countBadge}>{doctorCount > 9 ? '9+' : doctorCount}</span>}
+            <button
+              key={t.id}
+              type="button"
+              className={`ccnav__btn${isActive ? ' is-active' : ''}`}
+              onClick={() => handleTab(t)}
+              aria-current={isActive && t.id !== 'more' ? 'page' : undefined}
+              aria-haspopup={t.id === 'more' ? 'dialog' : undefined}
+              aria-expanded={t.id === 'more' ? moreOpen : undefined}
+            >
+              <span className="ccnav__icon">
+                <TabIcon size={22} strokeWidth={isActive ? 2.1 : 1.8} />
+                {showBadge && (
+                  <span className="ccnav__badge" aria-label={`${doctorCount} doctors available`}>
+                    {doctorCount > 9 ? '9+' : doctorCount}
+                  </span>
+                )}
               </span>
-              <span style={{ ...s.label, color: isActive ? color.blue : color.inkFaint }}>{t.label}</span>
+              <span className="ccnav__label">{t.label}</span>
             </button>
           );
         })}
@@ -66,104 +86,112 @@ export default function BottomNav({ active }) {
 
       {moreOpen && (
         <>
-          <div style={s.overlay} onClick={() => setMoreOpen(false)} />
-          <div style={s.sheet}>
-            <div style={s.sheetPill} />
-            <div style={s.sheetHeader}>
-              <p style={s.sheetTitle}>More</p>
-              <button style={s.closeBtn} className="cc-press" onClick={() => setMoreOpen(false)} aria-label="Close">✕</button>
+          <div className="ccnav__overlay" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+          <div className="ccnav__sheet" role="dialog" aria-modal="true" aria-labelledby="ccnav-more-title" ref={sheetRef}>
+            <div className="ccnav__handle" aria-hidden="true" />
+            <div className="ccnav__sheethead">
+              <h2 id="ccnav-more-title">More</h2>
+              <button type="button" className="ccnav__close" onClick={() => setMoreOpen(false)} aria-label="Close menu">
+                <Icon.Close size={18} />
+              </button>
             </div>
-            <div style={s.grid}>
-              {MORE_ITEMS.map((item, i) => (
-                <button
-                  key={item.title} style={{ ...s.gridCard, animationDelay: `${i * 0.04}s` }}
-                  className="cc-press cc-griditem" onClick={() => handleMoreItem(item)}
-                >
-                  <span style={s.gridEmojiWrap}><span style={s.gridEmoji}>{item.emoji}</span></span>
-                  <span style={s.gridTitle}>{item.title}</span>
-                  <span style={s.gridSub}>{item.sub}</span>
-                </button>
-              ))}
-            </div>
+            <ul className="ccnav__list">
+              {MORE_ITEMS.map((item) => {
+                const ItemIcon = Icon[item.icon];
+                return (
+                  <li key={item.title}>
+                    <button
+                      type="button"
+                      className={`ccnav__item${item.danger ? ' is-danger' : ''}`}
+                      onClick={() => handleMoreItem(item)}
+                    >
+                      <span className="ccnav__itemicon"><ItemIcon size={20} /></span>
+                      <span className="ccnav__itemtext">
+                        <span className="ccnav__itemtitle">{item.title}</span>
+                        <span className="ccnav__itemsub">{item.sub}</span>
+                      </span>
+                      {!item.danger && <Icon.Chevron size={18} className="ccnav__chev" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         </>
       )}
 
       <style>{`
-        .cc-bottomnav { display: flex; }
-        .cc-navbtn { transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1); }
-        .cc-navbtn:active { transform: scale(0.9); }
-        .cc-griditem { animation: gridIn 0.34s cubic-bezier(0.34,1.56,0.64,1) both; }
-        ${theme.motionCss}
-        @keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-        @keyframes gridIn { from{opacity:0;transform:translateY(10px) scale(0.96)} to{opacity:1;transform:translateY(0) scale(1)} }
-        @keyframes bubblePop { from{transform:scale(0.4);opacity:0} to{transform:scale(1);opacity:1} }
-        @keyframes badgePop { from{transform:scale(0)} to{transform:scale(1)} }
+        .ccnav {
+          position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+          max-width: 520px; margin: 0 auto; width: 100%;
+          display: flex; justify-content: space-around; align-items: stretch;
+          background: var(--cc-surface);
+          border-top: 1px solid var(--cc-border);
+          box-shadow: 0 -4px 16px rgba(16,24,40,0.04);
+          padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+        }
+        @media (min-width: 521px) {
+          .ccnav { border-left: 1px solid var(--cc-border); border-right: 1px solid var(--cc-border); border-radius: 16px 16px 0 0; }
+        }
+        .ccnav__btn {
+          flex: 1; min-width: 0; min-height: 52px;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+          background: none; border: none; border-radius: 10px;
+          color: var(--cc-faint); padding: 4px 2px;
+          transition: color .15s ease, background .15s ease;
+        }
+        .ccnav__btn:hover { color: var(--cc-text-2); }
+        .ccnav__btn.is-active { color: var(--cc-primary); }
+        .ccnav__icon { position: relative; display: inline-flex; }
+        .ccnav__btn.is-active .ccnav__icon::after {
+          content: ''; position: absolute; left: 50%; top: -7px; transform: translateX(-50%);
+          width: 20px; height: 3px; border-radius: 0 0 3px 3px; background: var(--cc-primary);
+        }
+        .ccnav__label { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        .ccnav__badge {
+          position: absolute; top: -4px; right: -9px; min-width: 16px; height: 16px; padding: 0 4px;
+          border-radius: 8px; background: var(--cc-success); color: #fff;
+          font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+          border: 2px solid var(--cc-surface); box-sizing: content-box;
+        }
+        .ccnav__overlay { position: fixed; inset: 0; background: var(--cc-overlay); z-index: 200; animation: fadeIn .18s ease both; }
+        .ccnav__sheet {
+          position: fixed; bottom: 0; left: 0; right: 0; z-index: 201;
+          max-width: 520px; margin: 0 auto; max-height: 80vh; overflow-y: auto;
+          background: var(--cc-surface); border: 1px solid var(--cc-border); border-bottom: none;
+          border-radius: 20px 20px 0 0; box-shadow: var(--cc-shadow-lg);
+          padding: 10px 16px calc(20px + env(safe-area-inset-bottom));
+          animation: ccSheetUp .24s cubic-bezier(0.2,0,0,1) both;
+        }
+        .ccnav__handle { width: 36px; height: 4px; border-radius: 2px; background: var(--cc-border-strong); margin: 0 auto 10px; }
+        .ccnav__sheethead { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; }
+        .ccnav__sheethead h2 { font-size: 17px; font-weight: 700; color: var(--cc-text); }
+        .ccnav__close {
+          width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--cc-border);
+          background: var(--cc-surface); color: var(--cc-muted);
+          display: inline-flex; align-items: center; justify-content: center;
+        }
+        .ccnav__close:hover { background: var(--cc-surface-2); color: var(--cc-text); }
+        .ccnav__list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+        .ccnav__item {
+          width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
+          padding: 12px 8px; min-height: 60px; border: none; background: none; border-radius: 12px;
+          color: var(--cc-text);
+        }
+        .ccnav__item:hover { background: var(--cc-surface-2); }
+        .ccnav__itemicon {
+          width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+          display: inline-flex; align-items: center; justify-content: center;
+          background: var(--cc-primary-soft); color: var(--cc-primary);
+        }
+        .ccnav__item.is-danger .ccnav__itemicon { background: var(--cc-danger-soft); color: var(--cc-danger); }
+        .ccnav__item.is-danger .ccnav__itemtitle { color: var(--cc-danger); }
+        .ccnav__itemtext { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .ccnav__itemtitle { font-size: 15px; font-weight: 600; }
+        .ccnav__itemsub { font-size: 13px; color: var(--cc-muted); }
+        .ccnav__chev { color: var(--cc-faint); flex-shrink: 0; }
+        @keyframes ccSheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
       `}</style>
     </>
   );
 }
-
-const s = {
-  bar: {
-    position: 'fixed', bottom: 0, left: 0, right: 0, maxWidth: 480, margin: '0 auto', width: '100%',
-    background: color.glassStrong, backdropFilter: 'blur(20px) saturate(160%)', WebkitBackdropFilter: 'blur(20px) saturate(160%)',
-    borderTop: `1px solid ${color.glassBorder}`,
-    boxShadow: '0 -8px 24px rgba(31,38,80,0.08)',
-    justifyContent: 'space-around', alignItems: 'center',
-    padding: '9px 4px calc(8px + env(safe-area-inset-bottom))', zIndex: 100, boxSizing: 'border-box',
-  },
-  btn: {
-    position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px',
-    minWidth: 50, fontFamily: font.ui,
-  },
-  activeBubble: {
-    position: 'absolute', top: -2, width: 34, height: 34, borderRadius: '50%',
-    background: color.blueDim, animation: 'bubblePop 0.28s cubic-bezier(0.34,1.56,0.64,1) both',
-  },
-  emojiWrap: { position: 'relative', display: 'inline-flex' },
-  emoji: { position: 'relative', fontSize: 19, lineHeight: 1, transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1)' },
-  countBadge: {
-    position: 'absolute', top: -6, right: -10, minWidth: 15, height: 15, borderRadius: 8,
-    background: color.teal, color: '#fff', fontSize: 8.5, fontWeight: 800, lineHeight: '15px',
-    textAlign: 'center', padding: '0 3px', border: `1.5px solid ${color.bgElevated}`,
-    animation: 'badgePop 0.25s cubic-bezier(0.34,1.56,0.64,1) both',
-  },
-  label: { position: 'relative', fontSize: 10, fontWeight: 600 },
-
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(16,18,32,0.4)', backdropFilter: 'blur(2px)', zIndex: 200, animation: 'fadeIn 0.2s ease both' },
-  sheet: {
-    position: 'fixed', bottom: 0, left: 0, right: 0, maxWidth: 480, margin: '0 auto', boxSizing: 'border-box',
-    background: color.glassStrong, backdropFilter: 'blur(26px) saturate(160%)', WebkitBackdropFilter: 'blur(26px) saturate(160%)',
-    border: `1px solid ${color.glassBorder}`, borderBottom: 'none',
-    borderRadius: '24px 24px 0 0', padding: '14px 20px calc(24px + env(safe-area-inset-bottom))',
-    zIndex: 201, animation: 'sheetUp 0.3s cubic-bezier(0.34,1.56,0.64,1) both', maxHeight: '78vh', overflowY: 'auto',
-    boxShadow: '0 -12px 40px rgba(31,38,80,0.18)',
-  },
-  sheetPill: { width: 36, height: 4, borderRadius: 2, background: color.hairlineStrong, margin: '0 auto 14px' },
-  sheetHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  sheetTitle: { fontSize: 19, fontWeight: 800, color: color.ink, margin: 0 },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: '50%', background: color.surfaceMuted, border: 'none',
-    boxShadow: theme.shadow.embossOut,
-    color: color.inkDim, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-  },
-
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, paddingBottom: 4 },
-  gridCard: {
-    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, textAlign: 'left',
-    background: color.glass, backdropFilter: color.blur, WebkitBackdropFilter: color.blur,
-    border: `1px solid ${color.glassBorder}`, borderRadius: radius.lg,
-    boxShadow: theme.shadow.glass,
-    padding: '16px 14px', cursor: 'pointer', fontFamily: font.ui, minHeight: 92,
-  },
-  gridEmojiWrap: {
-    width: 38, height: 38, borderRadius: 12, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: color.surfaceMuted, boxShadow: theme.shadow.embossOut,
-  },
-  gridEmoji: { fontSize: 18, lineHeight: 1 },
-  gridTitle: { fontSize: 13.5, fontWeight: 700, color: color.ink },
-  gridSub: { fontSize: 11.5, color: color.inkFaint },
-};
