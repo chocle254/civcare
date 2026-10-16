@@ -13,10 +13,6 @@ import 'leaflet/dist/leaflet.css';
 import { getNearbyHospitals } from '../../api/hospitals';
 import useLocation from '../../hooks/useLocation';
 import { confirmArrival } from '../../api/triage';
-import { theme } from '../../styles/theme';
-import BottomNav from '../../components/BottomNav';
-
-const { color, font, radius } = theme;
 
 /* ─────────────────────────────────────────────
    Icons
