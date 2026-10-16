@@ -8,6 +8,7 @@ from app.models.patient import Patient, IdentityType
 from app.models.doctor import Doctor, DoctorStatus
 from app.models.hospital import Hospital
 from app.services.encryption import generate_key_one, hash_password, verify_password
+from app.services.phone import normalize_ke_phone, phone_variants
 from app.config import settings
 
 router = APIRouter()
@@ -49,9 +50,18 @@ async def register_patient(data: PatientRegister, db: Session = Depends(get_db))
     No OTP — returns token immediately.
     If patient already exists, returns an error telling them to login instead.
     """
-    # Check phone already registered
+    canonical_phone = normalize_ke_phone(data.phone_number)
+    if not canonical_phone:
+        raise HTTPException(
+            status_code=400,
+            detail="Enter a valid Kenyan mobile number, such as 0712 345 678.",
+        )
+    variants = phone_variants(data.phone_number)
+    data.phone_number = canonical_phone
+
+    # Check phone already registered (in any stored format)
     existing_phone = db.query(Patient).filter(
-        Patient.phone_number == data.phone_number
+        Patient.phone_number.in_(variants)
     ).first()
     if existing_phone:
         raise HTTPException(
@@ -109,7 +119,7 @@ async def login_patient(data: PatientLogin, db: Session = Depends(get_db)):
     Both must match the same account.
     """
     patient = db.query(Patient).filter(
-        Patient.phone_number    == data.phone_number,
+        Patient.phone_number.in_(phone_variants(data.phone_number)),
         Patient.identity_number == data.identity_number,
     ).first()
 
