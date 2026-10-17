@@ -108,7 +108,15 @@ async def submit_ai_rating(
                 .first()
             )
             if appointment:
-                if appointment.symptoms_summary:
+                # The AI's own assessment lives on the triage session; the
+                # appointment's symptoms_summary is just the patient's first words.
+                session = None
+                if appointment.session_id:
+                    from app.models.session import ChatSession
+                    session = db.query(ChatSession).filter(ChatSession.id == appointment.session_id).first()
+                if session and session.ai_assessment:
+                    ai_assessment = session.ai_assessment
+                elif appointment.symptoms_summary:
                     ai_assessment = appointment.symptoms_summary
                 if appointment.risk_score or appointment.risk_numeric:
                     ai_risk_score = f"{appointment.risk_score or 'n/a'} ({appointment.risk_numeric or 'n/a'})"

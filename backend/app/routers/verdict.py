@@ -41,11 +41,19 @@ async def submit_verdict(data: VerdictSubmit, db: Session = Depends(get_db)):
     - Appointment marked as complete
     """
 
+    # The verdict screen is used after hospital visits (an appointment) and
+    # after online consultations (a consultation id). Only link real
+    # appointments; a consultation id there breaks the foreign key.
+    appointment = db.query(Appointment).filter(
+        Appointment.id == data.appointment_id
+    ).first()
+    appointment_id = appointment.id if appointment else None
+
     # Save verdict
     verdict = Verdict(
         doctor_id=data.doctor_id,
         patient_id=data.patient_id,
-        appointment_id=data.appointment_id,
+        appointment_id=appointment_id,
         diagnosis=data.diagnosis,
         severity_confirmed=data.severity,
         notes=data.notes,
@@ -72,9 +80,6 @@ async def submit_verdict(data: VerdictSubmit, db: Session = Depends(get_db)):
         db.add(prescription)
 
     # Mark appointment complete
-    appointment = db.query(Appointment).filter(
-        Appointment.id == data.appointment_id
-    ).first()
     if appointment:
         appointment.status       = AppointmentStatus.COMPLETED
         appointment.completed_at = datetime.utcnow()
@@ -94,7 +99,7 @@ async def submit_verdict(data: VerdictSubmit, db: Session = Depends(get_db)):
         rating=data.ai_accuracy_rating,
         comment=data.ai_rating_comment or "",
         diagnosis=data.diagnosis,
-        appointment_id=data.appointment_id,
+        appointment_id=appointment_id,
         notes=data.notes or "",
     )
 

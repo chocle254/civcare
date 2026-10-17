@@ -397,8 +397,10 @@ def detect_red_flag(conversation_history: list, current_message: str) -> bool:
     Detects life-threatening symptom combinations that require immediate routing
     without waiting for full field collection.
     """
+    # Only what the PATIENT said: the assistant's own questions ("any chest
+    # pain or shortness of breath?") must never trigger an emergency.
     all_text = " ".join([
-        m.get("content", "").lower() for m in conversation_history
+        m.get("content", "").lower() for m in conversation_history if m.get("role") == "patient"
     ] + [current_message.lower()])
 
     red_flag_combos = [
@@ -520,9 +522,27 @@ def detect_red_flag(conversation_history: list, current_message: str) -> bool:
     ]
 
     for combo in red_flag_combos:
-        if all(term in all_text for term in combo):
+        if all(_mentioned(term, all_text) for term in combo):
             return True
-    return False    
+    return False
+
+
+NEGATIONS = ("no ", "not ", "without ", "never ", "don't have ", "dont have ", "haven't had ", "hakuna ", "sina ")
+
+
+def _mentioned(term: str, text: str) -> bool:
+    """True if the patient mentions `term` at least once without negating it."""
+    start = 0
+    while True:
+        i = text.find(term, start)
+        if i == -1:
+            return False
+        # Look back within the clause for a negation ("no chest pain", "no cough or chest pain").
+        clause = text[max(0, i - 40):i]
+        clause = clause.split(".")[-1].split(",")[-1].split(" but ")[-1]
+        if not any(n in clause for n in NEGATIONS):
+            return True
+        start = i + len(term)
 
 
 async def process_message(
