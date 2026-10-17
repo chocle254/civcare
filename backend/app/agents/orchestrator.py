@@ -639,8 +639,20 @@ async def process_message(
         past_history_str = "\n".join(lines)
     else:
         past_history_str = "  None on record"
+    # ── Extract what the patient has told us, including this message ──────
+    # Runs BEFORE the reply so the "already known" list includes the answer
+    # just given; otherwise the reply can re-ask it.
+    # History holds both sides of the chat; only the patient's messages are turns.
+    turn_count = sum(1 for m in conversation_history if m.get("role") == "patient") + 1
+    result["updated_summary"] = await extract_conversation_summary(
+        conversation_history=conversation_history + [{"role": "patient", "content": patient_message}],
+        existing_summary=result["updated_summary"],
+        patient_record=patient_record,
+    )
+    summary_now = result["updated_summary"]
+
     # ── STEP 3: Get AI response ──────────────────────────────────────────────
-    known_facts = _known_facts(conversation_summary)
+    known_facts = _known_facts(summary_now)
     dynamic_context = SYSTEM_CONTEXT + (
         f"\n\n━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"PATIENT PROFILE\n"
@@ -660,9 +672,9 @@ async def process_message(
         f"- If Past Conditions is 'None on record' and Current Medications is empty, treat them as a new patient."
         + (
             f"\n\nMUST ASK BEFORE THE ROUTING QUESTION: the record item(s) "
-            f"\"{conversation_summary.get('relevant_history')}\" may relate to today's complaint. "
+            f"\"{summary_now.get('relevant_history')}\" may relate to today's complaint. "
             f"Ask one plain, kind question about it (current treatment, last treatment, recent changes)."
-            if history_link_pending(conversation_summary)
+            if history_link_pending(summary_now)
             else ""
         )
         + (
@@ -679,19 +691,6 @@ async def process_message(
         model="llama-3.3-70b-versatile",
     )
     result["response"] = ai_response
-
-    # ── STEP 4: Extract summary every turn ───────────────────────────────────
-    # History holds both sides of the chat; only the patient's messages are turns.
-    turn_count = sum(1 for m in conversation_history if m.get("role") == "patient") + 1
-    full_history = conversation_history + [
-        {"role": "patient", "content": patient_message},
-        {"role": "ai",      "content": ai_response},
-    ]
-    result["updated_summary"] = await extract_conversation_summary(
-        conversation_history=full_history,
-        existing_summary=result["updated_summary"],
-        patient_record=patient_record,
-    )
 
     # ── Medication check ────────────────────────────────────────────────
     # The check informs the doctor; it never ends triage early (a fever in a
