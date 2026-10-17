@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icons';
+import { checkInAfterTransfer } from '../../api/triage';
 
 export default function ArrivalWaiting() {
     const navigate = useNavigate();
@@ -8,6 +9,9 @@ export default function ArrivalWaiting() {
     const appointmentId = localStorage.getItem('civtech_appointment_id');
     const [callStatus, setCallStatus] = useState(null); // null | { doctor_name, room }
     const [completed, setCompleted] = useState(false); // NEW
+    const [visit, setVisit] = useState(null); // latest status: { status, doctor_name, transfer, hospital }
+    const [checkingIn, setCheckingIn] = useState(false);
+    const [checkInError, setCheckInError] = useState('');
 
     useEffect(() => {
         if (!appointmentId) return;
@@ -16,6 +20,7 @@ export default function ArrivalWaiting() {
             try {
                 const res = await fetch(`${process.env.REACT_APP_API_URL}/triage/appointment-status/${appointmentId}`);
                 const data = await res.json();
+                if (res.ok) setVisit(data);
                 if (data.status === 'called' || data.status === 'in_progress') {
                     setCallStatus({ doctor_name: data.doctor_name, room: data.room });
                 } else if (data.status === 'completed') {   // NEW
@@ -31,6 +36,20 @@ export default function ArrivalWaiting() {
     }, [appointmentId]);
 
     const firstName = patient.name?.split(' ')[0];
+    const hospital = visit?.hospital;
+
+    const handleCheckIn = async () => {
+        setCheckingIn(true);
+        setCheckInError('');
+        try {
+            await checkInAfterTransfer(appointmentId);
+            setVisit((v) => (v ? { ...v, status: 'arrived' } : v));
+        } catch {
+            setCheckInError('Could not check you in. Please try again.');
+        } finally {
+            setCheckingIn(false);
+        }
+    };
 
     // ── CONSULTATION COMPLETE ──
     if (completed && !callStatus) {
@@ -61,12 +80,66 @@ export default function ArrivalWaiting() {
         );
     }
 
-    // ── WAITING ──
+    // ── REFERRED TO ANOTHER HOSPITAL: travel there, then check in ──
+    if (visit?.transfer === 'hospital' && visit.status === 'pending') {
+        const directions = hospital?.lat != null && hospital?.lon != null
+            ? `https://www.google.com/maps/dir/?api=1&destination=${hospital.lat},${hospital.lon}`
+            : hospital?.name
+                ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hospital.name)}`
+                : null;
+        return (
+            <Shell live>
+                <span className="aw-icon aw-icon--wait" aria-hidden="true"><Icon.Hospital size={30} /></span>
+                <h1 className="aw-title">We've referred you to {hospital?.name || 'another hospital'}</h1>
+                <p className="aw-text">
+                    Your doctor wants you seen by the team there, as they're better placed to help with this.
+                    Please make your way over, then tap the button below when you arrive.
+                </p>
+                {(hospital?.address || hospital?.town || hospital?.phone) && (
+                    <div className="aw-place">
+                        {(hospital.address || hospital.town) && (
+                            <span><Icon.MapPin size={15} /> {[hospital.address, hospital.town].filter(Boolean).join(', ')}</span>
+                        )}
+                        {hospital.phone && (
+                            <span><Icon.Phone size={15} /> {hospital.phone} <a href={`tel:${hospital.phone}`}>Call</a></span>
+                        )}
+                    </div>
+                )}
+                {checkInError && <p className="aw-err" role="alert">{checkInError}</p>}
+                <button type="button" className="btn btn--primary aw-btn" onClick={handleCheckIn} disabled={checkingIn}>
+                    <Icon.CheckCircle size={18} /> {checkingIn ? 'Checking you in…' : "I've arrived, check me in"}
+                </button>
+                {directions && (
+                    <a className="btn btn--outline aw-btn aw-btn--tight" href={directions} target="_blank" rel="noopener noreferrer">
+                        <Icon.MapPin size={18} /> Get directions
+                    </a>
+                )}
+            </Shell>
+        );
+    }
+
+    // ── WAITING (possibly after a transfer) ──
+    const assigned = visit?.transfer && visit.doctor_name;
+    const title = visit?.transfer === 'doctor'
+        ? `Hang tight${firstName ? `, ${firstName}` : ''}`
+        : visit?.transfer === 'hospital'
+            ? `You're checked in at ${hospital?.name || 'the hospital'}`
+            : `You're checked in${firstName ? `, ${firstName}` : ''}`;
     return (
         <Shell live>
             <span className="aw-icon aw-icon--wait" aria-hidden="true"><Icon.Hospital size={30} /></span>
-            <h1 className="aw-title">You're checked in{firstName ? `, ${firstName}` : ''}</h1>
-            <p className="aw-text">Please take a seat. Your doctor will call you when they're ready. This screen updates automatically.</p>
+            <h1 className="aw-title">{title}</h1>
+            {assigned && (
+                <div className="aw-assigned">
+                    <Icon.Stethoscope size={18} />
+                    <span>You've been assigned to <strong>{visit.doctor_name}</strong></span>
+                </div>
+            )}
+            <p className="aw-text">
+                {assigned
+                    ? "They'll call you when they're ready. Please stay nearby; this screen updates automatically."
+                    : "Please take a seat. Your doctor will call you when they're ready. This screen updates automatically."}
+            </p>
             <span className="aw-status"><span className="aw-dot" aria-hidden="true" /> Waiting to be called</span>
             <button type="button" className="btn btn--outline aw-btn" onClick={() => navigate('/medications')}>
                 View my medications
@@ -95,6 +168,15 @@ function Shell({ children, live }) {
                 .aw-status { display: inline-flex; align-items: center; gap: 8px; margin: 20px 0 4px; font-size: 14px; font-weight: 600; color: var(--cc-text-2); }
                 .aw-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cc-primary); animation: pulse-glow 1.6s ease-in-out infinite; }
                 .aw-btn { margin-top: 24px; }
+                .aw-btn--tight { margin-top: 10px; text-decoration: none; }
+                .aw-assigned { display: flex; align-items: center; gap: 10px; width: 100%; margin: 6px 0 14px; padding: 14px 16px; border-radius: 14px; background: var(--cc-primary-soft); border: 1px solid var(--cc-primary-border); color: var(--cc-primary); text-align: left; font-size: 15px; }
+                .aw-assigned span { color: var(--cc-text); }
+                .aw-assigned svg { flex-shrink: 0; }
+                .aw-place { width: 100%; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--cc-surface-2); border: 1px solid var(--cc-border); display: flex; flex-direction: column; gap: 6px; text-align: left; font-size: 14px; color: var(--cc-text-2); }
+                .aw-place span { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+                .aw-place svg { flex-shrink: 0; color: var(--cc-muted); }
+                .aw-place a { color: var(--cc-primary); font-weight: 600; }
+                .aw-err { color: var(--cc-danger); font-size: 14px; margin-top: 12px; }
             `}</style>
         </div>
     );

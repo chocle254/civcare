@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { updateDoctorStatus } from '../../api/doctors';
+import { updateDoctorStatus, getTransferTargets, transferPatient } from '../../api/doctors';
 import { callPatient } from '../../api/triage';
 import client from '../../api/client';
 import Icon from '../../components/Icons';
@@ -14,22 +14,49 @@ export default function PatientProfile() {
   const [loading, setLoading] = useState(true);
   const [calling, setCalling] = useState(false);
   const [called, setCalled] = useState(false);
-  // Referral controls (guardrail UI): the AI routes the case to whichever doctor
-  // is available — not necessarily the matching specialty. If the assigned doctor
-  // isn't the right fit, they can hand the case off here.
-  const [referMenu, setReferMenu] = useState(null); // 'specialist' | 'hospital' | null
+  // Transfer controls: the AI routes each case to whichever doctor is free, not
+  // the matching specialty. If this doctor isn't the right fit, they hand the
+  // case to a named doctor or to a hospital (first available doctor there).
+  const [referMenu, setReferMenu] = useState(null); // 'doctor' | 'hospital' | null
+  const [targets, setTargets] = useState(null);     // { doctors, hospitals }
+  const [targetsError, setTargetsError] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [error, setError] = useState('');
 
-  const SPECIALTIES = [
-    'Cardiologist', 'Dermatologist', 'Pediatrician', 'Gynecologist',
-    'Neurologist', 'Orthopedic Surgeon', 'Psychiatrist', 'ENT Specialist',
-    'Ophthalmologist', 'General Surgeon',
-  ];
-  const REFERRAL_HOSPITALS = [
-    'Kenyatta National Hospital', 'Aga Khan University Hospital',
-    'Nairobi Hospital', 'Moi Teaching & Referral Hospital',
-    'Coast General Hospital', 'Mater Misericordiae Hospital',
-  ];
+  const openRefer = async (mode) => {
+    const next = referMenu === mode ? null : mode;
+    setReferMenu(next);
+    setTargetId('');
+    setConfirming(false);
+    if (!next || targets) return;
+    setTargetsError('');
+    try {
+      const res = await getTransferTargets(doctor.id);
+      setTargets(res.data);
+    } catch {
+      setTargetsError('Could not load doctors and hospitals. Please try again.');
+    }
+  };
+
+  const handleTransfer = async () => {
+    setTransferring(true);
+    setError('');
+    try {
+      await transferPatient({
+        appointment_id: id,
+        doctor_id: doctor.id,
+        ...(referMenu === 'doctor' ? { target_doctor_id: targetId } : { target_hospital_id: targetId }),
+      });
+      navigate('/doctor/dashboard', { replace: true });
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Could not transfer this patient. Please try again.');
+      setConfirming(false);
+    } finally {
+      setTransferring(false);
+    }
+  };
 
   // Call the patient straight from the case file — no need to go back to the queue.
   const handleCall = async () => {
@@ -248,41 +275,77 @@ export default function PatientProfile() {
               <h2 className="pp-h">Not the right fit?</h2>
               <p className="pp-muted pp-small">
                 CivCare routes each case to the next available doctor; it never chooses the specialty.
-                If this patient needs different expertise, choose a referral below.
+                Transfer this patient to a colleague or another hospital. They leave your queue and
+                their phone shows the new assignment.
               </p>
-              <div className="pp-refer" role="group" aria-label="Referral type">
-                <button type="button" className={`pp-btn pp-btn--ghost${referMenu === 'specialist' ? ' is-on' : ''}`}
-                  aria-pressed={referMenu === 'specialist'}
-                  onClick={() => setReferMenu(referMenu === 'specialist' ? null : 'specialist')}>
-                  <Icon.Stethoscope size={16} /> Specialist
+              <div className="pp-refer" role="group" aria-label="Transfer to">
+                <button type="button" className={`pp-btn pp-btn--ghost${referMenu === 'doctor' ? ' is-on' : ''}`}
+                  aria-pressed={referMenu === 'doctor'}
+                  onClick={() => openRefer('doctor')}>
+                  <Icon.Stethoscope size={16} /> Another doctor
                 </button>
                 <button type="button" className={`pp-btn pp-btn--ghost${referMenu === 'hospital' ? ' is-on' : ''}`}
                   aria-pressed={referMenu === 'hospital'}
-                  onClick={() => setReferMenu(referMenu === 'hospital' ? null : 'hospital')}>
-                  <Icon.Hospital size={16} /> Hospital
+                  onClick={() => openRefer('hospital')}>
+                  <Icon.Hospital size={16} /> Another hospital
                 </button>
               </div>
 
-              {referMenu === 'specialist' && (
-                <div className="form-group" style={{ marginTop: 12 }}>
-                  <label className="label" htmlFor="pp-spec">Specialty</label>
-                  <select id="pp-spec" className="input" defaultValue="">
-                    <option value="" disabled>Choose a specialist…</option>
-                    {SPECIALTIES.map((sp) => <option key={sp} value={sp}>{sp}</option>)}
-                  </select>
-                </div>
+              {referMenu && targetsError && (
+                <p className="pp-note pp-note--err" role="alert"><Icon.Alert size={15} /> {targetsError}</p>
               )}
-              {referMenu === 'hospital' && (
-                <div className="form-group" style={{ marginTop: 12 }}>
-                  <label className="label" htmlFor="pp-hosp">Referral hospital</label>
-                  <select id="pp-hosp" className="input" defaultValue="">
-                    <option value="" disabled>Choose a hospital…</option>
-                    {REFERRAL_HOSPITALS.map((h) => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                </div>
+              {referMenu && !targets && !targetsError && (
+                <div className="cc-skeleton" style={{ height: 44, marginTop: 12 }} aria-busy="true" aria-label="Loading" />
               )}
-              {referMenu && (
-                <p className="pp-note"><Icon.Info size={15} /> Referrals aren't sent automatically yet. Record the referral in your verdict notes.</p>
+
+              {referMenu === 'doctor' && targets && (
+                <TargetSelect id="pp-doc" label="Doctor" value={targetId} onChange={(v) => { setTargetId(v); setConfirming(false); }}
+                  empty={targets.doctors.length === 0 ? 'No other doctors are registered yet.' : ''}>
+                  <option value="" disabled>Choose a doctor…</option>
+                  {groupByHospital(targets.doctors).map(([hospital, docs]) => (
+                    <optgroup key={hospital} label={hospital || 'Other'}>
+                      {docs.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}{d.specialisation ? ` · ${d.specialisation}` : ''} ({STATUS_LABEL[d.status] || 'Offline'})
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </TargetSelect>
+              )}
+              {referMenu === 'hospital' && targets && (
+                <TargetSelect id="pp-hosp" label="Hospital" value={targetId} onChange={(v) => { setTargetId(v); setConfirming(false); }}
+                  empty={targets.hospitals.length === 0 ? 'No hospitals are registered yet.' : ''}>
+                  <option value="" disabled>Choose a hospital…</option>
+                  {targets.hospitals.map((h) => (
+                    <option key={h.id} value={h.id}>{h.name}{h.town ? ` · ${h.town}` : ''}</option>
+                  ))}
+                </TargetSelect>
+              )}
+
+              {referMenu && targetId && !confirming && (
+                <button type="button" className="pp-btn pp-btn--secondary pp-full" onClick={() => setConfirming(true)}>
+                  Transfer patient <Icon.ArrowRight size={16} />
+                </button>
+              )}
+              {referMenu && targetId && confirming && (
+                <div className="pp-confirm" role="alertdialog" aria-labelledby="pp-confirm-t">
+                  <p id="pp-confirm-t">
+                    Transfer <strong>{profile.patient_name}</strong> to{' '}
+                    <strong>{targetName(targets, referMenu, targetId)}</strong>?
+                  </p>
+                  <p className="pp-muted pp-small" style={{ margin: 0 }}>
+                    {referMenu === 'hospital'
+                      ? 'They leave your queue and are asked to go to this hospital. The first available doctor there takes the case.'
+                      : 'They leave your queue straight away and are told who will see them.'}
+                  </p>
+                  <div className="pp-confirmrow">
+                    <button type="button" className="pp-btn pp-btn--ghost" onClick={() => setConfirming(false)} disabled={transferring}>Cancel</button>
+                    <button type="button" className="pp-btn pp-btn--primary" onClick={handleTransfer} disabled={transferring}>
+                      {transferring ? 'Transferring…' : 'Approve transfer'}
+                    </button>
+                  </div>
+                </div>
               )}
             </section>
           </div>
@@ -317,6 +380,36 @@ function Bar({ onBack, children }) {
       </div>
       {children}
     </header>
+  );
+}
+
+const STATUS_LABEL = { available: 'Available', with_patient: 'With a patient', on_break: 'On break', offline: 'Offline' };
+
+function groupByHospital(doctors) {
+  const groups = new Map();
+  doctors.forEach((d) => {
+    const key = d.hospital_name || '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(d);
+  });
+  return [...groups.entries()];
+}
+
+function targetName(targets, mode, id) {
+  if (mode === 'doctor') {
+    const d = targets?.doctors.find((x) => x.id === id);
+    return d ? `${d.name}${d.hospital_name ? `, ${d.hospital_name}` : ''}` : 'the selected doctor';
+  }
+  return targets?.hospitals.find((x) => x.id === id)?.name || 'the selected hospital';
+}
+
+function TargetSelect({ id, label, value, onChange, empty, children }) {
+  if (empty) return <p className="pp-note" style={{ marginTop: 12 }}><Icon.Info size={15} /> {empty}</p>;
+  return (
+    <div className="form-group" style={{ marginTop: 12 }}>
+      <label className="label" htmlFor={id}>{label}</label>
+      <select id={id} className="input" value={value} onChange={(e) => onChange(e.target.value)}>{children}</select>
+    </div>
   );
 }
 
@@ -367,6 +460,11 @@ const CSS = `
   .pp-refer { display: flex; gap: 8px; flex-wrap: wrap; }
   .pp-note { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; color: var(--cc-muted); margin-top: 4px; }
   .pp-note svg { flex-shrink: 0; margin-top: 2px; }
+  .pp-note--err { color: var(--cc-danger); margin-top: 12px; }
+  .pp-full { width: 100%; margin-top: 4px; }
+  .pp-confirm { margin-top: 8px; padding: 14px; border-radius: 12px; background: var(--cc-warning-soft); border: 1px solid var(--cc-warning-border); display: flex; flex-direction: column; gap: 8px; }
+  .pp-confirm > p:first-child { font-size: 14.5px; line-height: 1.5; }
+  .pp-confirmrow { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
   .pp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 9px 16px; border-radius: 8px; border: 1px solid transparent; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background .15s ease, border-color .15s ease; }
   .pp-btn--primary { background: var(--cc-primary-grad); color: var(--cc-on-primary); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), var(--cc-primary-glow); }
   .pp-btn--primary:hover { background: var(--cc-primary-hover); }

@@ -182,3 +182,129 @@ async def update_settings(data: DoctorSettingsUpdate, db: Session = Depends(get_
     await broadcast_queue_update(doctor.hospital_id)
 
     return {"message": "Settings updated successfully."}
+
+
+# ── TRANSFER ONE PATIENT (wrong fit for this doctor) ──
+class TransferPatient(BaseModel):
+    appointment_id:     str
+    doctor_id:          str                  # doctor handing the case off
+    target_doctor_id:   Optional[str] = None # a specific doctor, or…
+    target_hospital_id: Optional[str] = None # …a hospital (first available doctor there)
+
+
+TRANSFERABLE = [
+    AppointmentStatus.PENDING,
+    AppointmentStatus.ARRIVED,
+    AppointmentStatus.CALLED,
+    AppointmentStatus.IN_PROGRESS,
+]
+
+
+def _pick_doctor(db: Session, hospital_id: str, exclude_id: str = None):
+    """Available doctor at a hospital, else any active one there, else None."""
+    base = db.query(Doctor).filter(Doctor.hospital_id == hospital_id, Doctor.is_active == True)
+    if exclude_id:
+        base = base.filter(Doctor.id != exclude_id)
+    return (
+        base.filter(Doctor.status == DoctorStatus.AVAILABLE).first()
+        or base.first()
+    )
+
+
+@router.get("/transfer-targets")
+async def transfer_targets(doctor_id: str, db: Session = Depends(get_db)):
+    """Doctors and registered hospitals a case can be transferred to."""
+    from app.models.hospital import Hospital
+
+    hospitals = db.query(Hospital).filter(Hospital.is_active == True).order_by(Hospital.name).all()
+    names = {h.id: h.name for h in hospitals}
+    doctors = db.query(Doctor).filter(
+        Doctor.is_active == True,
+        Doctor.id != doctor_id,
+    ).order_by(Doctor.full_name).all()
+
+    return {
+        "doctors": [
+            {
+                "id":             d.id,
+                "name":           d.full_name,
+                "specialisation": d.specialisation,
+                "hospital_id":    d.hospital_id,
+                "hospital_name":  names.get(d.hospital_id, ""),
+                "status":         d.status.value if hasattr(d.status, "value") else d.status,
+            }
+            for d in doctors
+        ],
+        "hospitals": [{"id": h.id, "name": h.name, "town": h.town} for h in hospitals],
+    }
+
+
+@router.post("/transfer")
+async def transfer_patient(data: TransferPatient, db: Session = Depends(get_db)):
+    """
+    The assigned doctor hands one patient to another doctor or hospital.
+    The patient leaves this doctor's queue, and their waiting screen shows
+    who they've been assigned to (or which hospital to go to).
+    """
+    from app.models.hospital import Hospital
+
+    if not data.target_doctor_id and not data.target_hospital_id:
+        raise HTTPException(status_code=400, detail="Choose a doctor or a hospital.")
+
+    appt = db.query(Appointment).filter(
+        Appointment.id        == data.appointment_id,
+        Appointment.doctor_id == data.doctor_id,
+    ).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="This patient is no longer in your queue.")
+    if appt.status not in TRANSFERABLE:
+        raise HTTPException(status_code=400, detail="This visit is already closed.")
+
+    if data.target_doctor_id:
+        target = db.query(Doctor).filter(
+            Doctor.id == data.target_doctor_id, Doctor.is_active == True,
+        ).first()
+        if not target or target.id == data.doctor_id:
+            raise HTTPException(status_code=404, detail="That doctor is not available for transfers.")
+        target_hospital_id = target.hospital_id
+    else:
+        hospital = db.query(Hospital).filter(
+            Hospital.id == data.target_hospital_id, Hospital.is_active == True,
+        ).first()
+        if not hospital:
+            raise HTTPException(status_code=404, detail="Hospital not found.")
+        target_hospital_id = hospital.id
+        target = _pick_doctor(db, hospital.id, exclude_id=data.doctor_id)
+
+    old_hospital_id = appt.hospital_id
+    same_hospital   = target_hospital_id == old_hospital_id
+
+    appt.original_doctor_id = appt.original_doctor_id or data.doctor_id
+    appt.doctor_id          = target.id if target else None
+    appt.hospital_id        = target_hospital_id
+    appt.redirect_reason    = "transfer_doctor" if same_hospital else "transfer_hospital"
+    appt.redirect_count     = str(int(appt.redirect_count or "0") + 1)
+    appt.called_at          = None
+    if same_hospital:
+        appt.status = AppointmentStatus.ARRIVED      # already on site: straight into the new queue
+    else:
+        appt.status     = AppointmentStatus.PENDING  # must travel; checks in on arrival
+        appt.arrived_at = None
+
+    # The handing-off doctor was marked with_patient when they opened the file.
+    me = db.query(Doctor).filter(Doctor.id == data.doctor_id).first()
+    if me and me.status == DoctorStatus.WITH_PATIENT:
+        me.status = DoctorStatus.AVAILABLE
+
+    db.commit()
+
+    from app.websocket.queue import broadcast_queue_update
+    await broadcast_queue_update(old_hospital_id)
+    if not same_hospital:
+        await broadcast_queue_update(target_hospital_id)
+
+    return {
+        "message":       "Patient transferred.",
+        "doctor_name":   target.full_name if target else None,
+        "same_hospital": same_hospital,
+    }

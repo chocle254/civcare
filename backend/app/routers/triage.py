@@ -338,6 +338,8 @@ async def call_patient(data: CallPatient, db: Session = Depends(get_db)):
 
 @router.get("/appointment-status/{appointment_id}")
 async def get_appointment_status(appointment_id: str, db: Session = Depends(get_db)):
+    from app.models.hospital import Hospital
+
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id
     ).first()
@@ -347,13 +349,56 @@ async def get_appointment_status(appointment_id: str, db: Session = Depends(get_
     doctor = None
     if appointment.doctor_id:
         doctor = db.query(Doctor).filter(Doctor.id == appointment.doctor_id).first()
+    hospital = db.query(Hospital).filter(Hospital.id == appointment.hospital_id).first()
+
+    # Only clinician-initiated transfers are shown to the patient; break and
+    # shift-end reassignments stay silent.
+    reason = appointment.redirect_reason or ""
+    transfer = {"transfer_doctor": "doctor", "transfer_hospital": "hospital"}.get(reason)
 
     return {
-        "status":      appointment.status.value if hasattr(appointment.status, "value") else appointment.status,
-        "doctor_name": doctor.full_name if doctor else None,
-        "room":        "Room 3A",
+        "status":         appointment.status.value if hasattr(appointment.status, "value") else appointment.status,
+        "doctor_name":    doctor.full_name if doctor else None,
+        "room":           "Room 3A",  # hardcoded for now
+        "transfer":       transfer,
+        "hospital": {
+            "id":      hospital.id,
+            "name":    hospital.name,
+            "town":    hospital.town,
+            "address": hospital.address,
+            "phone":   hospital.phone_number,
+            "lat":     hospital.latitude,
+            "lon":     hospital.longitude,
+        } if hospital else None,
     }
 
+
+# ── PATIENT CHECKS IN AT THE HOSPITAL THEY WERE REFERRED TO ──
+@router.post("/appointment/{appointment_id}/arrived")
+async def arrived_after_transfer(appointment_id: str, db: Session = Depends(get_db)):
+    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Not found")
+    if appointment.status != AppointmentStatus.PENDING:
+        return {"message": "Already checked in."}
+
+    # No doctor was free when the referral was made: assign one now.
+    if not appointment.doctor_id:
+        base = db.query(Doctor).filter(
+            Doctor.hospital_id == appointment.hospital_id, Doctor.is_active == True,
+        )
+        doctor = base.filter(Doctor.status == DoctorStatus.AVAILABLE).first() or base.first()
+        if doctor:
+            appointment.doctor_id = doctor.id
+
+    appointment.status     = AppointmentStatus.ARRIVED
+    appointment.arrived_at = datetime.utcnow()
+    db.commit()
+
+    from app.websocket.queue import broadcast_queue_update
+    await broadcast_queue_update(appointment.hospital_id)
+
+    return {"message": "Checked in."}
 
 
 @router.get("/sessions/{patient_id}")
@@ -394,25 +439,6 @@ async def get_session_messages(session_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Session not found")
     messages = json.loads(session.messages or "[]")
     return messages
-
-@router.get("/appointment-status/{appointment_id}")
-async def get_appointment_status(appointment_id: str, db: Session = Depends(get_db)):
-    appointment = db.query(Appointment).filter(
-        Appointment.id == appointment_id
-    ).first()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    doctor = None
-    if appointment.doctor_id:
-        doctor = db.query(Doctor).filter(Doctor.id == appointment.doctor_id).first()
-
-    return {
-        "status":      appointment.status.value if hasattr(appointment.status, "value") else appointment.status,
-        "doctor_name": doctor.full_name if doctor else None,
-        "room":        "Room 3A",  # hardcoded for now
-    }
-
 
 @router.get("/session/{session_id}")
 async def get_session(session_id: str, db: Session = Depends(get_db)):
