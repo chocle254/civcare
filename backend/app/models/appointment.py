@@ -48,6 +48,7 @@ class Appointment(Base):
     original_doctor_id  = Column(String, nullable=True)  # Who was first assigned
     redirect_reason     = Column(String, nullable=True)  # "break" / "shift_end" / "offline"
     redirect_count      = Column(String, default="0")    # How many times reassigned
+    transfer_reason     = Column(Text, nullable=True)    # Clinician's reason when transferring (shown to the receiving doctor)
 
     # ── TIMESTAMPS ──
     created_at      = Column(DateTime, default=datetime.utcnow)

@@ -144,6 +144,18 @@ async def get_queue(hospital_id: str, doctor_id: str):
         db.close()
 
 
+def _transfer_info(db, appt):
+    """Who handed this case over and why, for the receiving doctor."""
+    if appt.redirect_reason not in ("transfer_doctor", "transfer_hospital"):
+        return None
+    from app.models.doctor import Doctor
+    from_doc = db.query(Doctor).filter(Doctor.id == appt.original_doctor_id).first() if appt.original_doctor_id else None
+    return {
+        "from_doctor": from_doc.full_name if from_doc else None,
+        "reason":      getattr(appt, "transfer_reason", None),
+    }
+
+
 # ── APPOINTMENT PROFILE ENDPOINT ──
 @app.get("/triage/appointment/{appointment_id}")
 async def get_appointment(appointment_id: str, doctor_id: str):
@@ -325,6 +337,7 @@ Rules:
             "possible_diagnosis": possible_diagnosis,
             "diagnosis_reasoning": diagnosis_reasoning,
             "symptom_summary":     symptom_summary,
+            "transfer":            _transfer_info(db, appt),
         }
     finally:
         db.close()

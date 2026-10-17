@@ -21,6 +21,7 @@ export default function PatientProfile() {
   const [targets, setTargets] = useState(null);     // { doctors, hospitals }
   const [targetsError, setTargetsError] = useState('');
   const [targetId, setTargetId] = useState('');
+  const [reason, setReason] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [error, setError] = useState('');
@@ -47,6 +48,7 @@ export default function PatientProfile() {
       await transferPatient({
         appointment_id: id,
         doctor_id: doctor.id,
+        reason: reason.trim(),
         ...(referMenu === 'doctor' ? { target_doctor_id: targetId } : { target_hospital_id: targetId }),
       });
       navigate('/doctor/dashboard', { replace: true });
@@ -172,6 +174,16 @@ export default function PatientProfile() {
         {error && (
           <div className="alert alert--error" role="alert">
             <Icon.Alert size={18} style={{ flexShrink: 0, marginTop: 1 }} /><span>{error}</span>
+          </div>
+        )}
+
+        {profile.transfer && (
+          <div className="pp-transfer" role="note">
+            <Icon.Users size={20} />
+            <div>
+              <strong>Transferred to you{profile.transfer.from_doctor ? ` by ${profile.transfer.from_doctor}` : ''}</strong>
+              {profile.transfer.reason && <p>{profile.transfer.reason}</p>}
+            </div>
           </div>
         )}
 
@@ -323,10 +335,26 @@ export default function PatientProfile() {
                 </TargetSelect>
               )}
 
+              {referMenu && targetId && (
+                <div className="form-group">
+                  <label className="label" htmlFor="pp-reason">Reason for transfer</label>
+                  <textarea id="pp-reason" className="input pp-reason" rows={3} value={reason}
+                    maxLength={1000} aria-describedby="pp-reason-hint" disabled={transferring}
+                    placeholder="e.g. Suspected cardiac cause; needs cardiology review and ECG."
+                    onChange={(e) => { setReason(e.target.value); setConfirming(false); }} />
+                  <p id="pp-reason-hint" className="pp-muted pp-hint">
+                    The receiving doctor sees this. The patient doesn't.
+                  </p>
+                </div>
+              )}
               {referMenu && targetId && !confirming && (
-                <button type="button" className="pp-btn pp-btn--secondary pp-full" onClick={() => setConfirming(true)}>
+                <button type="button" className="pp-btn pp-btn--secondary pp-full"
+                  disabled={reason.trim().length < 10} onClick={() => setConfirming(true)}>
                   Transfer patient <Icon.ArrowRight size={16} />
                 </button>
+              )}
+              {referMenu && targetId && !confirming && reason.trim().length < 10 && (
+                <p className="pp-muted pp-hint" style={{ marginTop: 6 }}>Enter a reason (at least 10 characters) to continue.</p>
               )}
               {referMenu && targetId && confirming && (
                 <div className="pp-confirm" role="alertdialog" aria-labelledby="pp-confirm-t">
@@ -334,6 +362,7 @@ export default function PatientProfile() {
                     Transfer <strong>{profile.patient_name}</strong> to{' '}
                     <strong>{targetName(targets, referMenu, targetId)}</strong>?
                   </p>
+                  <p className="pp-quote">“{reason.trim()}”</p>
                   <p className="pp-muted pp-small" style={{ margin: 0 }}>
                     {referMenu === 'hospital'
                       ? 'They leave your queue and are asked to go to this hospital. The first available doctor there takes the case.'
@@ -462,6 +491,14 @@ const CSS = `
   .pp-note svg { flex-shrink: 0; margin-top: 2px; }
   .pp-note--err { color: var(--cc-danger); margin-top: 12px; }
   .pp-full { width: 100%; margin-top: 4px; }
+  .pp-full:disabled { opacity: .55; cursor: not-allowed; }
+  .pp-reason { resize: vertical; min-height: 84px; font: inherit; line-height: 1.5; }
+  .pp-hint { font-size: 12.5px; margin-top: 4px; }
+  .pp-quote { font-size: 14px; color: var(--cc-text-2); font-style: italic; white-space: pre-line; word-break: break-word; }
+  .pp-transfer { display: flex; gap: 12px; padding: 14px 16px; border-radius: 12px; background: var(--cc-primary-soft); border: 1px solid var(--cc-primary-border); color: var(--cc-primary); margin-bottom: 16px; }
+  .pp-transfer svg { flex-shrink: 0; margin-top: 1px; }
+  .pp-transfer strong { font-size: 14px; }
+  .pp-transfer p { color: var(--cc-text); font-size: 14px; white-space: pre-line; margin-top: 2px; }
   .pp-confirm { margin-top: 8px; padding: 14px; border-radius: 12px; background: var(--cc-warning-soft); border: 1px solid var(--cc-warning-border); display: flex; flex-direction: column; gap: 8px; }
   .pp-confirm > p:first-child { font-size: 14.5px; line-height: 1.5; }
   .pp-confirmrow { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }

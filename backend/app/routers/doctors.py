@@ -190,6 +190,7 @@ class TransferPatient(BaseModel):
     doctor_id:          str                  # doctor handing the case off
     target_doctor_id:   Optional[str] = None # a specific doctor, or…
     target_hospital_id: Optional[str] = None # …a hospital (first available doctor there)
+    reason:             str                  # why, for the receiving doctor
 
 
 TRANSFERABLE = [
@@ -250,6 +251,9 @@ async def transfer_patient(data: TransferPatient, db: Session = Depends(get_db))
 
     if not data.target_doctor_id and not data.target_hospital_id:
         raise HTTPException(status_code=400, detail="Choose a doctor or a hospital.")
+    reason = (data.reason or "").strip()
+    if len(reason) < 10:
+        raise HTTPException(status_code=400, detail="Give a reason for the transfer (at least 10 characters).")
 
     appt = db.query(Appointment).filter(
         Appointment.id        == data.appointment_id,
@@ -279,11 +283,12 @@ async def transfer_patient(data: TransferPatient, db: Session = Depends(get_db))
     old_hospital_id = appt.hospital_id
     same_hospital   = target_hospital_id == old_hospital_id
 
-    appt.original_doctor_id = appt.original_doctor_id or data.doctor_id
+    appt.original_doctor_id = data.doctor_id   # who handed the case on (shown to the receiver)
     appt.doctor_id          = target.id if target else None
     appt.hospital_id        = target_hospital_id
     appt.redirect_reason    = "transfer_doctor" if same_hospital else "transfer_hospital"
     appt.redirect_count     = str(int(appt.redirect_count or "0") + 1)
+    appt.transfer_reason    = reason[:1000]
     appt.called_at          = None
     if same_hospital:
         appt.status = AppointmentStatus.ARRIVED      # already on site: straight into the new queue
