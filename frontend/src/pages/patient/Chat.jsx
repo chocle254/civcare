@@ -6,25 +6,6 @@ import Icon from '../../components/Icons';
 
 const { color, font, radius } = theme;
 
-// What CivCare's AI can actually help with — shown on the landing screen.
-const QUICK_ACTIONS = [
-  {
-    icon: 'Alert', title: 'Emergency Care', sub: 'Immediate triage & nearest ER',
-    prompt: "I think I'm having a medical emergency and need help right away.",
-    tint: color.coral, tintDim: color.coralDim,
-  },
-  {
-    icon: 'Stethoscope', title: 'Symptom Checker', sub: 'Describe how you feel, get guided next steps',
-    prompt: "I'd like to describe my symptoms and get some guidance.",
-    tint: color.blue, tintDim: color.blueDim,
-  },
-  {
-    icon: 'Pill', title: 'Medication Guidance', sub: 'Dosage, interactions & reminders',
-    prompt: 'I have a question about a medication I\'m taking.',
-    tint: color.mint, tintDim: color.mintDim,
-  },
-];
-
 export default function Chat() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,7 +24,6 @@ export default function Chat() {
   // Landing (greeting + quick actions) shows for fresh sessions only —
   // resuming an existing conversation or a pre-hospital/pre-consultation
   // handoff drops straight into the thread.
-  const [showLanding, setShowLanding] = useState(!existingSessionId && !mode);
 
   const firstName = patient.name?.split(' ')[0] || 'there';
 
@@ -76,7 +56,7 @@ export default function Chat() {
           });
       });
     } else {
-      let welcomeMsg = `Hello ${firstName}. I am CivCare, your health assistant. How are you feeling today?`;
+      let welcomeMsg = `Hello${firstName ? ` ${firstName}` : ''}, I'm CivCare, your health assistant. It's good to see you. How are you feeling today?`;
       if (mode === 'pre_hospital') {
         const h = JSON.parse(localStorage.getItem('civtech_hospital') || '{}');
         welcomeMsg = `You've selected ${h.name}. To prepare your file for the doctor, please describe the symptoms you are experiencing.`;
@@ -95,7 +75,6 @@ export default function Chat() {
   const handleSend = async (overrideText) => {
     const text = (overrideText ?? input).trim();
     if (!text || isTyping || disabled) return;
-    setShowLanding(false);
     setInput('');
     setMessages((prev) => [...prev, { role: 'patient', content: text }]);
     setIsTyping(true);
@@ -186,8 +165,6 @@ export default function Chat() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const handleQuickAction = (action) => { handleSend(action.prompt); };
-
   // Hospital Selection is now handled entirely on the /hospitals map page
 
   return (
@@ -206,34 +183,7 @@ export default function Chat() {
         <span style={{ width: 36, flexShrink: 0 }} aria-hidden="true" />
       </div>
 
-      {showLanding ? (
-        /* ── LANDING: greeting + quick actions ── */
-        <div style={s.landing} className="cc-chat-col">
-          <div style={s.landingAvatarRing}>
-            <div style={s.landingAvatar}><Icon.Sparkle size={30} /></div>
-          </div>
-          <p style={s.landingHey}>Hey, {firstName}</p>
-          <h1 style={s.landingTitle}>How I can <span style={{ color: color.blue }}>help you?</span></h1>
-
-          <p style={s.landingLabel}>Quick actions</p>
-          <div style={s.actionList}>
-            {QUICK_ACTIONS.map((a, i) => (
-              <button
-                key={a.title} style={{ ...s.actionCard, animationDelay: `${i * 0.07}s` }}
-                className="cc-press" onClick={() => handleQuickAction(a)}
-              >
-                <span style={{ ...s.actionIcon, background: a.tintDim, color: a.tint }}>{(() => { const A = Icon[a.icon]; return <A size={20} />; })()}</span>
-                <span style={s.actionText}>
-                  <span style={s.actionTitle}>{a.title}</span>
-                  <span style={s.actionSub}>{a.sub}</span>
-                </span>
-                <span style={{ color: color.inkFaint, fontSize: 16 }}>›</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : (
-        /* ── MESSAGES ── */
+      {/* ── MESSAGES ── */}
         <div style={s.messageList} className="cc-chat-col">
           {messages.map((msg, i) => {
 
@@ -315,13 +265,12 @@ export default function Chat() {
           )}
           <div ref={bottomRef} />
         </div>
-      )}
 
       {/* ── INPUT ── */}
       <div style={s.inputRow} className="cc-chat-col">
         <input
           style={s.input}
-          placeholder={disabled ? 'Select an option above' : (showLanding ? 'Tell us about your request...' : 'Message...')}
+          placeholder={disabled ? 'Select an option above' : 'Tell me how you feel…'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
