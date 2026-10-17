@@ -282,6 +282,8 @@ export default function Medications() {
           ? parseInt(d.pillsInput, 10)
           : null,
         patient_id: patient.id,
+        // The time is the patient's local clock time; the server needs the offset to schedule in UTC.
+        tz_offset_minutes: new Date().getTimezoneOffset(),
       });
 
       setEditing((prev) => ({

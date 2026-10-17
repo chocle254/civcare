@@ -37,6 +37,7 @@ class ReminderSetup(BaseModel):
     first_dose_time: str          # e.g "14:00"
     patient_id:      str
     pills_dispensed: int | None = None   # how many tablets the patient was given
+    tz_offset_minutes: int | None = None # browser getTimezoneOffset(); first_dose_time is local time
 
 
 class ReminderResponse(BaseModel):
@@ -182,12 +183,15 @@ async def set_reminders(data: ReminderSetup, db: Session = Depends(get_db)):
     else:
         total_doses = times_per_day * 7   # fallback: 7-day course if pills unknown
 
-    # Parse first dose time
+    # Parse first dose time. It's the patient's local clock time, and reminders
+    # are stored in UTC, so shift by their offset (default: Kenya, UTC+3).
     hour, minute = map(int, data.first_dose_time.split(":"))
-    now          = datetime.utcnow()
-    first_dose   = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if first_dose < now:
-        first_dose += timedelta(days=1)
+    offset       = timedelta(minutes=data.tz_offset_minutes if data.tz_offset_minutes is not None else -180)
+    local_now    = datetime.utcnow() - offset
+    local_first  = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if local_first < local_now:
+        local_first += timedelta(days=1)
+    first_dose   = local_first + offset
 
     # Schedule exactly total_doses reminders — depletes when pills run out
     reminders_created = 0
