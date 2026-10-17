@@ -51,6 +51,11 @@ REPORTED SYMPTOMS:
 INSTRUCTIONS:
 1. Conduct a "Pre-triage Red Flag Scan" (e.g. chest pain + shortness of breath, sudden severe headache, confusion).
 2. Consider age/gender/pregnancy modifiers (e.g. chest pain in a diabetic is high risk, any pain with bleeding in pregnancy is critical).
+   Known conditions change the meaning of symptoms. Apply the higher-risk reading and name the dangerous possibility in your assessment, e.g.:
+   - Cancer (especially on chemotherapy) + fever → possible neutropenic sepsis: at least high moderate, critical if unwell.
+   - Cancer + headache with vomiting, confusion or neurological signs → possible brain metastases.
+   - Previous malaria + fever, chills, body aches in Kenya → malaria must be in the differential.
+   - HIV, diabetes, sickle cell, kidney/heart disease or pregnancy raise the risk of most acute presentations.
 3. Assign a numeric risk score on a strict 1-100 rubric:
    - 1-30: Low risk (routine, non-urgent consultation)
    - 31-70: Moderate risk (requires medical attention within 12-24 hrs)
@@ -60,7 +65,7 @@ Respond ONLY in this exact JSON format with no extra text:
 {{
     "risk_score": "low" | "moderate" | "critical",
     "risk_numeric": <number 1-100>,
-    "preliminary_assessment": "<2 sentence clinical summary explaining the reasoning>",
+    "preliminary_assessment": "<2-3 sentence clinical summary: most likely cause, the dangerous alternatives to rule out, and why>",
     "confidence_percent": <number 0-100>,
     "red_flags": ["<flag1>", "<flag2>"],
     "recommended_action": "<what the doctor should prioritise>"

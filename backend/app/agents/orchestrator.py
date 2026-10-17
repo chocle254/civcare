@@ -59,14 +59,23 @@ Always ask the ONE question that would give you the most clinical value right no
 
 Build the picture turn by turn. When you feel you have enough to understand what this patient is experiencing — their main complaint, how long, how bad, what else is happening, what they have tried — move to Step 3.
 
+Fever in Kenya: always find out about malaria exposure (recent travel to a malaria area such as the lake region or coast, or sleeping without a mosquito net) unless they've already told you.
+
+HIGH-RISK HISTORY — this changes what you must ask:
+If the patient profile below lists a serious condition, ask ONE question that links today's complaint to it before you ask the routing question. Examples:
+  - Cancer (any type) + fever, weakness or infection signs → "Are you currently having cancer treatment such as chemotherapy?" (fever during chemo can be dangerous).
+  - Cancer + headache with vomiting, confusion, vision changes or one-sided weakness → ask about those nervous-system symptoms (possible spread to the brain).
+  - HIV, diabetes, sickle cell, kidney or heart disease, or pregnancy → ask whether the condition is under control / what treatment they are on, as it fits the complaint.
+Never ask about a condition in a way that frightens them; ask plainly and kindly.
+
 STEP 3 — STANDARD PROBING (Turn 3-5, if not already answered)
   a) Duration and onset — "How long have you had this?"
   b) Severity — "On a scale of 1 to 10, how bad is it right now?"
   c) What makes it better or worse?
   d) Have they taken any medication for it? If yes, ask the NAME of the medicine they took or tried
 
-STEP 4 — ROUTING QUESTION (Only after 4+ turns with solid symptom data)
-Ask ONCE: "Are you able to travel to a hospital or clinic today, or would you prefer to speak to a doctor online?"
+STEP 4 — ROUTING QUESTION
+Only when you know the duration, severity, the important associated symptoms, and — if they apply — the high-risk-history link and malaria exposure above. Ask ONCE: "Are you able to travel to a hospital or clinic today, or would you prefer to speak to a doctor online?"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ROUTING RULES
@@ -199,6 +208,24 @@ Respond ONLY in this JSON, no markdown:
         return {"conflict": False, "detail": ""}
 
 
+KNOWN_FACT_LABELS = [
+    ("symptom", "Main symptom"), ("duration", "How long"), ("severity", "Severity (1-10)"),
+    ("character", "What it feels like"), ("associated", "Other symptoms"),
+    ("tried_medication", "Medicine already tried"), ("medical_history", "History mentioned in chat"),
+    ("can_travel", "Can travel to a hospital"),
+]
+
+
+def _known_facts(summary: dict) -> str:
+    """Bullet list of what the patient has already told us, for the prompt."""
+    lines = []
+    for key, label in KNOWN_FACT_LABELS:
+        value = (summary or {}).get(key)
+        if value not in (None, "", [], "null"):
+            lines.append(f"- {label}: {value}")
+    return "\n".join(lines)
+
+
 def count_collected_fields(summary: dict) -> int:
     """
     Counts confirmed fields needed before routing.
@@ -232,7 +259,7 @@ def is_ready_for_routing(summary: dict, turn_count: int, mode: str | None = None
       3. Normal triage: needs the travel question answered.
     """
     # ── Layer 1: absolute hard stop — never loop past this ──
-    if turn_count >= 9:
+    if turn_count >= 8:
         return True
 
     # Always need at least the main symptom and duration
@@ -251,10 +278,10 @@ def is_ready_for_routing(summary: dict, turn_count: int, mode: str | None = None
 
     # ── Layer 2: destination already chosen → route once picture is clear ──
     if mode in ("pre_consultation", "pre_hospital"):
-        return turn_count >= 4
+        return turn_count >= 3
 
     # ── Layer 3: normal triage → need travel answer + enough turns ──
-    if turn_count < 6:
+    if turn_count < 4:
         return False
     if summary.get("can_travel") is None:
         return False
@@ -634,6 +661,7 @@ async def process_message(
     else:
         past_history_str = "  None on record"
     # ── STEP 3: Get AI response ──────────────────────────────────────────────
+    known_facts = _known_facts(conversation_summary)
     dynamic_context = SYSTEM_CONTEXT + (
         f"\n\n━ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"PATIENT PROFILE\n"
@@ -651,6 +679,12 @@ async def process_message(
         f"  Example: If they had malaria before and now have fever, probe more specifically.\n"
         f"- NEVER recite their full medical record. Reference it naturally, like a nurse who remembers a returning patient.\n"
         f"- If Past Conditions is 'None on record' and Current Medications is empty, treat them as a new patient."
+        + (
+            f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"ALREADY KNOWN FROM THIS CONVERSATION — do NOT ask about these again\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n{known_facts}"
+            if known_facts else ""
+        )
     )
 
     ai_response = await ask_gemini_with_history(
@@ -660,17 +694,17 @@ async def process_message(
     )
     result["response"] = ai_response
 
-    # ── STEP 4: Extract summary using Gemini (every 2 turns) ─────────────────
-    turn_count = len(conversation_history) + 1
-    if turn_count % 2 == 0 or turn_count >= 4:
-        full_history = conversation_history + [
-            {"role": "patient", "content": patient_message},
-            {"role": "ai",      "content": ai_response},
-        ]
-        result["updated_summary"] = await extract_conversation_summary(
-            conversation_history=full_history,
-            existing_summary=result["updated_summary"],
-        )
+    # ── STEP 4: Extract summary every turn ───────────────────────────────────
+    # History holds both sides of the chat; only the patient's messages are turns.
+    turn_count = sum(1 for m in conversation_history if m.get("role") == "patient") + 1
+    full_history = conversation_history + [
+        {"role": "patient", "content": patient_message},
+        {"role": "ai",      "content": ai_response},
+    ]
+    result["updated_summary"] = await extract_conversation_summary(
+        conversation_history=full_history,
+        existing_summary=result["updated_summary"],
+    )
 
     # ── Allergy/medication conflict check ──
     tried_med = result["updated_summary"].get("tried_medication")
