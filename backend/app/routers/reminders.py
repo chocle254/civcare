@@ -347,7 +347,7 @@ async def due_dose(patient_id: str, db: Session = Depends(get_db)):
         patient = db.query(Patient).filter(Patient.id == patient_id).first()
         # Reminders are stored in UTC; greet by the patient's clock (Kenya).
         local_hour = (due.scheduled_at + timedelta(hours=3)).hour
-        part_of_day = "morning" if 4 <= local_hour < 12 else "afternoon" if local_hour < 17 else "evening"
+        part_of_day = "morning" if 4 <= local_hour < 12 else "afternoon" if 12 <= local_hour < 17 else "evening"
         question = await generate_checkin_question(
             prescription.medication_name,
             diagnosis,
