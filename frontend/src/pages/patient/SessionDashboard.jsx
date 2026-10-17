@@ -1307,11 +1307,13 @@ export default function SessionDashboard() {
         .cc-a-quick { order: 5; }
 
         /* Desktop: two-column workspace like the clinician dashboard. */
-        @media (min-width: 1024px) {
+        @media (min-width: 880px) {
           .cc-dashboard-main {
             max-width: 1200px !important;
             padding: 28px 36px 48px !important;
           }
+        }
+        @media (min-width: 1180px) {
           .cc-dash-grid {
             display: grid;
             grid-template-columns: minmax(0, 1fr) 360px;

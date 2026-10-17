@@ -1032,17 +1032,17 @@ select.input {
 }
 
 /* ── Patient desktop shell ─────────────────────────────────────────────
-   PatientSidebar sets body.cc-pside on the main patient pages. From 1024px
+   PatientSidebar sets body.cc-pside on the main patient pages. From 880px (which includes phones in "Desktop site" mode)
    the sidebar replaces the phone bottom bar and pages get room to breathe. */
 .ccps { display: none; }
 
-@media (min-width: 1024px) {
-  body.cc-pside { padding-left: 256px; }
+@media (min-width: 880px) {
+  body.cc-pside { padding-left: 240px; }
   body.cc-pside .ccnav { display: none; }
   body.cc-pside .cc-hide-desktop { display: none !important; }
 
   .ccps {
-    position: fixed; top: 0; bottom: 0; left: 0; z-index: 1050; width: 256px;
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 1050; width: 240px;
     display: flex; flex-direction: column; gap: 24px; padding: 20px 14px; overflow-y: auto;
     background: var(--cc-glass); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur);
     border-right: 1px solid var(--cc-glass-border); box-shadow: 1px 0 0 var(--cc-border);
@@ -1076,16 +1076,18 @@ select.input {
   .ccps__logout:hover { color: var(--cc-danger); background: var(--cc-danger-soft); }
 
   /* Fixed bars that span the viewport start after the sidebar. */
-  body.cc-pside .selection-shell { left: 256px; bottom: 24px; }
+  body.cc-pside .selection-shell { left: 240px; bottom: 24px; }
   /* The sidebar already carries the brand and navigation. */
   body.cc-pside .meds-topbar { display: none; }
 }
 
 /* Patient page layouts on desktop (classes added by the pages). */
-@media (min-width: 1024px) {
+@media (min-width: 880px) {
   .cc-pg-wide { max-width: 1120px !important; padding-left: 36px !important; padding-right: 36px !important; padding-top: 32px !important; }
   .cc-doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; align-items: stretch; }
   .cc-doc-grid > * { margin: 0 !important; }
+}
+@media (min-width: 1180px) {
   .cc-prof-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; align-items: start; }
   .cc-prof-card { position: sticky; top: 24px; margin: 0 !important; }
   .cc-prof-body { min-width: 0; }
@@ -1093,7 +1095,7 @@ select.input {
 
 /* Chat on wide screens: keep the conversation in a readable centre column
    while the scroll area still spans the full width. */
-@media (min-width: 1024px) {
+@media (min-width: 880px) {
   .cc-chat-col {
     padding-left: max(24px, calc((100% - 860px) / 2)) !important;
     padding-right: max(24px, calc((100% - 860px) / 2)) !important;
