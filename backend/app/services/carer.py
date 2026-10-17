@@ -32,7 +32,13 @@ def _diagnosis_for_prescription(db, prescription) -> str:
     return "their condition"
 
 
-async def generate_checkin_question(medication: str, diagnosis: str, patient_name: str | None = None) -> str:
+async def generate_checkin_question(
+    medication: str,
+    diagnosis: str,
+    patient_name: str | None = None,
+    part_of_day: str = "evening",
+    final_dose: bool = False,
+) -> str:
     """
     Build a warm, specific question that maps the medication to the diagnosis,
     so the evening check-in feels like a real person who cares is reaching out —
@@ -42,14 +48,19 @@ async def generate_checkin_question(medication: str, diagnosis: str, patient_nam
     easier tonight, and has the fever settled at all?"
     """
     first_name = (patient_name or "").strip().split(" ")[0] if patient_name else ""
+    hello = {"morning": "Morning", "afternoon": "Afternoon"}.get(part_of_day, "Evening")
     greeting_rule = (
-        f'Open warmly by name, e.g. "Evening, {first_name}." '
+        f'Open warmly by name, e.g. "{hello}, {first_name}." '
         if first_name else
-        "Open warmly, e.g. \"Evening.\" "
+        f"Open warmly, e.g. \"{hello}.\" "
+    )
+    moment = (
+        "after the very last dose of their treatment"
+        if final_dose else "after they have taken the last dose of their day"
     )
     prompt = f"""
 You are CivCare's caring community health companion, sending a patient a gentle text
-message in the evening, after they have taken the last dose of their day.
+message in the {part_of_day}, {moment}.
 
 Patient's first name: {first_name or "(unknown — do not invent one)"}
 Medication just taken: {medication}
@@ -58,8 +69,8 @@ What the doctor is treating: {diagnosis}
 Write ONE short, warm, human check-in message (max 35 words) that makes the patient feel
 genuinely cared for and not alone in this.
 - {greeting_rule}
-- Acknowledge their effort kindly (e.g. "well done for staying on track today").
-- Then gently ask how they are feeling tonight, specific to their condition where natural
+- Acknowledge their effort kindly (e.g. "well done for staying on track" or, for the last dose, "well done for finishing your treatment").
+- Then gently ask how they are feeling right now, specific to their condition where natural
   (e.g. for a throat infection, ask about swallowing and fever).
 - Warm and reassuring in tone — like a kind nurse or a caring friend, never clinical or robotic.
 - Do NOT diagnose. Do NOT claim the medicine is working. Do NOT give medical advice.
@@ -67,8 +78,8 @@ genuinely cared for and not alone in this.
 Return only the message text, nothing else.
 """
     fallback = (
-        f"Evening{', ' + first_name if first_name else ''} — well done for staying on track today. "
-        "How are you feeling tonight after your dose?"
+        f"{hello}{', ' + first_name if first_name else ''} — well done for staying on track. "
+        "How are you feeling now after your dose?"
     )
     try:
         q = (await ask_gemini(prompt, model="llama-3.1-8b-instant")).strip()

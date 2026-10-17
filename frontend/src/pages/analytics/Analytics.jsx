@@ -37,7 +37,7 @@ export default function Analytics() {
   const [error, setError] = useState(false);
   const c = CHART[usePrefersDark() ? 'dark' : 'light'];
 
-  const API_BASE = process.env.REACT_APP_API_BASE || 'https://civcaresys-production.up.railway.app';
+  const API_BASE = process.env.REACT_APP_API_URL;
 
   useEffect(() => {
     const fetchAnalytics = async () => {

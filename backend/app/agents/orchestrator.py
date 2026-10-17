@@ -317,6 +317,7 @@ CRITICAL_KEYWORDS_FALLBACK = [
 async def classify_emergency_severity(
     patient_message: str,
     conversation_history: list,
+    patient_record: str = "",
 ) -> dict:
     """
     Uses the LLM to reason about emergency severity instead of hardcoded string matching.
@@ -330,6 +331,9 @@ async def classify_emergency_severity(
     ])
 
     prompt = f"""You are a medical triage AI. Analyze this patient statement for life-threatening emergency signs.
+
+PATIENT'S RECORD (from previous visits):
+{patient_record or "Nothing on record"}
 
 RECENT CONVERSATION:
 {recent_context}
@@ -356,6 +360,9 @@ HIGH indicators (urgent, needs hospital within 1 hour):
 - Severe head injury with confusion
 - Severe abdominal pain with rigidity
 - Moderate active bleeding that's hard to control
+- Symptoms that are urgent BECAUSE of the patient's record or what they've said, e.g. fever in
+  someone whose immunity is weakened by treatment or illness, or a warning sign of a known
+  complication of a condition they have
 
 NORMAL: Everything else
 """
@@ -541,9 +548,15 @@ async def process_message(
     }
         # ── STEP 0: Emergency Severity Classification (NEW) ───────────────────────
     # Call the LLM-based emergency classifier FIRST, before anything else
+    patient_record = (
+        f"Conditions: {patient_data.get('conditions') or 'None on record'}\n"
+        f"Current medicines: {', '.join(patient_data.get('current_medications', []) or []) or 'None'}"
+    )
+
     emergency_classification = await classify_emergency_severity(
         patient_message=patient_message,
         conversation_history=conversation_history,
+        patient_record=patient_record,
     )
 
     if emergency_classification.get("severity") == "CRITICAL":
@@ -608,11 +621,6 @@ async def process_message(
                 "I'm recommending you visit a hospital for a proper evaluation."
             )
         return result
-
-    patient_record = (
-        f"Conditions: {patient_data.get('conditions') or 'None on record'}\n"
-        f"Current medicines: {', '.join(patient_data.get('current_medications', []) or []) or 'None'}"
-    )
 
     # ── STEP 2: Build conversation history for Gemini ────────────────────────
     gemini_history = []
@@ -741,7 +749,10 @@ async def process_message(
     if ready_to_route and turn_count < 8 and history_link_pending(result["updated_summary"]):
         ready_to_route = False   # the next reply is prompted to ask about the record
     # Red flag override — bypass normal routing requirements for emergencies
-    is_red_flag = detect_red_flag(conversation_history, patient_message)
+    is_red_flag = (
+        detect_red_flag(conversation_history, patient_message)
+        or emergency_classification.get("severity") == "HIGH"
+    )
     if is_red_flag and result["updated_summary"].get("can_travel") is not None:
         ready_to_route = True
     elif is_red_flag and result["updated_summary"].get("can_travel") is None:
@@ -807,6 +818,7 @@ Patient's first name: {(patient_data.get('name') or '').split(' ')[0] or 'not kn
 
 Write a warm, professional 2-sentence chat message from a senior nurse telling the patient you have gathered what you need
 and you are recommending they visit a hospital. If the risk level is critical, tell them to go now, without delay.
+Never mention the risk level, a score, or words like "critical", "severe" or "serious condition" to the patient.
 Do NOT name a specific hospital. Do NOT give a diagnosis. This is a chat message, not a letter: no "Dear", no sign-off,
 and never a placeholder like [Name]. Use the first name only if it is known.
 """

@@ -53,13 +53,18 @@ async def my_medications(patient_id: str, db: Session = Depends(get_db)):
         Prescription.patient_id == patient_id,
         Prescription.is_active  == True,
     ).all()
+    from app.models.doctor import Doctor
+    doctor_ids = {p.doctor_id for p in prescriptions if p.doctor_id}
+    doctor_names = {
+        d.id: d.full_name for d in db.query(Doctor).filter(Doctor.id.in_(doctor_ids)).all()
+    } if doctor_ids else {}
 
     return [
         {
             "id":                    p.id,
             "medication_name":       p.medication_name,
             "med_form":              p.med_form or "tablet",
-            "doctor_name":           None,
+            "doctor_name":           doctor_names.get(p.doctor_id),
             "dosage_notation":       p.dosage_notation,
             "first_dose_time":       p.first_dose_time,
             "reminder_interval_hours": p.reminder_interval_hours,
@@ -340,10 +345,15 @@ async def due_dose(patient_id: str, db: Session = Depends(get_db)):
     question = None
     if is_evening:
         patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        # Reminders are stored in UTC; greet by the patient's clock (Kenya).
+        local_hour = (due.scheduled_at + timedelta(hours=3)).hour
+        part_of_day = "morning" if 4 <= local_hour < 12 else "afternoon" if local_hour < 17 else "evening"
         question = await generate_checkin_question(
             prescription.medication_name,
             diagnosis,
             patient_name=patient.full_name if patient else None,
+            part_of_day=part_of_day,
+            final_dose=is_final,
         )
 
     return {
