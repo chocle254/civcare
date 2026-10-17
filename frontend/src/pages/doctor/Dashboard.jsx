@@ -218,9 +218,26 @@ export default function Dashboard() {
   });
 
   // ── Ping ──
+  // Keeps the doctor marked active and shows the status the server actually
+  // has: opening a case file or a long time away can change it.
   useEffect(() => {
-    const t = setInterval(() => pingDoctor(doctor.id).catch(() => { }), 5 * 60 * 1000);
-    return () => clearInterval(t);
+    if (!doctor.id) return;
+    const ping = async () => {
+      try {
+        const res = await pingDoctor(doctor.id);
+        const serverStatus = res.data?.doctor_status;
+        if (serverStatus) {
+          setStatus(serverStatus);
+          const saved = JSON.parse(localStorage.getItem("civtech_doctor") || "{}");
+          localStorage.setItem("civtech_doctor", JSON.stringify({ ...saved, status: serverStatus }));
+        }
+      } catch { }
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") ping(); };
+    ping();
+    const t = setInterval(ping, 60 * 1000);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
   }, [doctor.id]);
 
   // ── Status change ──
@@ -376,7 +393,7 @@ export default function Dashboard() {
                       role="radio"
                       aria-checked={on}
                       className={`dd-segbtn dd-segbtn--${c.tone}${on ? " is-on" : ""}`}
-                      onClick={() => !on && handleStatusChange(id)}
+                      onClick={() => (!on || id === "available") && handleStatusChange(id)}
                     >
                       <span className="dd-dot" aria-hidden="true" />
                       {c.label}

@@ -38,7 +38,14 @@ export default function Consultation() {
   const [query,    setQuery]    = useState('');
   const [selected, setSelected] = useState(null);
 
-  useEffect(() => { fetchDoctors(); }, []);
+  // Doctors come and go, so keep the list fresh while the page is open.
+  useEffect(() => {
+    fetchDoctors();
+    const t = setInterval(fetchDoctors, 15000);
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchDoctors(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+  }, []);
 
   const fetchDoctors = async () => {
     try {

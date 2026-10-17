@@ -148,7 +148,13 @@ async def ping_doctor(doctor_id: str, db: Session = Depends(get_db)):
     doctor.last_active_at = datetime.utcnow()
     db.commit()
 
-    return {"status": "active", "last_seen": doctor.last_active_at}
+    return {
+        "status":        "active",
+        "last_seen":     doctor.last_active_at,
+        # The server can change this (opening a case file, inactivity), so the
+        # dashboard syncs to it instead of trusting its saved copy.
+        "doctor_status": doctor.status.value if hasattr(doctor.status, "value") else doctor.status,
+    }
 
 # ── DOCTOR SETTINGS ──
 from pydantic import BaseModel
