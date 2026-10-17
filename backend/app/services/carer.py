@@ -114,7 +114,7 @@ Respond ONLY in this exact JSON:
         return {"sentiment": "same", "improved_areas": "", "persisting_areas": ""}
 
 
-async def build_course_outcome(db, prescription) -> dict:
+async def build_course_outcome(db, prescription, treatment=None) -> dict:
     """
     Runs when a course finishes. Aggregates every dose check-in into an
     observational recovery summary and decides whether the patient is still
@@ -122,15 +122,18 @@ async def build_course_outcome(db, prescription) -> dict:
     """
     from app.models.medication_outcome import DoseCheckin
 
+    # A treatment is every medicine from the same doctor's verdict; review
+    # them together rather than one medicine at a time.
+    treatment = treatment or [prescription]
     checkins = (
         db.query(DoseCheckin)
-        .filter(DoseCheckin.prescription_id == prescription.id)
+        .filter(DoseCheckin.prescription_id.in_([p.id for p in treatment]))
         .order_by(DoseCheckin.created_at.asc())
         .all()
     )
 
     diagnosis = _diagnosis_for_prescription(db, prescription)
-    medication = prescription.medication_name
+    medication = ", ".join(p.medication_name for p in treatment)
 
     taken_count = sum(1 for c in checkins if c.taken)
     total = len(checkins)
@@ -146,7 +149,10 @@ async def build_course_outcome(db, prescription) -> dict:
         if c.patient_answer:
             answers.append(c.patient_answer)
 
-    last_sentiment = checkins[-1].sentiment if checkins else "same"
+    # Only what the patient actually told us counts. A dose logged without an
+    # answer says nothing about how they feel, so it must not read as "unwell".
+    answered = [c for c in checkins if c.patient_answer]
+    last_sentiment = answered[-1].sentiment if answered else None
     still_unwell = bool(persisting) or last_sentiment in ("same", "worse", "side_effect")
 
     # Anything that showed up as both improved and persisting -> treat as persisting
@@ -169,6 +175,7 @@ async def build_course_outcome(db, prescription) -> dict:
         "adherence_note": adherence_note,
         "still_unwell": still_unwell,
         "followup_note": followup_note,
+        "has_answers": bool(answered),
     }
 
 

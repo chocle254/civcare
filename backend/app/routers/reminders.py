@@ -268,6 +268,30 @@ class CheckinSubmit(BaseModel):
     answer:          str | None = None    # patient's free-text "how do you feel" reply
 
 
+def _treatment(db: Session, prescription: Prescription) -> list:
+    """All medicines prescribed in the same verdict (just this one if none)."""
+    if not prescription.verdict_id:
+        return [prescription]
+    return db.query(Prescription).filter(
+        Prescription.verdict_id == prescription.verdict_id,
+        Prescription.patient_id == prescription.patient_id,
+    ).all()
+
+
+def _unanswered_doses(db: Session, prescriptions: list, exclude_reminder_id: str | None = None) -> int:
+    """Scheduled doses not yet logged across active medicines."""
+    ids = [p.id for p in prescriptions if p.is_active]
+    if not ids:
+        return 0
+    q = db.query(Reminder).filter(
+        Reminder.prescription_id.in_(ids),
+        Reminder.is_responded == False,   # noqa: E712
+    )
+    if exclude_reminder_id:
+        q = q.filter(Reminder.id != exclude_reminder_id)
+    return q.count()
+
+
 @router.get("/due")
 async def due_dose(patient_id: str, db: Session = Depends(get_db)):
     """
@@ -308,6 +332,10 @@ async def due_dose(patient_id: str, db: Session = Depends(get_db)):
     # the day (their evening pills, before sleep) — so they aren't overwhelmed
     # with questions at every dose. Earlier doses just confirm intake.
     is_evening = _is_last_dose_of_day(db, patient_id, due.scheduled_at)
+    # The final dose of the whole treatment always asks: it's the answer the
+    # recovery review depends on.
+    is_final = _unanswered_doses(db, _treatment(db, prescription), exclude_reminder_id=due.id) == 0
+    is_evening = is_evening or is_final
 
     question = None
     if is_evening:
@@ -420,7 +448,7 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
             "offer_followup": True,
         }
 
-    # Is the whole course finished? (every scheduled dose now answered)
+    # Is this medicine finished? (every scheduled dose now answered)
     remaining = db.query(Reminder).filter(
         Reminder.prescription_id == prescription.id,
         Reminder.is_responded == False,   # noqa: E712
@@ -437,8 +465,28 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
             "offer_followup": False,
         }
 
+    prescription.is_active    = False
+    prescription.is_completed = True
+    prescription.completed_at = datetime.utcnow()
+    db.commit()
+
+    # Other medicines from the same treatment still running? Review later.
+    treatment = _treatment(db, prescription)
+    if _unanswered_doses(db, treatment) > 0:
+        others = ", ".join(
+            p.medication_name for p in treatment if p.is_active and p.id != prescription.id
+        )
+        return {
+            "message": f"That was your last dose of {prescription.medication_name} — well done. "
+                       f"Keep going with {others or 'the rest of your treatment'}.",
+            "course_complete": False,
+            "still_unwell": False,
+            "offer_followup": False,
+        }
+
     # ── Course complete: run the recovery review ──
-    outcome = await build_course_outcome(db, prescription)
+    reviewed = [p for p in treatment if p.reminders_active or p.id == prescription.id]
+    outcome = await build_course_outcome(db, prescription, treatment=reviewed)
 
     course = CourseOutcome(
         prescription_id=prescription.id,
@@ -453,20 +501,18 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
     )
     db.add(course)
 
-    # Mark the course done
-    prescription.is_active    = False
-    prescription.is_completed = True
-    prescription.completed_at = datetime.utcnow()
     db.commit()
 
     # Feed the medication outcome into the AI's second training stream
-    await record_medication_outcome_lesson(
-        diagnosis=diagnosis,
-        medication=prescription.medication_name,
-        resolved_areas=outcome["resolved_areas"],
-        persisting_areas=outcome["persisting_areas"],
-        still_unwell=outcome["still_unwell"],
-    )
+    # Only learn from courses where the patient told us how they felt.
+    if outcome.get("has_answers"):
+        await record_medication_outcome_lesson(
+            diagnosis=diagnosis,
+            medication=outcome["medications"],
+            resolved_areas=outcome["resolved_areas"],
+            persisting_areas=outcome["persisting_areas"],
+            still_unwell=outcome["still_unwell"],
+        )
 
     if outcome["still_unwell"]:
         return {
@@ -477,6 +523,15 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
             "still_unwell": True,
             "offer_followup": True,
             "course_outcome_id": course.id,
+        }
+
+    if not outcome.get("has_answers"):
+        return {
+            "message": "You've finished your full treatment — well done for sticking with it. "
+                       "If you still don't feel well, you can talk to a doctor any time from the Doctors page.",
+            "course_complete": True,
+            "still_unwell": False,
+            "offer_followup": False,
         }
 
     return {
