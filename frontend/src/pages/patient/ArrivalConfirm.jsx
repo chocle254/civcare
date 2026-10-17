@@ -2,12 +2,32 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { confirmArrival, getSession } from '../../api/triage';
 import ArrivalWaiting from './ArrivalWaiting';
+import Icon from '../../components/Icons';
+
+const readJSON = (key, fallback) => {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+};
+
+// Pinned versions: "@latest" can change under us and break the page.
+const LEAFLET_CSS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+const LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+const LRM_CSS = 'https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css';
+const LRM_JS = 'https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js';
+
+const formatKm = (m) => (m >= 10000 ? `${Math.round(m / 1000)} km` : `${(m / 1000).toFixed(1)} km`);
+const formatDuration = (sec) => {
+  const mins = Math.round(sec / 60);
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+};
 
 export default function ArrivalConfirm() {
   const navigate = useNavigate();
-  const hospital = JSON.parse(localStorage.getItem('civtech_hospital') || '{}');
-  const patient = JSON.parse(localStorage.getItem('civtech_patient') || '{}');
-  const patientCoords = JSON.parse(localStorage.getItem('civtech_patient_coords') || 'null');
+  const [hospital] = useState(() => readJSON('civtech_hospital', {}));
+  const [patient] = useState(() => readJSON('civtech_patient', {}));
+  const [patientCoords] = useState(() => readJSON('civtech_patient_coords', null));
 
   const [loading, setLoading] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -19,6 +39,14 @@ export default function ArrivalConfirm() {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState('');
+  const [route, setRoute] = useState(null); // { distance, time } from the router
+
+  const hasCoords = !!(patientCoords && hospital.lat && hospital.lon);
+  const directionsUrl = hospital.lat && hospital.lon
+    ? `https://www.google.com/maps/dir/?api=1&destination=${hospital.lat},${hospital.lon}` +
+      (patientCoords ? `&origin=${patientCoords.lat},${patientCoords.lon}` : '') + '&travelmode=driving'
+    : null;
 
   // Load session data
   useEffect(() => {
@@ -38,72 +66,93 @@ export default function ArrivalConfirm() {
 
   // Load Leaflet and Routing Machine dynamically
   useEffect(() => {
-    if (!isReady) return; // Only load when user clicks to show map
+    if (!isReady) return; // Only load when user asks for the map
 
-    const link1 = document.createElement('link');
-    link1.rel = 'stylesheet';
-    link1.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link1);
-
-    const link2 = document.createElement('link');
-    link2.rel = 'stylesheet';
-    link2.href = 'https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css';
-    document.head.appendChild(link2);
-
-    const script1 = document.createElement('script');
-    script1.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script1.async = true;
-
-    const script2 = document.createElement('script');
-    script2.src = 'https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js';
-    script2.async = true;
-
-    script1.onload = () => {
-      document.head.appendChild(script2);
+    const added = [];
+    const addCss = (href) => {
+      if (document.querySelector(`link[href="${href}"]`)) return;
+      const el = document.createElement('link');
+      el.rel = 'stylesheet';
+      el.href = href;
+      document.head.appendChild(el);
+      added.push(el);
     };
+    const addScript = (src) => new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${src}"]`);
+      if (existing && existing.dataset.loaded) { resolve(); return; }
+      const el = existing || document.createElement('script');
+      el.src = src;
+      el.async = true;
+      el.addEventListener('load', () => { el.dataset.loaded = '1'; resolve(); });
+      el.addEventListener('error', reject);
+      if (!existing) document.head.appendChild(el);
+    });
 
-    script2.onload = () => setMapReady(true);
-    document.head.appendChild(script1);
+    let alive = true;
+    addCss(LEAFLET_CSS);
+    addCss(LRM_CSS);
+    addScript(LEAFLET_JS)
+      .then(() => addScript(LRM_JS))
+      .then(() => { if (alive) setMapReady(true); })
+      .catch(() => { if (alive) setMapError('The map could not load. Use the directions link instead.'); });
 
-    return () => {
-      document.head.removeChild(link1);
-      document.head.removeChild(link2);
-      document.head.removeChild(script1);
-      if (document.head.contains(script2)) document.head.removeChild(script2);
-    };
+    return () => { alive = false; };
   }, [isReady]);
 
   // Initialize Map and Routing
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !patientCoords || !hospital.lat || !hospital.lon) return;
-    if (mapInstance.current) return;
+    if (!mapReady || !mapRef.current || !hasCoords) return undefined;
+    if (mapInstance.current) return undefined;
+    const L = window.L;
 
-    mapInstance.current = window.L.map(mapRef.current).setView([patientCoords.lat, patientCoords.lon], 13);
+    const map = L.map(mapRef.current, { scrollWheelZoom: false })
+      .setView([patientCoords.lat, patientCoords.lon], 13);
+    mapInstance.current = map;
 
-    window.L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(mapInstance.current);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(map);
 
-    window.L.Routing.control({
+    // Show the whole trip straight away, even before the road route arrives.
+    map.fitBounds(
+      [[patientCoords.lat, patientCoords.lon], [hospital.lat, hospital.lon]],
+      { padding: [36, 36] },
+    );
+
+    const control = L.Routing.control({
       waypoints: [
-        window.L.latLng(patientCoords.lat, patientCoords.lon),
-        window.L.latLng(hospital.lat, hospital.lon)
+        L.latLng(patientCoords.lat, patientCoords.lon),
+        L.latLng(hospital.lat, hospital.lon),
       ],
+      show: false,               // no turn-by-turn panel covering the map
+      collapsible: false,
       routeWhileDragging: false,
       addWaypoints: false,
       draggableWaypoints: false,
       fitSelectedRoutes: true,
       showAlternatives: false,
       lineOptions: {
-        styles: [{ color: '#1769aa', opacity: 0.85, weight: 5 }]
+        styles: [{ color: '#1769aa', opacity: 0.9, weight: 5 }],
       },
       createMarker: function (i, wp, nWps) {
-        if (i === 0) return window.L.marker(wp.latLng).bindPopup("You are here");
-        else if (i === nWps - 1) return window.L.marker(wp.latLng).bindPopup(hospital.name);
-      }
-    }).addTo(mapInstance.current);
+        if (i === 0) return L.marker(wp.latLng).bindPopup('You are here');
+        if (i === nWps - 1) return L.marker(wp.latLng).bindPopup(hospital.name || 'Hospital');
+        return null;
+      },
+    }).addTo(map);
 
-  }, [mapReady, patientCoords, hospital]);
+    control.on('routesfound', (e) => {
+      const summary = e.routes?.[0]?.summary;
+      if (summary) setRoute({ distance: summary.totalDistance, time: summary.totalTime });
+    });
+    control.on('routingerror', () => setRoute(null));
+
+    return () => {
+      map.remove();
+      mapInstance.current = null;
+    };
+  }, [mapReady, hasCoords, patientCoords, hospital]);
 
   const handleConfirm = async () => {
     setLoading(true);
@@ -128,632 +177,292 @@ export default function ArrivalConfirm() {
     return <ArrivalWaiting />;
   }
 
+  const a = sessionData?.assessment;
+  const summaryItems = a && typeof a === 'object'
+    ? [
+        ['Main symptom', a.symptom],
+        ['How long', a.duration],
+        ['How bad it feels (your rating)', a.severity != null && a.severity !== '' ? `${a.severity}/10` : null],
+        ['Other symptoms', a.associated],
+      ].filter(([, v]) => v)
+    : [];
+
+  const distanceText = route
+    ? formatKm(route.distance)
+    : hospital.distance_km != null ? `${hospital.distance_km} km` : '—';
+
   return (
-    <div style={s.page}>
-      <main style={s.main}>
-        <header style={s.header}>
+    <div className="ac">
+      <main className="ac__main">
+        <header className="ac__header">
           <button
             type="button"
-            style={s.back}
+            className="ac__back"
             onClick={() => navigate('/hospitals')}
             aria-label="Back to hospital selection"
           >
-            <span style={s.backIcon}>‹</span>
+            <Icon.ChevronLeft size={20} />
           </button>
-
-          <div style={s.headerText}>
-            <p style={s.eyebrow}>CIVCARE • NEXT STEP</p>
-            <h1 style={s.title}>Confirm your arrival</h1>
-            <p style={s.sub}>Review your destination before checking in.</p>
+          <div className="ac__headtext">
+            <p className="ac__eyebrow">Next step</p>
+            <h1 className="ac__title">Confirm your arrival</h1>
+            <p className="ac__sub">Check your destination, then check in when you get there.</p>
           </div>
         </header>
 
-        <section style={s.content}>
-          <div style={s.destinationCard}>
-            <div style={s.destinationTop}>
-              <div style={s.facilityIcon}>
-                <span>+</span>
-              </div>
-              <div style={s.destinationMeta}>
-                <p style={s.cardLabel}>SELECTED FACILITY</p>
-                <h2 style={s.hospitalName}>{hospital.name || 'Selected hospital'}</h2>
-                <p style={s.location}>
-                  {hospital.town || 'Location'}{hospital.county ? `, ${hospital.county}` : ''}
+        <section className="ac__card ac__dest">
+          <div className="ac__desttop">
+            <span className="ac__facility" aria-hidden="true"><Icon.Hospital size={22} /></span>
+            <div className="ac__destmeta">
+              <p className="ac__label">Your hospital</p>
+              <h2 className="ac__name">{hospital.name || 'Selected hospital'}</h2>
+              {(hospital.town || hospital.county) && (
+                <p className="ac__muted">
+                  {[hospital.town, hospital.county].filter(Boolean).join(', ')}
                 </p>
-              </div>
-              <span style={s.readyPill}>READY</span>
-            </div>
-
-            <div style={s.destinationDetails}>
-              <div style={s.detail}>
-                <span style={s.detailLabel}>DISTANCE</span>
-                <strong style={s.detailValue}>
-                  {hospital.distance_km != null ? `${hospital.distance_km} km` : '—'}
-                </strong>
-              </div>
-              <div style={s.detailDivider} />
-              <div style={s.detail}>
-                <span style={s.detailLabel}>NEXT STEP</span>
-                <strong style={s.detailValue}>Confirm arrival</strong>
-              </div>
+              )}
             </div>
           </div>
 
-          {sessionData?.assessment && (
-            <section style={s.summaryCard}>
-              <div style={s.sectionHeading}>
-                <div>
-                  <p style={s.cardLabel}>CARE SUMMARY</p>
-                  <h2 style={s.sectionTitle}>Your triage information</h2>
+          <dl className="ac__stats">
+            <div>
+              <dt>{route ? 'By road' : 'Distance'}</dt>
+              <dd>{distanceText}</dd>
+            </div>
+            <div>
+              <dt>Travel time</dt>
+              <dd>{route ? formatDuration(route.time) : hospital.travel_time || '—'}</dd>
+            </div>
+          </dl>
+
+          {hospital.phone && (
+            <a className="ac__phone" href={`tel:${hospital.phone.replace(/\s+/g, '')}`}>
+              <Icon.Phone size={16} /> {hospital.phone}
+            </a>
+          )}
+        </section>
+
+        {summaryItems.length > 0 && (
+          <section className="ac__card">
+            <div className="ac__sechead">
+              <div>
+                <p className="ac__label">Shared with the doctor</p>
+                <h2 className="ac__sectitle">What you told us</h2>
+              </div>
+              <span className="ac__ok" aria-hidden="true"><Icon.Check size={18} /></span>
+            </div>
+            <p className="ac__muted ac__helper">
+              The doctor will see this, so you won't need to repeat it.
+            </p>
+            <dl className="ac__summary">
+              {summaryItems.map(([k, v]) => (
+                <div key={k}>
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
                 </div>
-                <div style={s.summaryIcon}>✓</div>
-              </div>
+              ))}
+            </dl>
+          </section>
+        )}
 
-              <p style={s.helper}>
-                This information will be available to the doctor so you do not have to repeat the same details.
-              </p>
+        <section className="ac__card">
+          <div className="ac__sechead">
+            <div>
+              <p className="ac__label">Route</p>
+              <h2 className="ac__sectitle">Getting there</h2>
+            </div>
+          </div>
 
-              <div style={s.summaryGrid}>
-                {sessionData.assessment.symptom && (
-                  <div style={s.summaryItem}>
-                    <span style={s.summaryKey}>Primary symptom</span>
-                    <span style={s.summaryVal}>{sessionData.assessment.symptom}</span>
-                  </div>
-                )}
-                {sessionData.assessment.duration && (
-                  <div style={s.summaryItem}>
-                    <span style={s.summaryKey}>Duration</span>
-                    <span style={s.summaryVal}>{sessionData.assessment.duration}</span>
-                  </div>
-                )}
-                {sessionData.assessment.severity && (
-                  <div style={s.summaryItem}>
-                    <span style={s.summaryKey}>How bad it feels (your rating)</span>
-                    <span style={s.summaryVal}>{sessionData.assessment.severity}/10</span>
-                  </div>
-                )}
-                {sessionData.assessment.associated && (
-                  <div style={s.summaryItem}>
-                    <span style={s.summaryKey}>Other symptoms</span>
-                    <span style={s.summaryVal}>{sessionData.assessment.associated}</span>
-                  </div>
-                )}
-              </div>
-            </section>
+          {!isReady ? (
+            <button
+              type="button"
+              className="ac__mapbtn"
+              onClick={() => setIsReady(true)}
+              disabled={!hasCoords}
+            >
+              <span className="ac__mapbtnicon" aria-hidden="true"><Icon.MapPin size={20} /></span>
+              <span className="ac__mapbtntext">
+                <strong>Show route on map</strong>
+                <small>{hasCoords ? 'Loads a map from your location' : 'Your location is not available'}</small>
+              </span>
+              <Icon.Chevron size={18} className="ac__chev" />
+            </button>
+          ) : (
+            <div className="ac__map">
+              {!mapReady && !mapError && (
+                <div className="ac__maploading">
+                  <span className="ac__spinner" aria-hidden="true" />
+                  <p>Loading map…</p>
+                </div>
+              )}
+              {mapError && <div className="ac__maploading"><p>{mapError}</p></div>}
+              <div ref={mapRef} className="ac__mapcanvas" />
+            </div>
           )}
 
-          <section style={s.mapCard}>
-            <div style={s.mapHeader}>
-              <div>
-                <p style={s.cardLabel}>ROUTE</p>
-                <h2 style={s.sectionTitle}>Getting there</h2>
-              </div>
-              {!isReady && <span style={s.mapStatus}>MAP OPTIONAL</span>}
-            </div>
-
-            <p style={s.helper}>
-              View the route from your current location to the selected facility.
-            </p>
-
-            {!isReady ? (
-              <button type="button" style={s.mapButton} onClick={() => setIsReady(true)}>
-                <span style={s.mapButtonIcon}>⌖</span>
-                <span>
-                  <strong>View route</strong>
-                  <small>Load the map when you need directions</small>
-                </span>
-                <span style={s.chevron}>›</span>
-              </button>
-            ) : (
-              <div style={s.mapViewport}>
-                {!mapReady && (
-                  <div style={s.mapLoader}>
-                    <div className="spinner" />
-                    <p>Loading route…</p>
-                  </div>
-                )}
-                <div ref={mapRef} style={s.map} />
-              </div>
-            )}
-          </section>
-
-          {error && <div style={s.errorBox}>{error}</div>}
+          {directionsUrl && (
+            <a className="ac__directions" href={directionsUrl} target="_blank" rel="noopener noreferrer">
+              <Icon.ArrowRight size={16} /> Turn-by-turn directions in Google Maps
+            </a>
+          )}
         </section>
+
+        {error && <div className="ac__error" role="alert">{error}</div>}
       </main>
 
-      <div style={s.actionBar}>
-        <div style={s.actionInner}>
-          <div style={s.actionCopy}>
-            <span style={s.actionDot} />
-            <div>
-              <strong>Ready to check in?</strong>
-              <span>Confirm once you have arrived at the facility.</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            style={{ ...s.btnPrimary, ...(loading ? s.btnDisabled : {}) }}
-            onClick={handleConfirm}
-            disabled={loading}
-          >
+      <div className="ac__bar">
+        <div className="ac__barinner">
+          <p className="ac__barcopy">
+            <strong>Arrived at the hospital?</strong>
+            <span>Check in so staff know you're here.</span>
+          </p>
+          <button type="button" className="ac__confirm" onClick={handleConfirm} disabled={loading}>
             {loading ? (
-              <>
-                <span className="buttonSpinner" />
-                Checking in…
-              </>
+              <><span className="ac__spinner ac__spinner--btn" aria-hidden="true" /> Checking in…</>
             ) : (
-              <>
-                Confirm arrival
-                <span style={s.buttonArrow}>→</span>
-              </>
+              <>I've arrived, check me in <Icon.ArrowRight size={18} /></>
             )}
           </button>
         </div>
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        .ac {
+          min-height: 100vh; min-height: 100dvh;
+          background: var(--cc-canvas); background-attachment: fixed;
+          color: var(--cc-text); font-family: var(--cc-font);
+          padding-bottom: calc(150px + env(safe-area-inset-bottom));
+        }
+        .ac__main { width: min(760px, calc(100% - 32px)); margin: 0 auto; display: grid; gap: 14px; }
+        .ac__header { display: flex; align-items: flex-start; gap: 12px; padding: 22px 0 6px; }
+        .ac__back {
+          width: 42px; height: 42px; flex-shrink: 0; border-radius: 12px;
+          display: grid; place-items: center; cursor: pointer;
+          background: var(--cc-glass); border: 1px solid var(--cc-glass-border);
+          box-shadow: var(--cc-glass-edge), var(--cc-shadow-sm); color: var(--cc-text-2);
+        }
+        .ac__headtext { min-width: 0; }
+        .ac__eyebrow {
+          margin: 2px 0 6px; color: var(--cc-primary);
+          font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+        }
+        .ac__title { margin: 0; font-size: clamp(26px, 6vw, 34px); line-height: 1.1; letter-spacing: -.02em; font-weight: 800; color: var(--cc-text); }
+        .ac__sub { margin: 8px 0 0; color: var(--cc-muted); font-size: 14px; line-height: 1.5; }
 
-        * { box-sizing: border-box; }
+        .ac__card {
+          background: var(--cc-glass-strong); border: 1px solid var(--cc-glass-border);
+          border-radius: 20px; padding: 18px;
+          box-shadow: var(--cc-glass-edge), var(--cc-shadow);
+        }
+        .ac__label { margin: 0; color: var(--cc-muted); font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+        .ac__muted { margin: 0; color: var(--cc-muted); font-size: 13px; line-height: 1.5; }
 
-        .spinner,
-        .buttonSpinner {
-          display: inline-block;
-          border-radius: 50%;
-          animation: spin .8s linear infinite;
+        .ac__desttop { display: flex; align-items: center; gap: 14px; }
+        .ac__facility {
+          width: 48px; height: 48px; flex-shrink: 0; border-radius: 14px; display: grid; place-items: center;
+          background: var(--cc-primary-soft); color: var(--cc-primary); box-shadow: var(--cc-clay);
+        }
+        .ac__destmeta { min-width: 0; }
+        .ac__name { margin: 4px 0 2px; font-size: 18px; line-height: 1.3; font-weight: 800; color: var(--cc-text); overflow-wrap: anywhere; }
+        .ac__stats {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0 0;
+        }
+        .ac__stats > div, .ac__summary > div {
+          min-width: 0; padding: 12px; border-radius: 14px;
+          background: var(--cc-surface-2); border: 1px solid var(--cc-border);
+        }
+        .ac__stats dt, .ac__summary dt { color: var(--cc-muted); font-size: 12px; font-weight: 600; }
+        .ac__stats dd { margin: 4px 0 0; font-size: 18px; font-weight: 800; color: var(--cc-text); }
+        .ac__phone, .ac__directions {
+          display: inline-flex; align-items: center; gap: 8px; margin-top: 14px;
+          color: var(--cc-primary); font-size: 14px; font-weight: 700; text-decoration: none;
+          min-height: 44px;
         }
 
-        .spinner {
-          width: 26px;
-          height: 26px;
-          border: 3px solid #dbe5ef;
-          border-top-color: #1769aa;
+        .ac__sechead { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+        .ac__sectitle { margin: 4px 0 0; font-size: 18px; font-weight: 800; color: var(--cc-text); }
+        .ac__ok {
+          width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0;
+          background: var(--cc-success-soft); color: var(--cc-success);
+        }
+        .ac__helper { margin: -4px 0 12px; }
+        .ac__summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0; }
+        .ac__summary dd { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: var(--cc-text); overflow-wrap: anywhere; }
+
+        .ac__mapbtn {
+          width: 100%; min-height: 68px; display: flex; align-items: center; gap: 12px; text-align: left;
+          padding: 12px 14px; border-radius: 16px; cursor: pointer;
+          background: var(--cc-surface-2); border: 1px solid var(--cc-border); color: var(--cc-text);
+        }
+        .ac__mapbtn:disabled { opacity: .6; cursor: not-allowed; }
+        .ac__mapbtnicon {
+          width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; display: grid; place-items: center;
+          background: var(--cc-primary-soft); color: var(--cc-primary); box-shadow: var(--cc-clay);
+        }
+        .ac__mapbtntext { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .ac__mapbtntext strong { font-size: 15px; }
+        .ac__mapbtntext small { font-size: 13px; color: var(--cc-muted); }
+        .ac__chev { margin-left: auto; color: var(--cc-faint); flex-shrink: 0; }
+
+        /* isolation keeps Leaflet's high z-index panes from painting over the
+           fixed check-in bar */
+        .ac__map {
+          position: relative; isolation: isolate; z-index: 0;
+          height: clamp(260px, 45vh, 380px); border-radius: 16px; overflow: hidden;
+          border: 1px solid var(--cc-border); background: var(--cc-surface-2);
+        }
+        .ac__mapcanvas { width: 100%; height: 100%; }
+        .ac__maploading {
+          position: absolute; inset: 0; z-index: 1000; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center;
+          background: var(--cc-surface-solid); color: var(--cc-muted); font-size: 14px;
+        }
+        .ac .leaflet-routing-container { display: none; }
+
+        .ac__error {
+          padding: 12px 14px; border-radius: 14px; font-size: 14px; font-weight: 600;
+          background: var(--cc-danger-soft); border: 1px solid var(--cc-danger-border); color: var(--cc-danger);
         }
 
-        .buttonSpinner {
-          width: 16px;
-          height: 16px;
-          border: 2px solid rgba(255,255,255,.35);
-          border-top-color: #fff;
+        .ac__bar {
+          position: fixed; left: 0; right: 0; bottom: 0; z-index: 1100;
+          padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+          background: var(--cc-glass-strong);
+          -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur);
+          border-top: 1px solid var(--cc-glass-border);
+          box-shadow: var(--cc-glass-edge), 0 -10px 30px -12px rgba(16,36,64,.25);
         }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        @media (max-width: 700px) {
-          .leaflet-control-container .leaflet-routing-container {
-            max-width: 220px;
-            font-size: 11px;
-          }
+        .ac__barinner {
+          width: min(760px, 100%); margin: 0 auto;
+          display: flex; align-items: center; gap: 16px;
         }
-
-        @media (prefers-reduced-motion: reduce) {
-          .spinner, .buttonSpinner { animation: none; }
+        .ac__barcopy { margin: 0; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .ac__barcopy strong { font-size: 15px; color: var(--cc-text); }
+        .ac__barcopy span { font-size: 13px; color: var(--cc-muted); }
+        .ac__confirm {
+          flex-shrink: 0; min-height: 50px; padding: 0 20px; border: 0; border-radius: 14px; cursor: pointer;
+          display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+          background: var(--cc-primary-grad); color: var(--cc-on-primary);
+          font-size: 15px; font-weight: 700; box-shadow: var(--cc-primary-glow);
         }
+        .ac__confirm:disabled { opacity: .65; cursor: wait; }
+
+        .ac__spinner {
+          display: inline-block; width: 26px; height: 26px; border-radius: 50%;
+          border: 3px solid var(--cc-border); border-top-color: var(--cc-primary);
+          animation: acSpin .8s linear infinite;
+        }
+        .ac__spinner--btn { width: 16px; height: 16px; border-width: 2px; border-color: rgba(255,255,255,.35); border-top-color: #fff; }
+        @keyframes acSpin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 560px) {
+          .ac__barinner { flex-direction: column; align-items: stretch; gap: 10px; }
+          .ac__barcopy { flex-direction: row; flex-wrap: wrap; column-gap: 6px; }
+          .ac__barcopy span { font-size: 13px; }
+          .ac__confirm { width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) { .ac__spinner { animation: none; } }
       `}</style>
     </div>
   );
 }
-const s = {
-  page: {
-    minHeight: '100vh',
-    background: 'var(--cc-canvas)', backgroundAttachment: 'fixed',
-    color: '#162033',
-    fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    paddingBottom: 118,
-  },
-
-  main: {
-    width: 'min(1080px, calc(100% - 32px))',
-    margin: '0 auto',
-  },
-
-  header: {
-    padding: '24px 0 22px',
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-
-  back: {
-    width: 40,
-    height: 40,
-    flexShrink: 0,
-    borderRadius: 12,
-    border: '1px solid #e5e9f0',
-    background: '#ffffff',
-    color: '#65748b',
-    cursor: 'pointer',
-    display: 'grid',
-    placeItems: 'center',
-    boxShadow: '0 2px 8px rgba(25,42,70,.04)',
-  },
-
-  backIcon: {
-    fontSize: 27,
-    lineHeight: 1,
-    marginTop: -2,
-  },
-
-  headerText: {
-    minWidth: 0,
-    flex: 1,
-  },
-
-  eyebrow: {
-    margin: '1px 0 6px',
-    color: '#1769e0',
-    fontSize: 10,
-    fontWeight: 800,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-
-  title: {
-    margin: 0,
-    fontSize: 'clamp(27px, 5vw, 38px)',
-    lineHeight: 1.08,
-    letterSpacing: '-.9px',
-    fontWeight: 800,
-    color: '#162033',
-  },
-
-  sub: {
-    margin: '9px 0 0',
-    maxWidth: 620,
-    color: '#68778d',
-    fontSize: 13,
-    lineHeight: 1.6,
-  },
-
-  content: {
-    display: 'grid',
-    gap: 14,
-    paddingBottom: 20,
-  },
-
-  destinationCard: {
-    background: '#ffffff',
-    border: '1px solid #e5e9f0',
-    borderRadius: 20,
-    padding: 20,
-    boxShadow: '0 5px 18px rgba(25,42,70,.035)',
-  },
-
-  destinationTop: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 13,
-  },
-
-  facilityIcon: {
-    width: 46,
-    height: 46,
-    flexShrink: 0,
-    borderRadius: 14,
-    display: 'grid',
-    placeItems: 'center',
-    background: '#edf5ff',
-    color: '#1769e0',
-    fontSize: 25,
-    fontWeight: 500,
-  },
-
-  destinationMeta: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  cardLabel: {
-    margin: 0,
-    color: '#748196',
-    fontSize: 10,
-    fontWeight: 800,
-    letterSpacing: .85,
-    textTransform: 'uppercase',
-  },
-
-  hospitalName: {
-    margin: '5px 0 3px',
-    color: '#162033',
-    fontSize: 17,
-    lineHeight: 1.3,
-    fontWeight: 800,
-    overflowWrap: 'anywhere',
-  },
-
-  location: {
-    margin: 0,
-    color: '#748196',
-    fontSize: 12,
-    lineHeight: 1.45,
-  },
-
-  readyPill: {
-    flexShrink: 0,
-    padding: '5px 9px',
-    borderRadius: 999,
-    background: '#e8f7f1',
-    color: '#168463',
-    fontSize: 9,
-    fontWeight: 800,
-    letterSpacing: .7,
-  },
-
-  destinationDetails: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1px 1fr',
-    alignItems: 'stretch',
-    gap: 18,
-    marginTop: 18,
-    paddingTop: 16,
-    borderTop: '1px solid #edf0f4',
-  },
-
-  detail: {
-    minWidth: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 5,
-  },
-
-  detailDivider: {
-    width: 1,
-    background: '#e5e9f0',
-  },
-
-  detailLabel: {
-    color: '#748196',
-    fontSize: 10,
-    fontWeight: 700,
-    letterSpacing: .55,
-  },
-
-  detailValue: {
-    color: '#26344a',
-    fontSize: 13,
-    fontWeight: 800,
-    overflowWrap: 'anywhere',
-  },
-
-  summaryCard: {
-    background: '#ffffff',
-    border: '1px solid #e5e9f0',
-    borderRadius: 20,
-    padding: 20,
-    boxShadow: '0 5px 18px rgba(25,42,70,.035)',
-  },
-
-  sectionHeading: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 14,
-  },
-
-  sectionTitle: {
-    margin: '5px 0 0',
-    color: '#162033',
-    fontSize: 17,
-    lineHeight: 1.25,
-    fontWeight: 800,
-    letterSpacing: '-.2px',
-  },
-
-  summaryIcon: {
-    width: 36,
-    height: 36,
-    flexShrink: 0,
-    borderRadius: 12,
-    display: 'grid',
-    placeItems: 'center',
-    background: '#e8f7f1',
-    color: '#168463',
-    fontSize: 15,
-    fontWeight: 800,
-  },
-
-  helper: {
-    margin: '10px 0 16px',
-    color: '#748196',
-    fontSize: 12,
-    lineHeight: 1.6,
-  },
-
-  summaryGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    gap: 10,
-  },
-
-  summaryItem: {
-    minWidth: 0,
-    padding: '12px 13px',
-    background: '#f7f9fc',
-    border: '1px solid #edf0f4',
-    borderRadius: 13,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 5,
-  },
-
-  summaryKey: {
-    color: '#748196',
-    fontSize: 10.5,
-    fontWeight: 700,
-  },
-
-  summaryVal: {
-    color: '#26344a',
-    fontSize: 12.5,
-    lineHeight: 1.45,
-    fontWeight: 700,
-    overflowWrap: 'anywhere',
-  },
-
-  mapCard: {
-    background: '#ffffff',
-    border: '1px solid #e5e9f0',
-    borderRadius: 20,
-    padding: 20,
-    boxShadow: '0 5px 18px rgba(25,42,70,.035)',
-  },
-
-  mapHeader: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 14,
-  },
-
-  mapStatus: {
-    flexShrink: 0,
-    padding: '5px 8px',
-    borderRadius: 999,
-    background: '#f1f4f8',
-    color: '#748196',
-    fontSize: 9,
-    fontWeight: 800,
-    letterSpacing: .6,
-  },
-
-  mapButton: {
-    width: '100%',
-    minHeight: 68,
-    border: '1px solid #e5e9f0',
-    borderRadius: 15,
-    background: '#f7f9fc',
-    padding: '12px 14px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    color: '#26344a',
-    textAlign: 'left',
-    cursor: 'pointer',
-  },
-
-  mapButtonIcon: {
-    width: 40,
-    height: 40,
-    flexShrink: 0,
-    borderRadius: 12,
-    display: 'grid',
-    placeItems: 'center',
-    background: '#edf5ff',
-    color: '#1769e0',
-    fontSize: 20,
-  },
-
-  chevron: {
-    marginLeft: 'auto',
-    color: '#8a97a8',
-    fontSize: 24,
-    lineHeight: 1,
-  },
-
-  mapViewport: {
-    height: 330,
-    borderRadius: 16,
-    overflow: 'hidden',
-    position: 'relative',
-    background: '#e9eef3',
-    border: '1px solid #e1e7ee',
-  },
-
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-
-  mapLoader: {
-    position: 'absolute',
-    inset: 0,
-    zIndex: 20,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-    background: 'rgba(255,255,255,.9)',
-    color: '#68778d',
-    fontSize: 12,
-  },
-
-  errorBox: {
-    padding: '12px 14px',
-    borderRadius: 13,
-    background: '#fff3f3',
-    border: '1px solid #f0cccc',
-    color: '#b43a3a',
-    fontSize: 12,
-    lineHeight: 1.5,
-    fontWeight: 600,
-  },
-
-  actionBar: {
-    position: 'fixed',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 100,
-    padding: '12px 16px 16px',
-    background: 'rgba(255,255,255,.96)',
-    borderTop: '1px solid #e5e9f0',
-    boxShadow: '0 -6px 22px rgba(25,42,70,.06)',
-    backdropFilter: 'blur(14px)',
-    WebkitBackdropFilter: 'blur(14px)',
-  },
-
-  actionInner: {
-    width: 'min(1080px, 100%)',
-    margin: '0 auto',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 16,
-  },
-
-  actionCopy: {
-    flex: 1,
-    minWidth: 0,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-  },
-
-  actionDot: {
-    width: 8,
-    height: 8,
-    flexShrink: 0,
-    borderRadius: '50%',
-    background: '#1769e0',
-  },
-
-  btnPrimary: {
-    minWidth: 205,
-    minHeight: 44,
-    border: 0,
-    borderRadius: 11,
-    padding: '0 16px',
-    background: '#1769e0',
-    color: '#ffffff',
-    fontSize: 12.5,
-    fontWeight: 800,
-    cursor: 'pointer',
-    boxShadow: '0 7px 18px rgba(23,105,224,.18)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-  },
-
-  btnDisabled: {
-    opacity: .6,
-    cursor: 'wait',
-  },
-
-  buttonArrow: {
-    fontSize: 17,
-    lineHeight: 1,
-  },
-};
-

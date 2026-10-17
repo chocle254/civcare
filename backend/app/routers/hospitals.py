@@ -1,10 +1,86 @@
+import asyncio
 import math
+import time
 import httpx
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Public Overpass servers are free but often overloaded or rate-limited, so
+# we try several in turn instead of failing on the first slow one.
+OVERPASS_URLS = [
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+]
+OVERPASS_HEADERS = {
+    "Accept": "*/*",
+    "User-Agent": "CivTechCare/1.0 (healthcare app; contact@civtech.care)",
+}
+
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+
+# Results for the same ~1 km area are reused for a while, which spares the
+# public servers and makes repeat visits instant.
+_CACHE: dict = {}
+_CACHE_SECONDS = 15 * 60
+
+
+async def _query_overpass(query: str) -> list:
+    """Return OSM elements from the first Overpass server that answers."""
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10, connect=4)) as client:
+        for url in OVERPASS_URLS:
+            try:
+                res = await client.post(url, data={"data": query}, headers=OVERPASS_HEADERS)
+                res.raise_for_status()
+                elements = res.json().get("elements", [])
+                print(f"Overpass OK via {url}: {len(elements)} elements")
+                return elements
+            except Exception as e:
+                print(f"Overpass error via {url}: {type(e).__name__}: {e}")
+    return []
+
+
+async def _query_nominatim(lat: float, lon: float, radius_km: int) -> list:
+    """
+    Fallback when every Overpass server is busy. Nominatim lists fewer
+    facilities but is far more available. Results are reshaped to look like
+    Overpass elements so the rest of the endpoint is unchanged.
+    Usage policy: max 1 request/second, so the two lookups are spaced out.
+    """
+    d_lat = radius_km / 111.0
+    d_lon = radius_km / (111.0 * max(math.cos(math.radians(lat)), 0.1))
+    viewbox = f"{lon - d_lon},{lat + d_lat},{lon + d_lon},{lat - d_lat}"
+    elements = []
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10, connect=4)) as client:
+        for i, amenity in enumerate(("hospital", "clinic")):
+            if i:
+                await asyncio.sleep(1.1)
+            try:
+                res = await client.get(NOMINATIM_URL, headers=OVERPASS_HEADERS, params={
+                    "amenity": amenity, "format": "jsonv2", "limit": 40,
+                    "bounded": 1, "viewbox": viewbox, "addressdetails": 1,
+                })
+                res.raise_for_status()
+                for r in res.json():
+                    addr = r.get("address") or {}
+                    elements.append({
+                        "type": "node",
+                        "id": r.get("osm_id"),
+                        "lat": float(r["lat"]),
+                        "lon": float(r["lon"]),
+                        "tags": {
+                            "name": r.get("name") or "",
+                            "addr:city": addr.get("city") or addr.get("town") or addr.get("village") or "",
+                            "addr:county": addr.get("county") or addr.get("state") or "",
+                            "addr:street": addr.get("road") or "",
+                        },
+                    })
+            except Exception as e:
+                print(f"Nominatim error ({amenity}): {type(e).__name__}: {e}")
+    print(f"Nominatim fallback: {len(elements)} facilities")
+    return elements
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -62,31 +138,28 @@ async def get_nearby_hospitals(lat: float, lon: float, radius_km: int = 30):
 
     # Overpass query — finds hospital nodes and ways within radius
     query = f"""
-    [out:json][timeout:15];
+    [out:json][timeout:12];
     (
       node["amenity"="hospital"](around:{radius_m},{lat},{lon});
       node["amenity"="clinic"](around:{radius_m},{lat},{lon});
       node["healthcare"="hospital"](around:{radius_m},{lat},{lon});
       way["amenity"="hospital"](around:{radius_m},{lat},{lon});
+      way["amenity"="clinic"](around:{radius_m},{lat},{lon});
     );
     out center;
     """
 
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            res = await client.post(
-                OVERPASS_URL,
-                data={"data": query},
-                headers={
-                    "Accept": "*/*",
-                    "User-Agent": "CivTechCare/1.0 (healthcare app; contact@civtech.care)",
-                },
-            )
-            res.raise_for_status()
-            data = res.json()
-    except Exception as e:
-        print(f"Overpass API error: {e}")
-        data = {"elements": []}
+    cache_key = (round(lat, 2), round(lon, 2), radius_km)
+    cached = _CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < _CACHE_SECONDS:
+        elements = cached[1]
+    else:
+        elements = await _query_overpass(query)
+        if not elements:
+            elements = await _query_nominatim(lat, lon, radius_km)
+        if elements:
+            _CACHE[cache_key] = (time.time(), elements)
+    data = {"elements": elements}
 
     hospitals = []
     seen_names = set()
