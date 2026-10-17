@@ -52,7 +52,7 @@ export default function Chat() {
     navigator.geolocation?.getCurrentPosition(
       (p) => setCoords({ lat: p.coords.latitude, lon: p.coords.longitude }),
       () => { },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
     );
   }, []);
 
