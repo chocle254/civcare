@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { registerPatient, loginPatient } from '../../api/auth';
+import { normalizeKePhone, PHONE_HINT, PHONE_ERROR } from '../../utils/phone';
 
 const Icon = ({ name, size = 20 }) => {
   const paths = {
@@ -92,6 +93,9 @@ const Field = ({
   type = 'text',
   icon,
   required = false,
+  hint,
+  inputMode,
+  autoComplete = 'off',
   children,
 }) => (
   <div className="cc-auth-field">
@@ -113,15 +117,25 @@ const Field = ({
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          autoComplete="off"
+          autoComplete={autoComplete}
+          inputMode={inputMode}
+          aria-describedby={hint ? `${name}-hint` : undefined}
         />
       )}
     </div>
+    {hint && <p id={`${name}-hint`} className="cc-field-hint">{hint}</p>}
   </div>
 );
 
 export default function Register() {
   const navigate = useNavigate();
+
+  // Already signed in? Skip the sign-in screen (e.g. when pressing Back).
+  useEffect(() => {
+    if (localStorage.getItem('civtech_token') && localStorage.getItem('civtech_patient')) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate]);
 
   const [mode, setMode] = useState('login');
   const [loading, setLoading] = useState(false);
@@ -156,7 +170,8 @@ export default function Register() {
   const saveAndNavigate = (data) => {
     localStorage.setItem('civtech_token', data.access_token);
     localStorage.setItem('civtech_patient', JSON.stringify(data.patient));
-    navigate('/dashboard');
+    // replace: Back from the dashboard shouldn't return to this form
+    navigate('/dashboard', { replace: true });
   };
 
   const handleLogin = async () => {
@@ -167,10 +182,16 @@ export default function Register() {
       return;
     }
 
+    const phone = normalizeKePhone(loginForm.phone_number);
+    if (!phone) {
+      setError(PHONE_ERROR);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await loginPatient(loginForm);
+      const res = await loginPatient({ ...loginForm, phone_number: phone });
       saveAndNavigate(res.data);
     } catch (err) {
       setError(
@@ -194,10 +215,16 @@ export default function Register() {
       return;
     }
 
+    const phone = normalizeKePhone(regForm.phone_number);
+    if (!phone) {
+      setError(PHONE_ERROR);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await registerPatient(regForm);
+      const res = await registerPatient({ ...regForm, phone_number: phone });
       saveAndNavigate(res.data);
     } catch (err) {
       setError(
@@ -212,6 +239,12 @@ export default function Register() {
   return (
     <>
       <style>{`
+        .cc-field-hint {
+          font-size: 12.5px;
+          color: var(--cc-muted);
+          margin-top: 6px;
+        }
+
         .cc-auth-page {
           --cc-bg: #f5f8fc;
           --cc-surface: #ffffff;
@@ -965,9 +998,12 @@ export default function Register() {
                     name="phone_number"
                     value={loginForm.phone_number}
                     onChange={handleLoginChange}
-                    placeholder="+254 712 345 678"
+                    placeholder="0712 345 678"
                     icon="phone"
                     type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    hint={PHONE_HINT}
                     required
                   />
 
@@ -1027,9 +1063,12 @@ export default function Register() {
                       name="phone_number"
                       value={regForm.phone_number}
                       onChange={handleRegChange}
-                      placeholder="+254 712 345 678"
+                      placeholder="0712 345 678"
                       icon="phone"
                       type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      hint={PHONE_HINT}
                       required
                     />
 

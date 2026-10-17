@@ -18,6 +18,13 @@ export default function DoctorLogin() {
   });
   const [hospitals, setHospitals] = useState([]);
 
+  // Already signed in? Skip the sign-in screen (e.g. when pressing Back).
+  useEffect(() => {
+    if (localStorage.getItem('civtech_token') && localStorage.getItem('civtech_doctor')) {
+      navigate('/doctor/dashboard', { replace: true });
+    }
+  }, [navigate]);
+
   useEffect(() => {
     fetch(`${process.env.REACT_APP_API_URL}/hospitals/registered`)
       .then(r => r.json())
@@ -40,7 +47,7 @@ export default function DoctorLogin() {
   const saveAndNavigate = (data) => {
     localStorage.setItem('civtech_token', data.access_token);
     localStorage.setItem('civtech_doctor', JSON.stringify(data.doctor));
-    navigate('/doctor/dashboard');
+    navigate('/doctor/dashboard', { replace: true });
   };
 
   const handleLogin = async () => {

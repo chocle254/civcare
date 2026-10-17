@@ -74,7 +74,7 @@ export default function Profile() {
     fetchAll();
   }, [fetchAll, navigate, patient.id]);
 
-  const handleLogout = () => { localStorage.clear(); navigate('/login'); };
+  const handleLogout = () => { localStorage.clear(); navigate('/', { replace: true }); };
 
   // Snapshot chips — allergies and location are real patient fields today.
   // Blood type / height / weight aren't collected at registration yet;

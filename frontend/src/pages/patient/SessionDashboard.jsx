@@ -591,7 +591,7 @@ export default function SessionDashboard() {
 
   const handleLogout = () => {
     localStorage.clear();
-    navigate('/login');
+    navigate('/', { replace: true });
   };
 
   const handleCardTap = (session) => {
