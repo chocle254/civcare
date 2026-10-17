@@ -76,7 +76,7 @@ export default function Consultation() {
 
   return (
     <div style={s.page}>
-      <div style={s.main}>
+      <div style={s.main} className="cc-pg-wide">
         {/* Header */}
         <div style={s.header}>
           <button style={s.back} className="cc-press" onClick={() => navigate('/dashboard')}>
@@ -111,7 +111,7 @@ export default function Consultation() {
         </div>
 
         {/* Doctor list */}
-        <div style={s.list}>
+        <div style={s.list} className="cc-doc-grid">
           {loading && [1, 2, 3, 4].map((i) => <div key={i} style={s.skeleton} />)}
 
           {!loading && filtered.length === 0 && (

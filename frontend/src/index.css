@@ -1030,3 +1030,72 @@ select.input {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root { --cc-glass: var(--cc-surface-solid); --cc-glass-strong: var(--cc-surface-solid); }
 }
+
+/* ── Patient desktop shell ─────────────────────────────────────────────
+   PatientSidebar sets body.cc-pside on the main patient pages. From 1024px
+   the sidebar replaces the phone bottom bar and pages get room to breathe. */
+.ccps { display: none; }
+
+@media (min-width: 1024px) {
+  body.cc-pside { padding-left: 256px; }
+  body.cc-pside .ccnav { display: none; }
+  body.cc-pside .cc-hide-desktop { display: none !important; }
+
+  .ccps {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 1050; width: 256px;
+    display: flex; flex-direction: column; gap: 24px; padding: 20px 14px; overflow-y: auto;
+    background: var(--cc-glass); -webkit-backdrop-filter: var(--cc-blur); backdrop-filter: var(--cc-blur);
+    border-right: 1px solid var(--cc-glass-border); box-shadow: 1px 0 0 var(--cc-border);
+  }
+  .ccps__brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+  .ccps__mark {
+    width: 36px; height: 36px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--cc-primary-grad); color: var(--cc-on-primary);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.25), var(--cc-primary-glow);
+  }
+  .ccps__name { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; color: var(--cc-text); }
+  .ccps__sub { font-size: 12px; color: var(--cc-muted); }
+  .ccps__nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .ccps__btn {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px;
+    padding: 8px 10px; border-radius: 10px; border: none; background: none; text-align: left; cursor: pointer;
+    color: var(--cc-text-2); font: inherit; font-size: 14px; font-weight: 500;
+  }
+  .ccps__btn:hover { background: var(--cc-surface-2); color: var(--cc-text); }
+  .ccps__btn.is-active { background: var(--cc-primary-soft); color: var(--cc-primary); font-weight: 600; box-shadow: var(--cc-clay); }
+  .ccps__btn:focus-visible { outline: 2px solid var(--cc-focus); outline-offset: 2px; }
+  .ccps__me { border-top: 1px solid var(--cc-border); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .ccps__id { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
+  .ccps__avatar {
+    width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--cc-primary-soft); color: var(--cc-primary); box-shadow: var(--cc-clay); font-weight: 700; font-size: 13px;
+  }
+  .ccps__mename { font-size: 14px; font-weight: 600; color: var(--cc-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ccps__mesub { font-size: 12px; color: var(--cc-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ccps__logout { color: var(--cc-muted); }
+  .ccps__logout:hover { color: var(--cc-danger); background: var(--cc-danger-soft); }
+
+  /* Fixed bars that span the viewport start after the sidebar. */
+  body.cc-pside .selection-shell { left: 256px; bottom: 24px; }
+  /* The sidebar already carries the brand and navigation. */
+  body.cc-pside .meds-topbar { display: none; }
+}
+
+/* Patient page layouts on desktop (classes added by the pages). */
+@media (min-width: 1024px) {
+  .cc-pg-wide { max-width: 1120px !important; padding-left: 36px !important; padding-right: 36px !important; padding-top: 32px !important; }
+  .cc-doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; align-items: stretch; }
+  .cc-doc-grid > * { margin: 0 !important; }
+  .cc-prof-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; align-items: start; }
+  .cc-prof-card { position: sticky; top: 24px; margin: 0 !important; }
+  .cc-prof-body { min-width: 0; }
+}
+
+/* Chat on wide screens: keep the conversation in a readable centre column
+   while the scroll area still spans the full width. */
+@media (min-width: 1024px) {
+  .cc-chat-col {
+    padding-left: max(24px, calc((100% - 860px) / 2)) !important;
+    padding-right: max(24px, calc((100% - 860px) / 2)) !important;
+  }
+}

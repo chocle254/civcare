@@ -1,6 +1,7 @@
 
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
+import PatientSidebar from './components/PatientSidebar';
 import Register       from './pages/patient/Register';
 import Chat           from './pages/patient/Chat';
 import HospitalSelect from './pages/patient/HospitalSelect';
@@ -31,6 +32,7 @@ function GuardedRoutes({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <PatientSidebar />
       <GuardedRoutes>
       <Routes>
         {/* Patient */}

@@ -193,7 +193,7 @@ export default function Chat() {
   return (
     <div style={s.page}>
       {/* ── HEADER ── */}
-      <div style={s.header}>
+      <div style={s.header} className="cc-chat-col">
         <button style={s.backBtn} className="cc-press" onClick={() => navigate('/dashboard')} aria-label="Back to home">
           <Icon.ChevronLeft size={20} />
         </button>
@@ -208,7 +208,7 @@ export default function Chat() {
 
       {showLanding ? (
         /* ── LANDING: greeting + quick actions ── */
-        <div style={s.landing}>
+        <div style={s.landing} className="cc-chat-col">
           <div style={s.landingAvatarRing}>
             <div style={s.landingAvatar}><Icon.Sparkle size={30} /></div>
           </div>
@@ -234,7 +234,7 @@ export default function Chat() {
         </div>
       ) : (
         /* ── MESSAGES ── */
-        <div style={s.messageList}>
+        <div style={s.messageList} className="cc-chat-col">
           {messages.map((msg, i) => {
 
             if (msg.role === 'patient') return (
@@ -318,8 +318,7 @@ export default function Chat() {
       )}
 
       {/* ── INPUT ── */}
-      <div style={s.inputRow}>
-        <button style={s.attachBtn} className="cc-press" aria-label="Attach">📎</button>
+      <div style={s.inputRow} className="cc-chat-col">
         <input
           style={s.input}
           placeholder={disabled ? 'Select an option above' : (showLanding ? 'Tell us about your request...' : 'Message...')}

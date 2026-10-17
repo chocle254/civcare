@@ -88,14 +88,15 @@ export default function Profile() {
 
   return (
     <div style={s.page}>
-      <div style={s.main}>
+      <div style={s.main} className="cc-pg-wide">
         <div style={s.header}>
           <button style={s.backBtn} onClick={() => navigate('/dashboard')}><BackIcon /></button>
           <p style={s.headerTitle}>Profile</p>
           <button style={s.logoutBtn} onClick={handleLogout}>Sign out</button>
         </div>
 
-        <div style={s.snapshot}>
+        <div className="cc-prof-grid">
+        <div style={s.snapshot} className="cc-prof-card">
           <div style={s.snapshotTop}>
             <div style={s.avatarLg}>{(patient.name || patient.full_name || 'U')[0].toUpperCase()}</div>
             <div>
@@ -113,6 +114,7 @@ export default function Profile() {
           </div>
         </div>
 
+        <div className="cc-prof-body">
         <div style={s.tabRow}>
           {TABS.map((t) => (
             <button
@@ -175,6 +177,9 @@ export default function Profile() {
             ))}
           </div>
         )}
+
+        </div>
+        </div>
 
         <div style={{ height: 60 }} />
       </div>

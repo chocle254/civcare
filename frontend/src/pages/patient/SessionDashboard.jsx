@@ -628,13 +628,13 @@ export default function SessionDashboard() {
 
   return (
     <div style={s.page}>
-      <main style={s.main}>
+      <main style={s.main} className="cc-dashboard-main">
         {/* HEADER */}
 
         <header style={s.header}>
           <button
             style={s.iconButton}
-            className="cc-press"
+            className="cc-press cc-hide-desktop"
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
           >
@@ -674,8 +674,10 @@ export default function SessionDashboard() {
           </p>
         </section>
 
+        <div className="cc-dash-grid">
         {/* AI ASSISTANT */}
 
+        <div className="cc-a-hero">
         <button
           style={s.aiHero}
           className="cc-press"
@@ -725,10 +727,13 @@ export default function SessionDashboard() {
             />
           </div>
         </button>
+        </div>
 
+        <div className="cc-a-side">
         {/* PENDING CONSULTATION */}
 
         {pendingConsult && (
+          <div className="cc-a-pending">
           <button
             style={s.consultationBanner}
             className="cc-press"
@@ -758,18 +763,21 @@ export default function SessionDashboard() {
               stroke={color.teal}
             />
           </button>
+          </div>
         )}
 
         {/* MEDICATIONS */}
 
+        <div className="cc-a-meds">
         <MedicationSummary
           prescriptions={prescriptions}
           onOpen={() => navigate('/medications')}
         />
+        </div>
 
         {/* RECENT CONSULTATIONS */}
 
-        <section style={s.section}>
+        <section style={s.section} className="cc-a-recent">
           <div style={s.sectionHeader}>
             <div>
               <p style={s.eyebrow}>Care activity</p>
@@ -878,7 +886,7 @@ export default function SessionDashboard() {
 
         {/* QUICK ACTIONS */}
 
-        <section style={s.section}>
+        <section style={s.section} className="cc-a-quick">
           <div style={s.sectionHeader}>
             <div>
               <p style={s.eyebrow}>Quick access</p>
@@ -965,8 +973,10 @@ export default function SessionDashboard() {
             </button>
           </div>
         </section>
+        </div>
+        </div>
 
-        <div style={{ height: 110 }} />
+        <div style={{ height: 110 }} className="cc-hide-desktop" />
       </main>
 
       <BottomNav active="home" />
@@ -1284,6 +1294,41 @@ export default function SessionDashboard() {
           .cc-dashboard-main {
             max-width: 760px !important;
           }
+        }
+
+        /* Mobile: one column in the original order (flex "order" lets the
+           side column's items slot back between the main ones). */
+        .cc-dash-grid { display: flex; flex-direction: column; }
+        .cc-a-side { display: contents; }
+        .cc-a-hero { order: 1; }
+        .cc-a-pending { order: 2; }
+        .cc-a-meds { order: 3; }
+        .cc-a-recent { order: 4; }
+        .cc-a-quick { order: 5; }
+
+        /* Desktop: two-column workspace like the clinician dashboard. */
+        @media (min-width: 1024px) {
+          .cc-dashboard-main {
+            max-width: 1200px !important;
+            padding: 28px 36px 48px !important;
+          }
+          .cc-dash-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 360px;
+            grid-template-areas: "hero side" "meds side" "recent side";
+            grid-template-rows: auto auto 1fr;
+            column-gap: 24px;
+            align-items: start;
+          }
+          .cc-a-hero { grid-area: hero; }
+          .cc-a-meds { grid-area: meds; }
+          .cc-a-recent { grid-area: recent; }
+          .cc-a-side {
+            grid-area: side; display: flex; flex-direction: column;
+            position: sticky; top: 24px;
+          }
+          .cc-a-quick > div:last-child { grid-template-columns: 1fr !important; }
+          .cc-a-quick button { flex-direction: row !important; align-items: center !important; padding: 12px 14px !important; }
         }
 
         @media (prefers-reduced-motion: reduce) {
