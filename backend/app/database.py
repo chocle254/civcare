@@ -36,6 +36,7 @@ def run_migrations():
         "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS med_form TEXT DEFAULT 'tablet';",
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS allergy_flags TEXT;",
         "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS transfer_reason TEXT;",
+        "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS triage_summary TEXT;",
         # RLHF self-training columns
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS ai_risk_score TEXT;",
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS doctor_notes TEXT;",

@@ -122,13 +122,11 @@ async def send_message(data: MessageInput, db: Session = Depends(get_db)):
     # ── Get current Nairobi time ──
     nairobi_time = datetime.now(NAIROBI_TZ).strftime("%I:%M %p")
 
-    # ── Conversation summary from session ──
-    conversation_summary = json.loads(session.messages or "[]")
-    summary_dict = {}
-    for msg in conversation_summary:
-        if msg.get("summary"):
-            summary_dict = msg["summary"]
-            break
+    # ── Facts gathered on earlier turns ──
+    try:
+        summary_dict = json.loads(session.triage_summary or "{}")
+    except (TypeError, ValueError):
+        summary_dict = {}
 
     # ── Run orchestrator ──
     result = await process_message(
@@ -151,6 +149,7 @@ async def send_message(data: MessageInput, db: Session = Depends(get_db)):
         messages.append({"role": "action", "content": "consultation"})
         
     session.messages = json.dumps(messages)
+    session.triage_summary = json.dumps(result.get("updated_summary") or {})
 
     # ── Save triage score if generated ──
     if result.get("triage_score"):

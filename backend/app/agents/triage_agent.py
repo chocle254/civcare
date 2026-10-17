@@ -51,11 +51,9 @@ REPORTED SYMPTOMS:
 INSTRUCTIONS:
 1. Conduct a "Pre-triage Red Flag Scan" (e.g. chest pain + shortness of breath, sudden severe headache, confusion).
 2. Consider age/gender/pregnancy modifiers (e.g. chest pain in a diabetic is high risk, any pain with bleeding in pregnancy is critical).
-   Known conditions change the meaning of symptoms. Apply the higher-risk reading and name the dangerous possibility in your assessment, e.g.:
-   - Cancer (especially on chemotherapy) + fever → possible neutropenic sepsis: at least high moderate, critical if unwell.
-   - Cancer + headache with vomiting, confusion or neurological signs → possible brain metastases.
-   - Previous malaria + fever, chills, body aches in Kenya → malaria must be in the differential.
-   - HIV, diabetes, sickle cell, kidney/heart disease or pregnancy raise the risk of most acute presentations.
+   Known conditions and current medicines change the meaning of symptoms. Ask yourself what the record makes more likely or more dangerous for THIS complaint (weakened immunity, a chronic disease flaring or causing complications, a medicine side effect or interaction, pregnancy, recent surgery) and apply the higher-risk reading where it fits. Name that possibility in the assessment.
+   Local epidemiology matters: weigh the infections and conditions that are common where the patient lives.
+   Use only what the patient reported. Do not assume signs that were never asked about.
 3. Assign a numeric risk score on a strict 1-100 rubric:
    - 1-30: Low risk (routine, non-urgent consultation)
    - 31-70: Moderate risk (requires medical attention within 12-24 hrs)
