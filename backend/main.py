@@ -207,6 +207,13 @@ async def get_appointment(appointment_id: str, doctor_id: str):
             except Exception:
                 pass
 
+        convo_lines = []
+        for msg in messages:
+            if msg.get("role") in ("patient", "ai"):
+                role = "Nurse" if msg.get("role") == "ai" else "Patient"
+                convo_lines.append(f"{role}: {msg['content']}")
+        full_convo = "\n".join(convo_lines)
+
         # ── Build possible diagnosis comparison ──
         # ── Deep AI clinical reasoning for possible diagnosis ──
         possible_diagnosis = None
@@ -231,8 +238,11 @@ Current Medications: {", ".join(medications) if medications else "None"}
 Allergies: {patient.allergies or "None on record"}
 Past Confirmed Diagnoses: {past_dx_lines}
 
-What the triage nurse gathered today:
+Triage nurse's summary today:
 {session.ai_assessment}
+
+The full triage conversation (this is the evidence; nothing else was examined):
+{full_convo or "Not available"}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW A GREAT DOCTOR THINKS
@@ -246,19 +256,20 @@ Read the symptoms carefully. What is the patient actually experiencing right now
 Feel the severity — is this mild discomfort or a body in crisis?
 Notice what symptoms appear together — combinations tell the real story, not individual symptoms in isolation.
 Ask yourself: if a colleague described this patient to you in a hallway, what would you immediately think?
-Consider the whole person — age, location, history — but only let those factors influence you if they genuinely explain what you are seeing today. A past diagnosis is just history. The current symptoms are the truth.
+Consider the whole person — age, location, history. A past diagnosis matters when today's symptoms fit it: malaria recurs, cancer spreads, chronic illness lowers defences. Weigh it honestly, neither ignoring it nor letting it override what the patient reports today.
 When considering geography, always ask: is this the MOST COMMON disease in this region that matches these symptoms, or am I reaching for a rare dramatic diagnosis? Common diseases are common everywhere. Dengue is far more prevalent across Kenya than Viral Hemorrhagic Fever. Typhoid is far more common than Brucellosis. Malaria is far more common than Trypanosomiasis. Always default to the most probable, not the most exotic.
 Trust your clinical instinct. The most elegant diagnosis is usually the correct one — the one that explains everything naturally without forcing it.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ONE IMPORTANT PRINCIPLE
+EVIDENCE RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-When symptoms have a clear, unmistakable pattern that any experienced clinician would recognize immediately — trust that pattern completely. Do not let a patient's medical history distract you from what their body is telling you right now. The current presentation is always more important than the past.
+Use only what the patient actually reported. Never assume a sign that wasn't asked about or mentioned (for example neck stiffness, confusion, rash, or "rapid progression").
+Pick the most probable diagnosis that explains the reported symptoms. If a dangerous alternative can't be excluded from what was asked, name it in your reasoning as something to rule out, along with the question or test that would settle it.
 
 Return ONLY this JSON with no extra text or markdown:
 {{
     "possible_diagnosis": "<single diagnosis name, 3-8 words>",
-    "reasoning": "<two sentences max — explain your thinking the way you would tell a colleague in a corridor, naturally and confidently>"
+    "reasoning": "<two or three sentences, as you'd tell a colleague: why this is most likely, and what dangerous alternative to rule out and how>"
 }}
 """
             try:
@@ -276,13 +287,6 @@ Return ONLY this JSON with no extra text or markdown:
         if messages:
             from app.services.ai_client import ask_gemini
 
-            convo_lines = []
-            for msg in messages:
-                if msg.get("role") in ("patient", "ai"):
-                    role = "Nurse" if msg.get("role") == "ai" else "Patient"
-                    convo_lines.append(f"{role}: {msg['content']}")
-            full_convo = "\n".join(convo_lines)
-
             summary_prompt = f"""
 A patient just completed a medical triage conversation with an AI nurse.
 Read the full conversation below and extract a structured clinical summary a doctor can read in seconds.
@@ -296,18 +300,18 @@ Extract and structure into this format:
 - Character: <how it feels — sharp, dull, burning, throbbing etc>
 - Duration: <how long they've had it>
 - Severity: <X/10 if patient rated it>
-- Associated Symptoms: <any other symptoms mentioned, or None>
-- Medication Taken: <what they took, or None>
+- Associated Symptoms: <any other symptoms mentioned>
+- Medication Taken: <what they took>
 - Response to Medication: <did it help — yes/no/partial>
-- Aggravating Factors: <what makes it worse, or None>
-- Relieving Factors: <what makes it better, or None>
-- Recent Travel or Exposure: <any travel or sick contacts mentioned, or None>
+- Aggravating Factors: <what makes it worse>
+- Relieving Factors: <what makes it better>
+- Recent Travel or Exposure: <travel, mosquito-net use or sick contacts mentioned>
 
 Rules:
 - Read the nurse question AND the patient answer together to understand context
 - "Forehead" after "where is the headache?" means Location: Forehead
 - "Sharp" after "is it sharp or dull?" means Character: Sharp
-- Only skip a line if the patient genuinely gave no information for it
+- Write "None" only when the patient said so (e.g. "no cough"). If it was never asked or mentioned, write "Not asked". Never turn silence into a negative.
 - Return plain text only, no JSON, no markdown
 """
             try:
