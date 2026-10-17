@@ -5,6 +5,7 @@ async def run_medscan_agent(
     medication_name: str,
     patient_message: str,
     current_medications: list,
+    conditions: str = "",
 ) -> dict:
     """
     Checks a medication for:
@@ -25,10 +26,16 @@ async def run_medscan_agent(
     prompt = f"""
 You are a clinical pharmacology AI assistant for a Kenyan healthcare platform.
 
-A patient mentioned they have {medication_name} available and may want to take it.
+A patient mentioned {medication_name} (they may have already taken it, or may want to).
 
 Patient's current medications: {current_meds_str}
+Patient's known conditions: {conditions or "None on record"}
 Patient's message: "{patient_message}"
+
+Rules:
+- Only set clash_detected to true for a real, well-established interaction between {medication_name} and a medicine named in the current medications list above. Name both drugs in clash_details. If the list is empty, there is no clash.
+- A condition (e.g. cancer, kidney disease) that makes the medicine risky goes in clash_details too, but only if it is well established.
+- Never suggest another medicine, a dose, or stopping a prescribed medicine. The recommendation is for a doctor to review, not for the patient to act on.
 
 Check the following and respond ONLY in this exact JSON format with no extra text:
 {{

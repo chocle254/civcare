@@ -216,6 +216,48 @@ KNOWN_FACT_LABELS = [
 ]
 
 
+# Serious conditions whose link to today's complaint must be asked about before
+# routing. Keys match the patient's recorded conditions; values are words that
+# show the assistant has actually asked about it.
+HIGH_RISK_CONDITIONS = {
+    "cancer":      ("Cancer",        ("chemo", "cancer", "radiotherapy", "radiation", "oncology", "treatment")),
+    "carcinoma":   ("Cancer",        ("chemo", "cancer", "radiotherapy", "radiation", "oncology", "treatment")),
+    "tumour":      ("Cancer",        ("chemo", "cancer", "tumour", "tumor", "treatment")),
+    "tumor":       ("Cancer",        ("chemo", "cancer", "tumour", "tumor", "treatment")),
+    "leukaemia":   ("Cancer",        ("chemo", "cancer", "leukaemia", "treatment")),
+    "leukemia":    ("Cancer",        ("chemo", "cancer", "leukemia", "treatment")),
+    "lymphoma":    ("Cancer",        ("chemo", "cancer", "lymphoma", "treatment")),
+    "hiv":         ("HIV",           ("hiv", "arv", "antiretroviral", "viral load", "cd4")),
+    "diabet":      ("Diabetes",      ("diabet", "sugar", "insulin", "glucose", "metformin")),
+    "sickle":      ("Sickle cell",   ("sickle", "crisis")),
+    "kidney":      ("Kidney disease", ("kidney", "dialysis")),
+    "renal":       ("Kidney disease", ("kidney", "renal", "dialysis")),
+    "heart":       ("Heart disease", ("heart", "cardiac")),
+    "pregnan":     ("Pregnancy",     ("pregnan", "weeks", "antenatal")),
+}
+
+
+def high_risk_conditions(conditions: str) -> dict:
+    """{label: probe words} for each serious condition on the patient's record."""
+    found = {}
+    text = (conditions or "").lower()
+    for key, (label, probes) in HIGH_RISK_CONDITIONS.items():
+        if key in text and label not in found:
+            found[label] = probes
+    return found
+
+
+def history_link_asked(conditions: str, conversation_history: list, latest_ai: str = "") -> bool:
+    """True once the assistant has asked about every serious condition on record."""
+    risky = high_risk_conditions(conditions)
+    if not risky:
+        return True
+    asked = " ".join(
+        m.get("content", "").lower() for m in conversation_history if m.get("role") == "ai"
+    ) + " " + (latest_ai or "").lower()
+    return all(any(p in asked for p in probes) for probes in risky.values())
+
+
 def _known_facts(summary: dict) -> str:
     """Bullet list of what the patient has already told us, for the prompt."""
     lines = []
@@ -616,24 +658,34 @@ async def process_message(
         return result
 
     # ── STEP 1: MedScan check ────────────────────────────────────────────────
+    # The check informs the doctor; it never ends triage early (a fever in a
+    # chemo patient still needs the full assessment) and never gives the
+    # patient drug advice of its own — patient-facing wording is fixed here.
     medication = detect_medication_mention(patient_message)
     if medication:
+        current_meds = patient_data.get("current_medications", []) or []
         medscan_result = await run_medscan_agent(
             medication_name=medication,
             patient_message=patient_message,
-            current_medications=patient_data.get("current_medications", []),
+            current_medications=current_meds,
+            conditions=patient_data.get("conditions", ""),
         )
+        clash = bool(medscan_result.get("clash_detected")) and bool(current_meds or medscan_result.get("clash_details"))
+        medscan_result["clash_detected"] = clash
+        if clash:
+            medscan_result["recommendation"] = (
+                f"Please don't take more {medication} until a doctor has checked it against "
+                f"your other medicines and conditions. Your doctor will see this note."
+            )
+            detail = (medscan_result.get("clash_details") or "").strip()
+            result["allergy_flag"] = f"Medication check: patient mentioned {medication}. {detail}".strip()
+        else:
+            medscan_result["recommendation"] = (
+                f"No known problem between {medication} and the medicines on your record. "
+                f"Your doctor will still review everything you've taken."
+            )
         result["medscan_result"] = medscan_result
         result["action"] = "medscan"
-
-        if medscan_result.get("clash_detected"):
-            result["action"] = "route_consultation"
-            result["response"] = (
-                f"I need to flag something important — {medication} may not be safe "
-                f"to take with your current medications. "
-                f"I'd like to connect you with a doctor right now. Are you available?"
-            )
-            return result
 
     # ── STEP 2: Build conversation history for Gemini ────────────────────────
     gemini_history = []
@@ -680,6 +732,15 @@ async def process_message(
         f"- NEVER recite their full medical record. Reference it naturally, like a nurse who remembers a returning patient.\n"
         f"- If Past Conditions is 'None on record' and Current Medications is empty, treat them as a new patient."
         + (
+            f"\n\nMUST ASK BEFORE THE ROUTING QUESTION: this patient has "
+            f"{', '.join(high_risk_conditions(patient_data.get('conditions', '')))} on record. "
+            f"Ask one plain, kind question linking today's symptoms to it (for cancer: are they "
+            f"currently having chemotherapy or other cancer treatment, and when was the last session)."
+            if high_risk_conditions(patient_data.get('conditions', ''))
+            and not history_link_asked(patient_data.get('conditions', ''), conversation_history)
+            else ""
+        )
+        + (
             f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"ALREADY KNOWN FROM THIS CONVERSATION — do NOT ask about these again\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n{known_facts}"
@@ -712,13 +773,16 @@ async def process_message(
     if tried_med and allergies and allergies != "None on record":
         conflict = await check_allergy_conflict(tried_med, allergies)
         if conflict.get("conflict"):
-            result["allergy_flag"] = (
-                f"Patient took {tried_med} despite allergy ({allergies}): {conflict.get('detail', '')}".strip()
-            )
+            allergy_note = f"Patient took {tried_med} despite allergy ({allergies}): {conflict.get('detail', '')}".strip()
+            result["allergy_flag"] = "\n".join(f for f in (result.get("allergy_flag"), allergy_note) if f)
 
     # ── STEP 5: Decide routing ───────────────────────────────────────────────
     fields_collected = count_collected_fields(result["updated_summary"])
     ready_to_route   = is_ready_for_routing(result["updated_summary"], turn_count, mode)
+    if ready_to_route and turn_count < 8 and not history_link_asked(
+        patient_data.get("conditions", ""), conversation_history, ai_response
+    ):
+        ready_to_route = False   # the assistant's reply this turn will ask about it
     # Red flag override — bypass normal routing requirements for emergencies
     is_red_flag = detect_red_flag(conversation_history, patient_message)
     if is_red_flag and result["updated_summary"].get("can_travel") is not None:
