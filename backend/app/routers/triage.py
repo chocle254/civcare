@@ -354,6 +354,24 @@ async def get_appointment_status(appointment_id: str, db: Session = Depends(get_
     # Only clinician-initiated transfers are shown to the patient; break and
     # shift-end reassignments stay silent.
     reason = appointment.redirect_reason or ""
+
+    # Once the doctor has submitted their verdict, the patient sees the outcome.
+    verdict_out = None
+    if appointment.status == AppointmentStatus.COMPLETED:
+        verdict = db.query(Verdict).filter(
+            Verdict.appointment_id == appointment.id
+        ).order_by(Verdict.submitted_at.desc()).first()
+        if verdict:
+            rx = db.query(Prescription).filter(Prescription.verdict_id == verdict.id).all()
+            vdoc = db.query(Doctor).filter(Doctor.id == verdict.doctor_id).first()
+            verdict_out = {
+                "diagnosis":   verdict.diagnosis,
+                "notes":       verdict.notes,
+                "doctor_name": vdoc.full_name if vdoc else None,
+                "prescriptions": [
+                    {"name": p.medication_name, "form": p.med_form, "notes": p.notes} for p in rx
+                ],
+            }
     transfer = {"transfer_doctor": "doctor", "transfer_hospital": "hospital"}.get(reason)
 
     return {
@@ -361,6 +379,7 @@ async def get_appointment_status(appointment_id: str, db: Session = Depends(get_
         "doctor_name":    doctor.full_name if doctor else None,
         "room":           "Room 3A",  # hardcoded for now
         "transfer":       transfer,
+        "verdict":        verdict_out,
         "hospital": {
             "id":      hospital.id,
             "name":    hospital.name,

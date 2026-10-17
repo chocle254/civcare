@@ -6,26 +6,26 @@ import { checkInAfterTransfer } from '../../api/triage';
 export default function ArrivalWaiting() {
     const navigate = useNavigate();
     const patient = JSON.parse(localStorage.getItem('civtech_patient') || '{}');
-    const appointmentId = localStorage.getItem('civtech_appointment_id');
-    const [callStatus, setCallStatus] = useState(null); // null | { doctor_name, room }
-    const [completed, setCompleted] = useState(false); // NEW
-    const [visit, setVisit] = useState(null); // latest status: { status, doctor_name, transfer, hospital }
+    // Read once: it's removed from storage when the visit ends.
+    const [appointmentId] = useState(() => localStorage.getItem('civtech_appointment_id'));
+    const [visit, setVisit] = useState(null); // latest status: { status, doctor_name, room, transfer, hospital, verdict }
     const [checkingIn, setCheckingIn] = useState(false);
     const [checkInError, setCheckInError] = useState('');
+    const completed = visit?.status === 'completed';
 
     useEffect(() => {
-        if (!appointmentId) return;
+        if (!appointmentId || completed) return;
 
         const poll = async () => {
             try {
                 const res = await fetch(`${process.env.REACT_APP_API_URL}/triage/appointment-status/${appointmentId}`);
+                if (!res.ok) return;
                 const data = await res.json();
-                if (res.ok) setVisit(data);
-                if (data.status === 'called' || data.status === 'in_progress') {
-                    setCallStatus({ doctor_name: data.doctor_name, room: data.room });
-                } else if (data.status === 'completed') {   // NEW
-                    setCompleted(true);                       // NEW
+                setVisit(data);
+                if (data.status === 'completed') {
+                    // The visit is over: the next check-in starts fresh.
                     localStorage.removeItem('civtech_appointment_id');
+                    localStorage.removeItem('civtech_session_id');
                 }
             } catch { }
         };
@@ -33,10 +33,22 @@ export default function ArrivalWaiting() {
         poll();
         const interval = setInterval(poll, 2000);
         return () => clearInterval(interval);
-    }, [appointmentId]);
+    }, [appointmentId, completed]);
+
+    // Swiping back from here shouldn't land on the hospital list: this screen
+    // is the end of the check-in flow, so back goes home instead.
+    useEffect(() => {
+        window.history.pushState({ ccVisit: true }, '', window.location.href);
+        const onBack = () => navigate('/dashboard', { replace: true });
+        window.addEventListener('popstate', onBack);
+        return () => window.removeEventListener('popstate', onBack);
+    }, [navigate]);
 
     const firstName = patient.name?.split(' ')[0];
     const hospital = visit?.hospital;
+    const callStatus = visit && (visit.status === 'called' || visit.status === 'in_progress')
+        ? { doctor_name: visit.doctor_name, room: visit.room }
+        : null;
 
     const handleCheckIn = async () => {
         setCheckingIn(true);
@@ -51,15 +63,63 @@ export default function ArrivalWaiting() {
         }
     };
 
-    // ── CONSULTATION COMPLETE ──
-    if (completed && !callStatus) {
+    // ── VISIT COMPLETE: show the doctor's outcome ──
+    if (completed) {
+        const v = visit.verdict;
+        const meds = v?.prescriptions || [];
         return (
             <Shell>
                 <span className="aw-icon aw-icon--success" aria-hidden="true"><Icon.CheckCircle size={32} /></span>
-                <h1 className="aw-title">You're all set</h1>
-                <p className="aw-text">Your consultation is complete. Any prescriptions from your doctor are in your Medications.</p>
-                <button type="button" className="btn btn--primary aw-btn" onClick={() => navigate('/medications')}>
-                    <Icon.Pill size={18} /> View my medications
+                <h1 className="aw-title">Your visit is complete</h1>
+                <p className="aw-text">
+                    {v?.doctor_name ? `Here's what ${v.doctor_name} found.` : "Here's what your doctor found."} It's also saved in your medical history.
+                </p>
+
+                {v && (
+                    <div className="aw-summary">
+                        <div className="aw-sumrow">
+                            <span className="aw-sumlabel">Diagnosis</span>
+                            <strong className="aw-dx">{v.diagnosis}</strong>
+                        </div>
+                        {v.notes && (
+                            <div className="aw-sumrow">
+                                <span className="aw-sumlabel">Doctor's notes</span>
+                                <p className="aw-notes">{v.notes}</p>
+                            </div>
+                        )}
+                        {meds.length > 0 && (
+                            <div className="aw-sumrow">
+                                <span className="aw-sumlabel">Prescribed ({meds.length})</span>
+                                <ul className="aw-meds">
+                                    {meds.map((m, i) => (
+                                        <li key={i}>
+                                            <span className="aw-medicon" aria-hidden="true"><Icon.Pill size={16} /></span>
+                                            <span>
+                                                <strong>{m.name}</strong>
+                                                {m.notes && <small>{m.notes}</small>}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {meds.length > 0 ? (
+                    <>
+                        <p className="aw-hint">Once you collect your medicine from the pharmacy, set up reminders so you never miss a dose.</p>
+                        <button type="button" className="btn btn--primary aw-btn aw-btn--tight" onClick={() => navigate('/medications', { replace: true })}>
+                            <Icon.Bell size={18} /> Set up medication reminders
+                        </button>
+                    </>
+                ) : (
+                    <button type="button" className="btn btn--primary aw-btn" onClick={() => navigate('/diagnosis-history', { replace: true })}>
+                        <Icon.History size={18} /> View my medical history
+                    </button>
+                )}
+                <button type="button" className="btn btn--outline aw-btn aw-btn--tight" onClick={() => navigate('/dashboard', { replace: true })}>
+                    Back to home
                 </button>
             </Shell>
         );
@@ -177,6 +237,18 @@ function Shell({ children, live }) {
                 .aw-place svg { flex-shrink: 0; color: var(--cc-muted); }
                 .aw-place a { color: var(--cc-primary); font-weight: 600; }
                 .aw-err { color: var(--cc-danger); font-size: 14px; margin-top: 12px; }
+                .aw-summary { width: 100%; margin-top: 18px; text-align: left; border-radius: 16px; background: var(--cc-surface); border: 1px solid var(--cc-border); overflow: hidden; }
+                .aw-sumrow { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+                .aw-sumrow + .aw-sumrow { border-top: 1px solid var(--cc-border); }
+                .aw-sumlabel { font-size: 12px; font-weight: 650; color: var(--cc-muted); text-transform: uppercase; letter-spacing: .04em; }
+                .aw-dx { font-size: 17px; font-weight: 700; line-height: 1.35; }
+                .aw-notes { font-size: 14.5px; line-height: 1.55; color: var(--cc-text-2); white-space: pre-line; }
+                .aw-meds { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 2px; }
+                .aw-meds li { display: flex; gap: 10px; align-items: flex-start; }
+                .aw-meds strong { display: block; font-size: 15px; }
+                .aw-meds small { display: block; font-size: 13px; color: var(--cc-muted); margin-top: 1px; }
+                .aw-medicon { flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--cc-primary-soft); color: var(--cc-primary); }
+                .aw-hint { font-size: 13.5px; color: var(--cc-muted); line-height: 1.5; margin-top: 16px; max-width: 360px; }
             `}</style>
         </div>
     );
