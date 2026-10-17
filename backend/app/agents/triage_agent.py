@@ -5,6 +5,8 @@ from app.services.rlhf import get_learned_lessons
 async def run_triage_agent(
     conversation_summary: dict,
     patient_data: dict,
+    transcript: str = "",
+    escalated: bool = False,
 ) -> dict:
     """
     Generates a triage risk score from the conversation summary and patient history.
@@ -47,6 +49,11 @@ REPORTED SYMPTOMS:
 - Vital signs mentioned: {conversation_summary.get('vital_signs', 'None')}
 - Recent food/activity: {conversation_summary.get('recent_activity', 'Not specified')}
 - Pregnancy Status: {conversation_summary.get('pregnancy_status', 'Not specified')}
+- Record items judged relevant to today: {conversation_summary.get('relevant_history') or 'None'}
+
+FULL TRIAGE CONVERSATION (the evidence; the fields above are a summary of it and may miss things):
+{transcript or 'Not available'}
+{'NOTE: the triage nurse escalated this conversation as urgent.' if escalated else ''}
 {learned_corrections}
 INSTRUCTIONS:
 1. Conduct a "Pre-triage Red Flag Scan" (e.g. chest pain + shortness of breath, sudden severe headache, confusion).

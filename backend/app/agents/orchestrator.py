@@ -764,9 +764,18 @@ async def process_message(
     print(f"[DEBUG] can_travel={result['updated_summary'].get('can_travel')}")
 
     if ready_to_route:
+        transcript = "\n".join(
+            f"{'Patient' if m.get('role') == 'patient' else 'Nurse'}: {m.get('content', '')}"
+            for m in conversation_history if m.get("role") in ("patient", "ai")
+        ) + f"\nPatient: {patient_message}"
         triage_result = await run_triage_agent(
             conversation_summary=result["updated_summary"],
             patient_data=patient_data,
+            transcript=transcript,
+            escalated=is_red_flag or any(
+                "need medical attention urgently" in (m.get("content") or "")
+                for m in conversation_history if m.get("role") == "ai"
+            ),
         )
         result["triage_score"]  = triage_result.get("risk_score", "moderate")
         result["triage_result"] = triage_result
@@ -794,8 +803,12 @@ Current time: {current_time}.
 Triage assessment: {triage_result.get('preliminary_assessment', '')}.
 Risk level: {triage_result.get('risk_score', 'moderate')}.
 
-Write a warm, professional 2-sentence message from a senior nurse telling the patient you have gathered what you need
-and you are recommending they visit a hospital. Do NOT name a specific hospital. Do NOT give a diagnosis.
+Patient's first name: {(patient_data.get('name') or '').split(' ')[0] or 'not known'}.
+
+Write a warm, professional 2-sentence chat message from a senior nurse telling the patient you have gathered what you need
+and you are recommending they visit a hospital. If the risk level is critical, tell them to go now, without delay.
+Do NOT name a specific hospital. Do NOT give a diagnosis. This is a chat message, not a letter: no "Dear", no sign-off,
+and never a placeholder like [Name]. Use the first name only if it is known.
 """
             result["response"] = await ask_gemini(routing_prompt, model="llama-3.1-8b-instant")
 

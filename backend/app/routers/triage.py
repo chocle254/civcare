@@ -111,6 +111,7 @@ async def send_message(data: MessageInput, db: Session = Depends(get_db)):
 
     # ── Build patient data for agents ──
     patient_data = {
+    "name":                patient.full_name,
     "age":                 patient.age or "Unknown",
     "location":            patient.location or "Unknown",
     "conditions":          conditions_str,
