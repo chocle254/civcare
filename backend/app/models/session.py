@@ -40,7 +40,8 @@ class ChatSession(Base):
     # Full conversation stored as JSON string
     # Format: [{"role": "patient", "content": "..."}, {"role": "ai", "content": "..."}]
     messages     = Column(Text, nullable=True)
-    triage_summary = Column(Text, nullable=True)  # JSON: facts extracted so far, carried between turns
+    triage_summary = Column(Text, nullable=True)
+    case_file_cache = Column(Text, nullable=True)  # JSON: doctor's case statement + summary, generated once per visit  # JSON: facts extracted so far, carried between turns
 
     # ── TRIAGE OUTPUT ──
     # Generated silently — patient never sees this, doctor always sees it

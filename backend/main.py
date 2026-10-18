@@ -214,81 +214,17 @@ async def get_appointment(appointment_id: str, doctor_id: str):
                 convo_lines.append(f"{role}: {msg['content']}")
         full_convo = "\n".join(convo_lines)
 
-        # ── Build possible diagnosis comparison ──
-        # ── Deep AI clinical reasoning for possible diagnosis ──
-        possible_diagnosis = None
-        diagnosis_reasoning = None
-        if session and session.ai_assessment:
-            from app.services.ai_client import ask_gemini
-
-            past_dx_lines = "\n".join([
-                f"- {v.diagnosis} (severity: {v.severity_confirmed or 'unknown'}, date: {v.submitted_at.strftime('%B %Y') if v.submitted_at else 'unknown'})"
-                for v in past_verdicts if v.diagnosis
-            ]) or "None on record"
-
-            diagnosis_prompt = f"""
-You are a brilliant senior consultant physician with 20+ years of clinical experience across East Africa. You trained at top institutions and have seen thousands of patients. You think like a doctor, not like a search engine.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PATIENT INFORMATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Age: {calc_age}
-Sex: {patient.sex or "Not recorded"} (never suggest a diagnosis that cannot occur in this sex)
-Location: {patient.location or "Kenya"}
-Current Medications: {", ".join(medications) if medications else "None"}
-Allergies: {patient.allergies or "None on record"}
-Past Confirmed Diagnoses: {past_dx_lines}
-
-Triage nurse's summary today:
-{session.ai_assessment}
-
-The full triage conversation (this is the evidence; nothing else was examined):
-{full_convo or "Not available"}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW A GREAT DOCTOR THINKS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-When an experienced doctor listens to a patient, they do not run through a checklist.
-They build a mental picture. They feel the weight of each symptom. They know that certain combinations of symptoms, when they appear together, almost always mean one thing — and that knowledge comes from deep clinical experience, not rules.
-
-Think through this patient the same way:
-
-Read the symptoms carefully. What is the patient actually experiencing right now, today?
-Feel the severity — is this mild discomfort or a body in crisis?
-Notice what symptoms appear together — combinations tell the real story, not individual symptoms in isolation.
-Ask yourself: if a colleague described this patient to you in a hallway, what would you immediately think?
-Consider the whole person — age, location, history. A past diagnosis matters when today's symptoms fit it: malaria recurs, cancer spreads, chronic illness lowers defences. Weigh it honestly, neither ignoring it nor letting it override what the patient reports today.
-Age shapes both what is likely and what is dangerous: think about the diseases common at this patient's age, and remember that babies, young children and older adults can be seriously ill with mild or atypical symptoms.
-When considering geography, always ask: is this the MOST COMMON disease in this region that matches these symptoms, or am I reaching for a rare dramatic diagnosis? Common diseases are common everywhere. Dengue is far more prevalent across Kenya than Viral Hemorrhagic Fever. Typhoid is far more common than Brucellosis. Malaria is far more common than Trypanosomiasis. Always default to the most probable, not the most exotic.
-Trust your clinical instinct. The most elegant diagnosis is usually the correct one — the one that explains everything naturally without forcing it.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-EVIDENCE RULES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Use only what the patient actually reported. Never assume a sign that wasn't asked about or mentioned (for example neck stiffness, confusion, rash, or "rapid progression").
-Pick the most probable diagnosis that explains the reported symptoms. If a dangerous alternative can't be excluded from what was asked, name it in your reasoning as something to rule out, along with the question or test that would settle it.
-
-Return ONLY this JSON with no extra text or markdown:
-{{
-    "possible_diagnosis": "<single diagnosis name, 3-8 words>",
-    "reasoning": "<two or three sentences, as you'd tell a colleague: why this is most likely, and what dangerous alternative to rule out and how>"
-}}
-"""
-            try:
-                raw = (await ask_gemini(diagnosis_prompt)).strip()
-                clean = raw.replace("```json", "").replace("```", "").strip()
-                parsed = json.loads(clean)
-                possible_diagnosis  = parsed.get("possible_diagnosis", "").strip()
-                diagnosis_reasoning = parsed.get("reasoning", "").strip()
-            except Exception:
-                possible_diagnosis  = session.ai_assessment.split(".")[0].strip()
-                diagnosis_reasoning = None
-
-        # ── Structured symptom summary for doctor ──
-        symptom_summary = None
-        if messages:
-            from app.services.ai_client import ask_gemini
-
+        # ── Case statement + symptom summary (generated once, then cached) ──
+        # Both are AI-written; regenerating on every open made the case file
+        # slow and could show the doctor a different answer each time.
+        from app.services.ai_client import ask_gemini
+        from app.services.case_statement import build_dossier, generate_case_statement, cache_key, read_cache
+        key = cache_key(appt)
+        cached = read_cache(session, key)
+        case_statement = cached.get("case_statement") if cached else None
+        symptom_summary = cached.get("symptom_summary") if cached else None
+        if not cached and session and messages:
+            case_statement = await generate_case_statement(build_dossier(db, patient, appt, session), full_convo)
             summary_prompt = f"""
 A patient just completed a medical triage conversation with an AI nurse.
 Read the full conversation below and extract a structured clinical summary a doctor can read in seconds.
@@ -320,6 +256,15 @@ Rules:
                 symptom_summary = (await ask_gemini(summary_prompt)).strip()
             except Exception:
                 symptom_summary = None
+            if case_statement:
+                session.case_file_cache = json.dumps({
+                    "key": key, "case_statement": case_statement, "symptom_summary": symptom_summary,
+                })
+                db.commit()
+
+        most_likely = (case_statement or {}).get("most_likely") or {}
+        possible_diagnosis = most_likely.get("diagnosis")
+        diagnosis_reasoning = most_likely.get("reasoning")
 
         return {
             "appointment_id":    appt.id,
@@ -344,6 +289,7 @@ Rules:
             "possible_diagnosis": possible_diagnosis,
             "diagnosis_reasoning": diagnosis_reasoning,
             "symptom_summary":     symptom_summary,
+            "case_statement":      case_statement,
             "transfer":            _transfer_info(db, appt),
         }
     finally:

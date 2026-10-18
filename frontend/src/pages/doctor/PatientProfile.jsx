@@ -199,8 +199,10 @@ export default function PatientProfile() {
         )}
 
         <div className="pp-grid">
-          {/* LEFT — complaint & triage */}
+          {/* LEFT — case statement, complaint & triage */}
           <div className="pp-col">
+            {profile.case_statement && <CaseStatement cs={profile.case_statement} />}
+
             <section className="pp-card">
               <h2 className="pp-h">Current complaint & AI triage</h2>
 
@@ -216,7 +218,7 @@ export default function PatientProfile() {
                 <div><span>AI confidence</span><strong>{profile.ai_confidence ?? '—'}<small>%</small></strong></div>
               </div>
 
-              {profile.possible_diagnosis && (
+              {profile.possible_diagnosis && !profile.case_statement && (
                 <div className="pp-dx">
                   <span>AI possible diagnosis</span>
                   <strong>{profile.possible_diagnosis}</strong>
@@ -413,6 +415,71 @@ function Bar({ onBack, children }) {
   );
 }
 
+const asList = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? [v] : []);
+const CONFIDENCE_TONE = { high: 'pp-conf--high', moderate: 'pp-conf--mid', low: 'pp-conf--low' };
+
+// The AI's handover for a doctor who has never met the patient: built from
+// their whole record (age, sex, location, allergies, medicines, past visits,
+// how past treatment went) plus today's triage. Doctor-facing only.
+function CaseStatement({ cs }) {
+  const ml = cs.most_likely || {};
+  const conf = String(ml.confidence || '').toLowerCase();
+  const List = ({ title, items, tone }) => {
+    const list = asList(items);
+    if (!list.length) return null;
+    return (
+      <div className={`pp-cs-block${tone ? ` pp-cs-block--${tone}` : ''}`}>
+        <h3>{title}</h3>
+        <ul>{list.map((x, i) => <li key={i}>{typeof x === 'string' ? x : JSON.stringify(x)}</li>)}</ul>
+      </div>
+    );
+  };
+  const diffs = asList(cs.differentials).filter((d) => d && typeof d === 'object');
+  return (
+    <section className="pp-card pp-cs" aria-labelledby="pp-cs-title">
+      <div className="pp-cs-head">
+        <h2 className="pp-h" id="pp-cs-title">Case statement</h2>
+        <span className="pp-ailabel"><Icon.Sparkle size={14} /> AI handover from the full record</span>
+      </div>
+      {cs.one_liner && <p className="pp-cs-lead">{cs.one_liner}</p>}
+      {cs.presenting_complaint && <p className="pp-cs-text">{cs.presenting_complaint}</p>}
+      <List title="Background that matters today" items={cs.relevant_background} />
+
+      {ml.diagnosis && (
+        <div className="pp-cs-ml">
+          <div className="pp-cs-mlhead">
+            <span>Most likely</span>
+            {conf && <span className={`pp-conf ${CONFIDENCE_TONE[conf] || ''}`}>{conf} confidence</span>}
+          </div>
+          <strong>{ml.diagnosis}</strong>
+          {ml.reasoning && <p>{ml.reasoning}</p>}
+        </div>
+      )}
+
+      {diffs.length > 0 && (
+        <div className="pp-cs-block">
+          <h3>Also consider</h3>
+          <ul className="pp-cs-diffs">
+            {diffs.map((d, i) => (
+              <li key={i}>
+                <strong>{d.diagnosis}</strong>
+                {d.why && <span>{d.why}</span>}
+                {d.rule_out_with && <span className="pp-cs-rule">Rule out: {d.rule_out_with}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <List title="Red flags to check now" items={cs.red_flags} tone="danger" />
+      <List title="Suggested work-up" items={cs.suggested_workup} />
+      <List title="Prescribing cautions" items={cs.prescribing_cautions} tone="warning" />
+      <List title="Not yet asked" items={cs.not_yet_asked} tone="muted" />
+      <p className="pp-disclaimer">Built from reported information only: no examination has taken place. It supports, and does not replace, your clinical judgement.</p>
+    </section>
+  );
+}
+
 const STATUS_LABEL = { available: 'Available', with_patient: 'With a patient', on_break: 'On break', offline: 'Offline' };
 
 function groupByHospital(doctors) {
@@ -502,6 +569,32 @@ const CSS = `
   .pp-transfer p { color: var(--cc-text); font-size: 14px; white-space: pre-line; margin-top: 2px; }
   .pp-confirm { margin-top: 8px; padding: 14px; border-radius: 12px; background: var(--cc-warning-soft); border: 1px solid var(--cc-warning-border); display: flex; flex-direction: column; gap: 8px; }
   .pp-confirm > p:first-child { font-size: 14.5px; line-height: 1.5; }
+  .pp-cs-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .pp-cs-head .pp-h { margin-bottom: 0; }
+  .pp-cs-lead { font-size: 16px; font-weight: 650; line-height: 1.45; margin-bottom: 8px; }
+  .pp-cs-text { font-size: 14.5px; line-height: 1.6; color: var(--cc-text-2); margin-bottom: 12px; }
+  .pp-cs-ml { background: var(--cc-primary-soft); border: 1px solid var(--cc-primary-border); border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
+  .pp-cs-mlhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 2px; }
+  .pp-cs-mlhead > span:first-child { font-size: 12px; font-weight: 650; color: var(--cc-primary); text-transform: uppercase; letter-spacing: .04em; }
+  .pp-cs-ml strong { font-size: 17px; display: block; }
+  .pp-cs-ml p { font-size: 14px; line-height: 1.55; color: var(--cc-text-2); margin-top: 4px; }
+  .pp-conf { font-size: 12px; font-weight: 650; padding: 2px 9px; border-radius: 999px; text-transform: capitalize; background: var(--cc-surface-3); color: var(--cc-text-2); }
+  .pp-conf--high { background: var(--cc-success-soft); color: var(--cc-success); }
+  .pp-conf--mid { background: var(--cc-warning-soft); color: var(--cc-warning); }
+  .pp-cs-block { margin-top: 12px; }
+  .pp-cs-block h3 { font-size: 12.5px; font-weight: 650; color: var(--cc-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .pp-cs-block ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .pp-cs-block li { font-size: 14px; line-height: 1.5; padding-left: 14px; position: relative; }
+  .pp-cs-block li::before { content: ''; position: absolute; left: 2px; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: var(--cc-border-strong); }
+  .pp-cs-block--danger li::before { background: var(--cc-danger); }
+  .pp-cs-block--danger h3 { color: var(--cc-danger); }
+  .pp-cs-block--warning li::before { background: var(--cc-warning); }
+  .pp-cs-block--warning h3 { color: var(--cc-warning); }
+  .pp-cs-block--muted li { color: var(--cc-text-2); }
+  .pp-cs-diffs li { display: flex; flex-direction: column; gap: 2px; }
+  .pp-cs-diffs strong { font-size: 14.5px; }
+  .pp-cs-diffs span { color: var(--cc-text-2); font-size: 13.5px; }
+  .pp-cs-rule { color: var(--cc-primary) !important; font-weight: 600; }
   .pp-confirmrow { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
   .pp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 9px 16px; border-radius: 8px; border: 1px solid transparent; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background .15s ease, border-color .15s ease; }
   .pp-btn--primary { background: var(--cc-primary-grad); color: var(--cc-on-primary); box-shadow: inset 0 1px 0 rgba(255,255,255,.22), var(--cc-primary-glow); }

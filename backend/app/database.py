@@ -38,6 +38,7 @@ def run_migrations():
         "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS transfer_reason TEXT;",
         "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS triage_summary TEXT;",
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS sex TEXT;",
+        "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS case_file_cache TEXT;",
         # RLHF self-training columns
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS ai_risk_score TEXT;",
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS doctor_notes TEXT;",
