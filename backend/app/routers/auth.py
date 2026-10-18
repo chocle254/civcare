@@ -14,6 +14,14 @@ from app.config import settings
 router = APIRouter()
 
 
+from app.services.patient_info import patient_age
+
+
+def _clean_sex(value: str | None) -> str | None:
+    v = (value or "").strip().lower()
+    return v if v in ("female", "male") else None
+
+
 # ── TOKEN HELPER ──
 def create_token(data: dict) -> str:
     payload = data.copy()
@@ -33,6 +41,7 @@ class PatientRegister(BaseModel):
     identity_number: str
     identity_type:   str   # national_id / birth_cert / chf_number
     date_of_birth:   str | None = None
+    sex:             str | None = None   # female / male
     location:        str | None = None
     allergies:       str | None = None
 
@@ -88,6 +97,7 @@ async def register_patient(data: PatientRegister, db: Session = Depends(get_db))
         identity_number=data.identity_number,
         identity_type=IdentityType(data.identity_type),
         date_of_birth=data.date_of_birth,
+        sex=_clean_sex(data.sex),
         location=data.location,
         allergies=data.allergies,
         key_one_hash=key_one_hash,
@@ -107,6 +117,8 @@ async def register_patient(data: PatientRegister, db: Session = Depends(get_db))
             "phone":    patient.phone_number,
             "location": patient.location,
             "allergies": patient.allergies,
+            "sex":      patient.sex,
+            "age":      patient_age(patient),
         }
     }
 
@@ -139,6 +151,8 @@ async def login_patient(data: PatientLogin, db: Session = Depends(get_db)):
             "phone":    patient.phone_number,
             "location": patient.location,
             "allergies": patient.allergies,
+            "sex":      patient.sex,
+            "age":      patient_age(patient),
         }
     }
 
@@ -301,6 +315,7 @@ class UpdateProfile(BaseModel):
     patient_id: str
     allergies:  str | None = None
     location:   str | None = None
+    sex:        str | None = None
 
 @router.patch("/patient/profile/update")
 async def update_profile(data: UpdateProfile, db: Session = Depends(get_db)):
@@ -311,9 +326,12 @@ async def update_profile(data: UpdateProfile, db: Session = Depends(get_db)):
         patient.allergies = data.allergies
     if data.location is not None:
         patient.location = data.location
+    if data.sex is not None and _clean_sex(data.sex):
+        patient.sex = _clean_sex(data.sex)
     db.commit()
     return {
         "message":   "Profile updated successfully",
         "allergies": patient.allergies,
         "location":  patient.location,
+        "sex":       patient.sex,
     }

@@ -232,7 +232,8 @@ You are a brilliant senior consultant physician with 20+ years of clinical exper
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PATIENT INFORMATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Age: {patient.age or "Unknown"}
+Age: {calc_age}
+Sex: {patient.sex or "Not recorded"} (never suggest a diagnosis that cannot occur in this sex)
 Location: {patient.location or "Kenya"}
 Current Medications: {", ".join(medications) if medications else "None"}
 Allergies: {patient.allergies or "None on record"}
@@ -325,6 +326,7 @@ Rules:
             "patient_name":      patient.full_name if patient else "Unknown",
             "patient_phone":     patient.phone_number if patient else "—",
             "patient_age":       calc_age if patient else "—",
+            "patient_sex":       (patient.sex or "").capitalize() if patient else "",
             "patient_location":  patient.location if patient else "—",
             "identity_type":     patient.identity_type if patient else "—",
             "identity_number":   patient.identity_number if patient else "—",

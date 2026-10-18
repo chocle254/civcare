@@ -152,6 +152,7 @@ export default function Register() {
     identity_number: '',
     identity_type: 'national_id',
     date_of_birth: '',
+    sex: '',
     location: '',
     allergies: '',
   });
@@ -209,7 +210,8 @@ export default function Register() {
     if (
       !regForm.full_name ||
       !regForm.phone_number ||
-      !regForm.identity_number
+      !regForm.identity_number ||
+      !regForm.sex
     ) {
       setError('Please fill in all required fields.');
       return;
@@ -1110,6 +1112,32 @@ export default function Register() {
                           </option>
                         </select>
                       </div>
+                    </div>
+
+                    <div className="cc-auth-field">
+                      <label htmlFor="sex">
+                        Sex
+                        <span className="cc-required"> *</span>
+                      </label>
+
+                      <div className="cc-input-wrap">
+                        <span className="cc-input-icon">
+                          <Icon name="user" size={18} />
+                        </span>
+
+                        <select
+                          id="sex"
+                          name="sex"
+                          value={regForm.sex}
+                          onChange={handleRegChange}
+                          aria-describedby="sex-hint"
+                        >
+                          <option value="" disabled>Choose…</option>
+                          <option value="female">Female</option>
+                          <option value="male">Male</option>
+                        </select>
+                      </div>
+                      <p id="sex-hint" className="cc-field-hint">Helps the assistant ask the right questions.</p>
                     </div>
 
                     <Field

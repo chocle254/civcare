@@ -44,7 +44,26 @@ const TABS = [
 
 export default function Profile() {
   const navigate = useNavigate();
-  const patient = (() => { try { return JSON.parse(localStorage.getItem('civtech_patient') || '{}'); } catch { return {}; } })();
+  const [patient, setPatient] = useState(() => { try { return JSON.parse(localStorage.getItem('civtech_patient') || '{}'); } catch { return {}; } });
+  const [savingSex, setSavingSex] = useState(false);
+  const [sexError, setSexError] = useState('');
+
+  // Patients registered before sex was collected can set it once here; the
+  // assistant uses it to avoid questions that can't apply to them.
+  const saveSex = async (sex) => {
+    setSavingSex(true);
+    setSexError('');
+    try {
+      const res = await axios.patch(`${API}/auth/patient/profile/update`, { patient_id: patient.id, sex });
+      const next = { ...patient, sex: res.data.sex || sex };
+      localStorage.setItem('civtech_patient', JSON.stringify(next));
+      setPatient(next);
+    } catch {
+      setSexError('Could not save. Please try again.');
+    } finally {
+      setSavingSex(false);
+    }
+  };
   const [tab, setTab] = useState('diagnoses');
   const [verdicts, setVerdicts] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
@@ -81,6 +100,7 @@ export default function Profile() {
   // shown as "Not recorded" rather than invented placeholder data.
   const chips = [
     { label: 'Age', value: patient.age || '—' },
+    { label: 'Sex', value: patient.sex ? patient.sex[0].toUpperCase() + patient.sex.slice(1) : 'Not set' },
     { label: 'Blood type', value: patient.blood_type || 'Not recorded' },
     { label: 'Allergies', value: patient.allergies || 'None recorded' },
     { label: 'Location', value: patient.location || '—' },
@@ -112,6 +132,19 @@ export default function Profile() {
               </div>
             ))}
           </div>
+          {!patient.sex && (
+            <div style={s.sexBox} role="group" aria-labelledby="prof-sex-q">
+              <p id="prof-sex-q" style={s.sexQ}>What is your sex? It helps the assistant ask the right questions.</p>
+              <div style={s.sexRow}>
+                {['female', 'male'].map((v) => (
+                  <button key={v} type="button" style={s.sexBtn} disabled={savingSex} onClick={() => saveSex(v)}>
+                    {v === 'female' ? 'Female' : 'Male'}
+                  </button>
+                ))}
+              </div>
+              {sexError && <p role="alert" style={s.sexErr}>{sexError}</p>}
+            </div>
+          )}
         </div>
 
         <div className="cc-prof-body">
@@ -223,6 +256,11 @@ const s = {
   chip: { background: color.surfaceMuted, borderRadius: radius.md, padding: '10px 12px', boxShadow: theme.shadow.embossOut },
   chipLabel: { fontSize: 10.5, letterSpacing: 0.5, textTransform: 'uppercase', color: color.inkFaint, margin: '0 0 4px' },
   chipValue: { fontSize: 14, fontWeight: 500, color: color.ink, margin: 0 },
+  sexBox: { marginTop: 12, padding: '12px 14px', borderRadius: radius.md, background: 'var(--cc-primary-soft)', border: '1px solid var(--cc-primary-border)' },
+  sexQ: { fontSize: 13.5, color: color.ink, margin: '0 0 10px', lineHeight: 1.45 },
+  sexRow: { display: 'flex', gap: 8 },
+  sexBtn: { flex: 1, minHeight: 40, borderRadius: radius.md, border: '1px solid var(--cc-primary-border)', background: 'var(--cc-surface)', color: 'var(--cc-primary)', fontWeight: 600, fontSize: 14, cursor: 'pointer' },
+  sexErr: { fontSize: 13, color: 'var(--cc-danger)', margin: '8px 0 0' },
 
   tabRow: { display: 'flex', gap: 8, marginBottom: 18, borderBottom: `1px solid ${color.hairline}`, paddingBottom: 2 },
   tabBtn: {

@@ -14,6 +14,7 @@ from app.services.africastalking import send_doctor_call_notification
 from app.routers.hospitals import get_nearby_hospitals
 import json
 import pytz
+from app.services.patient_info import patient_age, patient_sex
 
 router = APIRouter()
 
@@ -112,7 +113,8 @@ async def send_message(data: MessageInput, db: Session = Depends(get_db)):
     # ── Build patient data for agents ──
     patient_data = {
     "name":                patient.full_name,
-    "age":                 patient.age or "Unknown",
+    "age":                 patient_age(patient),
+    "sex":                 patient_sex(patient),
     "location":            patient.location or "Unknown",
     "conditions":          conditions_str,
     "current_medications": medications,

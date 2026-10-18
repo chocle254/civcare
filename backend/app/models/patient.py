@@ -27,6 +27,7 @@ class Patient(Base):
     full_name        = Column(String, nullable=False)
     phone_number     = Column(String, unique=True, nullable=False, index=True)
     date_of_birth    = Column(String, nullable=True)
+    sex              = Column(String, nullable=True)   # "female" / "male"; shapes which conditions are possible
     age              = Column(String, nullable=True)
     allergies        = Column(String, nullable=True)
     allergy_flags    = Column(Text, nullable=True)   # AI-detected allergy/med conflicts for doctor + AI

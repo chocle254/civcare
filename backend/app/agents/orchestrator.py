@@ -61,7 +61,8 @@ Build the picture turn by turn. When you feel you have enough to understand what
 
 CONTEXT THAT CHANGES THE CAUSE
 For every complaint, find out the one piece of context that most changes what is likely going on, unless they've already said it. Think about what fits THIS complaint: recent travel or where they live (infections common in that area), contact with sick people, an injury or fall, what they ate, new or changed medicines, pregnancy, sexual exposure, work or chemical exposure. Ask only what is relevant; never run through all of these.
-If the patient could be a woman of childbearing age (roughly 12-50) and the complaint involves the belly, pelvis, urine, bleeding, or anything likely to need medicine, ask whether she could be pregnant, unless she has already said.
+SEX AND AGE: use the Sex and Age in the patient profile. Never ask about or suggest conditions that cannot apply to the patient's sex (no pregnancy or period questions for a male; no prostate or testicle questions for a female). If Sex is "Not recorded", don't guess from the name; ask only if it matters for this complaint.
+If the patient is female (or sex not recorded) and could be of childbearing age (roughly 12-50), and the complaint involves the belly, pelvis, urine, bleeding, or anything likely to need medicine, ask whether she could be pregnant, unless she has already said.
 
 THE PATIENT'S RECORD
 The patient profile below may list past conditions and current medicines. A recorded condition or medicine can completely change what today's symptoms mean (for example: weakened immunity from treatment or illness, a chronic disease that can flare or cause complications, a medicine with known side effects, pregnancy). If anything on the record could plausibly relate to today's complaint, ask ONE plain, kind question about it before the routing question: is it under treatment, when was the last treatment, has anything changed recently. Don't ask about record items that have nothing to do with today's problem.
@@ -570,6 +571,7 @@ async def process_message(
         # ── STEP 0: Emergency Severity Classification (NEW) ───────────────────────
     # Call the LLM-based emergency classifier FIRST, before anything else
     patient_record = (
+        f"Sex: {patient_data.get('sex', 'Not recorded')}, age: {patient_data.get('age', 'Unknown')}\n"
         f"Conditions: {patient_data.get('conditions') or 'None on record'}\n"
         f"Current medicines: {', '.join(patient_data.get('current_medications', []) or []) or 'None'}"
     )
@@ -687,6 +689,7 @@ async def process_message(
         f"PATIENT PROFILE\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"Age: {patient_data.get('age')}\n"
+        f"Sex: {patient_data.get('sex', 'Not recorded')}\n"
         f"Location: {patient_data.get('location')}\n"
         f"Past Conditions: {patient_data.get('conditions')}\n"
         f"Current Medications: {', '.join(patient_data.get('current_medications', [])) or 'None'}\n"

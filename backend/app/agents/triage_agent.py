@@ -35,6 +35,7 @@ You are an expert clinical triage AI assistant. Your role is to assess patient r
 
 PATIENT INFORMATION:
 - Age: {patient_data.get('age', 'Unknown')}
+- Sex: {patient_data.get('sex', 'Not recorded')} (never consider conditions that cannot occur in this sex)
 - Known conditions: {patient_data.get('conditions', 'None recorded')}
 - Current medications: {patient_data.get('current_medications', 'None recorded')}
 - Known allergies: {patient_data.get('allergies', 'None recorded')}

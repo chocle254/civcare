@@ -162,6 +162,7 @@ export default function PatientProfile() {
           <dl className="pp-iddl">
             {[
               ['Age', profile.patient_age || '—'],
+              ['Sex', profile.patient_sex || 'Not recorded'],
               ['Phone', profile.patient_phone],
               ['Location', profile.patient_location || '—'],
               [profile.identity_type || 'ID', profile.identity_number || '—'],
