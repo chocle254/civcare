@@ -1,3 +1,4 @@
+from app.services.security import mask
 import africastalking
 from app.config import settings
 
@@ -24,7 +25,7 @@ async def send_sms(phone_number: str, message: str) -> bool:
             recipients=[phone_number],
             sender_id=settings.AT_SENDER_ID,
         )
-        print(f"SMS sent to {phone_number}: {response}")
+        print(f"SMS sent to {mask(phone_number)}")
         return True
     except Exception as e:
         print(f"SMS error: {e}")

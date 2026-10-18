@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { theme } from '../../styles/theme';
+import PrivacyPanel from '../../components/PrivacyPanel';
 
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
@@ -40,6 +41,7 @@ const TABS = [
   { id: 'diagnoses', label: 'Diagnoses' },
   { id: 'medications', label: 'Medications' },
   { id: 'history', label: 'History' },
+  { id: 'privacy', label: 'Your privacy' },
 ];
 
 export default function Profile() {
@@ -160,7 +162,7 @@ export default function Profile() {
           ))}
         </div>
 
-        {loading && <p style={{ color: color.inkFaint, fontSize: 13, padding: '20px 0' }}>Loading…</p>}
+        {loading && tab !== 'privacy' && <p style={{ color: color.inkFaint, fontSize: 13, padding: '20px 0' }}>Loading…</p>}
 
         {!loading && tab === 'diagnoses' && (
           <div>
@@ -197,6 +199,13 @@ export default function Profile() {
               </div>
             ))}
           </div>
+        )}
+
+        {tab === 'privacy' && (
+          <PrivacyPanel
+            patient={patient}
+            onPatient={(next) => { localStorage.setItem('civtech_patient', JSON.stringify(next)); setPatient(next); }}
+          />
         )}
 
         {!loading && tab === 'history' && (
@@ -262,7 +271,7 @@ const s = {
   sexBtn: { flex: 1, minHeight: 40, borderRadius: radius.md, border: '1px solid var(--cc-primary-border)', background: 'var(--cc-surface)', color: 'var(--cc-primary)', fontWeight: 600, fontSize: 14, cursor: 'pointer' },
   sexErr: { fontSize: 13, color: 'var(--cc-danger)', margin: '8px 0 0' },
 
-  tabRow: { display: 'flex', gap: 8, marginBottom: 18, borderBottom: `1px solid ${color.hairline}`, paddingBottom: 2 },
+  tabRow: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18, borderBottom: `1px solid ${color.hairline}`, paddingBottom: 2 },
   tabBtn: {
     background: 'none', border: 'none', color: color.inkFaint, fontSize: 13.5, fontWeight: 500,
     padding: '8px 4px', cursor: 'pointer', borderBottom: '2px solid transparent', marginBottom: -2,

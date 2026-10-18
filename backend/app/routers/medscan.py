@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models.prescription import Prescription
 from app.agents.medscan_agent import run_medscan_agent
+from app.services.authz import Principal, current_user, can_patient
 
 router = APIRouter()
 
@@ -15,12 +16,13 @@ class MedScanRequest(BaseModel):
 
 
 @router.post("/check")
-async def check_medication(data: MedScanRequest, db: Session = Depends(get_db)):
+async def check_medication(data: MedScanRequest, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Standalone MedScan endpoint.
     Also called by the orchestrator mid-conversation.
     Pulls patient's active prescriptions to check for clashes.
     """
+    can_patient(db, user, data.patient_id)
     # Get patient's active medications from prescriptions table
     active_prescriptions = db.query(Prescription).filter(
         Prescription.patient_id == data.patient_id,

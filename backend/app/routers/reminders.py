@@ -18,6 +18,7 @@ from app.services.rlhf import (
     record_evening_checkin_lesson,
 )
 import math
+from app.services.authz import Principal, current_user, only_patient, can_patient
 
 router = APIRouter()
 
@@ -47,8 +48,9 @@ class ReminderResponse(BaseModel):
 
 
 @router.get("/my-meds")
-async def my_medications(patient_id: str, db: Session = Depends(get_db)):
+async def my_medications(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """Returns all active prescriptions for a patient."""
+    only_patient(user, patient_id)
     prescriptions = db.query(Prescription).filter(
         Prescription.patient_id == patient_id,
         Prescription.is_active  == True,
@@ -78,7 +80,7 @@ async def my_medications(patient_id: str, db: Session = Depends(get_db)):
     ]
 
 @router.get("/courses")
-async def my_courses(patient_id: str, db: Session = Depends(get_db)):
+async def my_courses(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Returns the patient's treatments GROUPED by diagnosis (one card per
     illness, e.g. "Malaria"), each bundling every medication the doctor
@@ -86,6 +88,7 @@ async def my_courses(patient_id: str, db: Session = Depends(get_db)):
     whole set — so the patient sees one clear treatment plan instead of a
     flat list of loose pills.
     """
+    only_patient(user, patient_id)
     from app.models.verdict import Verdict
 
     prescriptions = db.query(Prescription).filter(
@@ -160,11 +163,12 @@ async def my_courses(patient_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/set")
-async def set_reminders(data: ReminderSetup, db: Session = Depends(get_db)):
+async def set_reminders(data: ReminderSetup, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Patient enters how many pills they were given + frequency.
     Reminders are scheduled to deplete exactly when the supply runs out.
     """
+    only_patient(user, data.patient_id)
     prescription = db.query(Prescription).filter(
         Prescription.id         == data.prescription_id,
         Prescription.patient_id == data.patient_id,
@@ -230,11 +234,20 @@ async def set_reminders(data: ReminderSetup, db: Session = Depends(get_db)):
     }
 
 
+def _own_reminder(db: Session, user: Principal, reminder_id: str) -> None:
+    reminder = db.query(Reminder).filter(Reminder.id == reminder_id).first()
+    rx = db.query(Prescription).filter(Prescription.id == reminder.prescription_id).first() if reminder else None
+    if not rx:
+        raise HTTPException(status_code=404, detail="Reminder not found.")
+    only_patient(user, rx.patient_id)
+
+
 @router.post("/respond")
-async def respond_to_reminder(data: ReminderResponse, db: Session = Depends(get_db)):
+async def respond_to_reminder(data: ReminderResponse, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Patient replies TAKEN or SKIP to a reminder SMS or in-app notification.
     """
+    _own_reminder(db, user, data.reminder_id)
     reminder = db.query(Reminder).filter(Reminder.id == data.reminder_id).first()
     if not reminder:
         raise HTTPException(status_code=404, detail="Reminder not found.")
@@ -298,12 +311,13 @@ def _unanswered_doses(db: Session, prescriptions: list, exclude_reminder_id: str
 
 
 @router.get("/due")
-async def due_dose(patient_id: str, db: Session = Depends(get_db)):
+async def due_dose(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Returns the next dose that is due and not yet checked in, plus a warm,
     diagnosis-aware check-in question to show in the pop-up.
     The frontend polls this so the timer can raise the pop-up in-app.
     """
+    only_patient(user, patient_id)
     now = datetime.utcnow()
 
     # Find a fired-but-unanswered reminder for one of this patient's active courses
@@ -391,12 +405,13 @@ def _is_last_dose_of_day(db: Session, patient_id: str, scheduled_at: datetime) -
 
 
 @router.post("/checkin")
-async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
+async def submit_checkin(data: CheckinSubmit, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Patient confirms a dose from the in-app pop-up and answers the check-in.
     We record it, read their reply observationally, and — if this was the last
     dose — run the recovery review and decide whether to re-offer a doctor.
     """
+    only_patient(user, data.patient_id)
     prescription = db.query(Prescription).filter(
         Prescription.id == data.prescription_id,
         Prescription.patient_id == data.patient_id,
@@ -555,7 +570,7 @@ async def submit_checkin(data: CheckinSubmit, db: Session = Depends(get_db)):
 
 
 @router.get("/followup/{course_outcome_id}")
-async def followup_case_file(course_outcome_id: str, db: Session = Depends(get_db)):
+async def followup_case_file(course_outcome_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Builds the follow-up case file handed to the next doctor when a patient
     re-routes after finishing a course while still unwell. It bundles the
@@ -565,6 +580,7 @@ async def followup_case_file(course_outcome_id: str, db: Session = Depends(get_d
     course = db.query(CourseOutcome).filter(CourseOutcome.id == course_outcome_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course outcome not found.")
+    can_patient(db, user, course.patient_id)
 
     prev_diagnosis = None
     prev_notes = None

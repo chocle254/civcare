@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models.doctor import Doctor, DoctorStatus
 from app.models.appointment import Appointment, AppointmentStatus
+from app.services.authz import Principal, current_doctor, must_be_doctor
 
 router = APIRouter()
 
@@ -52,11 +53,12 @@ async def get_available_doctors(hospital_id: str = None, db: Session = Depends(g
 
 # ── UPDATE DOCTOR STATUS ──
 @router.patch("/status")
-async def update_status(data: StatusUpdate, db: Session = Depends(get_db)):
+async def update_status(data: StatusUpdate, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     Doctor manually updates their availability status.
     Also called automatically by the system when they open/close patient profiles.
     """
+    must_be_doctor(user, data.doctor_id)
     doctor = db.query(Doctor).filter(Doctor.id == data.doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found.")
@@ -73,12 +75,13 @@ async def update_status(data: StatusUpdate, db: Session = Depends(get_db)):
 
 # ── REDIRECT ALL PATIENTS (doctor going on break or ending shift) ──
 @router.post("/redirect-patients")
-async def redirect_patients(data: RedirectPatients, db: Session = Depends(get_db)):
+async def redirect_patients(data: RedirectPatients, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     Called when doctor goes on break or ends shift.
     Silently reassigns all their pending patients to next available doctor.
     Patient never knows their doctor changed — they just get called by whoever is now assigned.
     """
+    must_be_doctor(user, data.doctor_id)
     # Get all pending appointments for this doctor
     pending = db.query(Appointment).filter(
         Appointment.doctor_id == data.doctor_id,
@@ -136,11 +139,12 @@ async def redirect_patients(data: RedirectPatients, db: Session = Depends(get_db
 
 # ── DOCTOR PING (inactivity check) ──
 @router.post("/ping")
-async def ping_doctor(doctor_id: str, db: Session = Depends(get_db)):
+async def ping_doctor(doctor_id: str, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     Called every 10 minutes by the system to check if doctor is still active.
     If no response comes back within 5 minutes, status auto-switches to offline.
     """
+    must_be_doctor(user, doctor_id)
     doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found.")
@@ -167,10 +171,11 @@ class DoctorSettingsUpdate(BaseModel):
     breaks: Optional[str] = None
 
 @router.patch("/settings")
-async def update_settings(data: DoctorSettingsUpdate, db: Session = Depends(get_db)):
+async def update_settings(data: DoctorSettingsUpdate, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     Update doctor shift timings and breaks.
     """
+    must_be_doctor(user, data.doctor_id)
     doctor = db.query(Doctor).filter(Doctor.id == data.doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=404, detail="Doctor not found.")
@@ -219,9 +224,10 @@ def _pick_doctor(db: Session, hospital_id: str, exclude_id: str = None):
 
 
 @router.get("/transfer-targets")
-async def transfer_targets(doctor_id: str, db: Session = Depends(get_db)):
+async def transfer_targets(doctor_id: str, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """Doctors and registered hospitals a case can be transferred to."""
     from app.models.hospital import Hospital
+    must_be_doctor(user, doctor_id)
 
     hospitals = db.query(Hospital).filter(Hospital.is_active == True).order_by(Hospital.name).all()
     names = {h.id: h.name for h in hospitals}
@@ -247,7 +253,7 @@ async def transfer_targets(doctor_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/transfer")
-async def transfer_patient(data: TransferPatient, db: Session = Depends(get_db)):
+async def transfer_patient(data: TransferPatient, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     The assigned doctor hands one patient to another doctor or hospital.
     The patient leaves this doctor's queue, and their waiting screen shows
@@ -255,6 +261,7 @@ async def transfer_patient(data: TransferPatient, db: Session = Depends(get_db))
     """
     from app.models.hospital import Hospital
 
+    must_be_doctor(user, data.doctor_id)
     if not data.target_doctor_id and not data.target_hospital_id:
         raise HTTPException(status_code=400, detail="Choose a doctor or a hospital.")
     reason = (data.reason or "").strip()
@@ -308,6 +315,9 @@ async def transfer_patient(data: TransferPatient, db: Session = Depends(get_db))
         me.status = DoctorStatus.AVAILABLE
 
     db.commit()
+    from app.services.authz import log_access
+    log_access(db, user, appt.patient_id, "transferred your care",
+               f"to {target.full_name if target else 'another hospital'}")
 
     from app.websocket.queue import broadcast_queue_update
     await broadcast_queue_update(old_hospital_id)

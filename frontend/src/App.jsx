@@ -2,6 +2,8 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import PatientSidebar from './components/PatientSidebar';
+import PrivacyGate from './components/PrivacyGate';
+import Privacy from './pages/Privacy';
 import Register       from './pages/patient/Register';
 import Chat           from './pages/patient/Chat';
 import HospitalSelect from './pages/patient/HospitalSelect';
@@ -33,6 +35,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <PatientSidebar />
+      <PrivacyGate />
       <GuardedRoutes>
       <Routes>
         {/* Patient */}
@@ -49,6 +52,7 @@ export default function App() {
         <Route path="/consultation/waiting" element={<ConsultationWaiting />} />
         <Route path="/diagnosis-history"   element={<DiagnosisHistory />} />
         <Route path="/analytics"           element={<Analytics />} />
+        <Route path="/privacy"             element={<Privacy />} />
         {/* Doctor */}
         <Route path="/doctor"              element={<DoctorLogin />} />
         <Route path="/doctor/dashboard"    element={<Dashboard />} />

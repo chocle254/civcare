@@ -7,6 +7,7 @@ from app.models.prescription import Prescription, Reminder
 from app.models.consultation import Consultation, ConsultationStatus, PaymentStatus, PaymentMethod, RecordAccess
 from app.models.verdict      import Verdict
 from app.models.rlhf         import AIFeedback
+from app.models.data_access  import DataAccessLog
 
 __all__ = [
     "Patient", "IdentityType",
@@ -18,4 +19,5 @@ __all__ = [
     "Consultation", "ConsultationStatus", "PaymentStatus", "PaymentMethod", "RecordAccess",
     "Verdict",
     "AIFeedback",
+    "DataAccessLog",
 ]

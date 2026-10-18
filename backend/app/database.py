@@ -39,6 +39,14 @@ def run_migrations():
         "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS triage_summary TEXT;",
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS sex TEXT;",
         "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS case_file_cache TEXT;",
+        # Data protection: PINs, consent, erasure, real doctor passwords
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS pin_hash TEXT;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS consent_version TEXT;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS consent_at TIMESTAMP;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS guardian_name TEXT;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS guardian_relationship TEXT;",
+        "ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;",
+        "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMP;",
         # RLHF self-training columns
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS ai_risk_score TEXT;",
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS doctor_notes TEXT;",

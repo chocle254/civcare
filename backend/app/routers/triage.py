@@ -15,6 +15,8 @@ from app.routers.hospitals import get_nearby_hospitals
 import json
 import pytz
 from app.services.patient_info import patient_age, patient_sex
+from app.services.authz import Principal, current_user, only_patient, can_session, can_appointment, can_patient, must_be_doctor
+from app.services.consent import has_consent
 
 router = APIRouter()
 
@@ -55,21 +57,26 @@ class SelectHospital(BaseModel):
 
 # ── START OR CONTINUE CONVERSATION ──
 @router.post("/message")
-async def send_message(data: MessageInput, db: Session = Depends(get_db)):
+async def send_message(data: MessageInput, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Main endpoint for the AI conversation.
     Creates a session if new, continues if existing.
     Returns AI response + any routing actions.
     When action is route_hospital, fetches nearby hospitals from OpenStreetMap.
     """
+    only_patient(user, data.patient_id)
     patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found.")
+    if not has_consent(patient):
+        raise HTTPException(status_code=403, detail="consent_required")
 
     # ── Get or create session ──
     session = None
     if data.session_id:
-        session = db.query(ChatSession).filter(ChatSession.id == data.session_id).first()
+        session = db.query(ChatSession).filter(
+            ChatSession.id == data.session_id, ChatSession.patient_id == patient.id,
+        ).first()
 
     if not session:
         session = ChatSession(
@@ -201,14 +208,13 @@ async def send_message(data: MessageInput, db: Session = Depends(get_db)):
 
 # ── PATIENT SELECTS A HOSPITAL ──
 @router.post("/select-hospital")
-async def select_hospital(data: SelectHospital, db: Session = Depends(get_db)):
+async def select_hospital(data: SelectHospital, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Called when patient taps a hospital card in the chat.
     Records the chosen hospital against the session for the doctor's dashboard.
     """
-    session = db.query(ChatSession).filter(ChatSession.id == data.session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found.")
+    only_patient(user, data.patient_id)
+    session = can_session(db, user, data.session_id)
 
     # Save hospital choice to session as JSON
     session.chosen_hospital = json.dumps({
@@ -227,12 +233,14 @@ async def select_hospital(data: SelectHospital, db: Session = Depends(get_db)):
 
 # ── PATIENT CONFIRMS HOSPITAL ARRIVAL ──
 @router.post("/confirm-arrival")
-async def confirm_arrival(data: ArrivalConfirm, db: Session = Depends(get_db)):
+async def confirm_arrival(data: ArrivalConfirm, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Patient clicks 'I have arrived' in the app.
     This creates the appointment, finds an available doctor, and sets status to ARRIVED.
     This triggers the live queue update on the doctor's dashboard.
     """
+    only_patient(user, data.patient_id)
+    can_session(db, user, data.session_id)
     existing = db.query(Appointment).filter(
         Appointment.session_id == data.session_id
     ).first()
@@ -311,17 +319,13 @@ async def confirm_arrival(data: ArrivalConfirm, db: Session = Depends(get_db)):
 
 # ── DOCTOR CALLS PATIENT ──
 @router.post("/call-patient")
-async def call_patient(data: CallPatient, db: Session = Depends(get_db)):
+async def call_patient(data: CallPatient, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Doctor clicks the Call button on their dashboard.
     Sends SMS notification to patient and marks doctor as busy.
     """
-    appointment = db.query(Appointment).filter(
-        Appointment.id == data.appointment_id
-    ).first()
-
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found.")
+    must_be_doctor(user, data.doctor_id)
+    appointment = can_appointment(db, user, data.appointment_id)
 
     doctor  = db.query(Doctor).filter(Doctor.id == data.doctor_id).first()
     patient = db.query(Patient).filter(Patient.id == appointment.patient_id).first()
@@ -339,14 +343,10 @@ async def call_patient(data: CallPatient, db: Session = Depends(get_db)):
     return {"message": f"Patient {patient.full_name} has been notified."}
 
 @router.get("/appointment-status/{appointment_id}")
-async def get_appointment_status(appointment_id: str, db: Session = Depends(get_db)):
+async def get_appointment_status(appointment_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     from app.models.hospital import Hospital
 
-    appointment = db.query(Appointment).filter(
-        Appointment.id == appointment_id
-    ).first()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Not found")
+    appointment = can_appointment(db, user, appointment_id)
 
     doctor = None
     if appointment.doctor_id:
@@ -396,10 +396,8 @@ async def get_appointment_status(appointment_id: str, db: Session = Depends(get_
 
 # ── PATIENT CHECKS IN AT THE HOSPITAL THEY WERE REFERRED TO ──
 @router.post("/appointment/{appointment_id}/arrived")
-async def arrived_after_transfer(appointment_id: str, db: Session = Depends(get_db)):
-    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
-    if not appointment:
-        raise HTTPException(status_code=404, detail="Not found")
+async def arrived_after_transfer(appointment_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
+    appointment = can_appointment(db, user, appointment_id)
     if appointment.status != AppointmentStatus.PENDING:
         return {"message": "Already checked in."}
 
@@ -423,7 +421,8 @@ async def arrived_after_transfer(appointment_id: str, db: Session = Depends(get_
 
 
 @router.get("/sessions/{patient_id}")
-async def get_patient_sessions(patient_id: str, db: Session = Depends(get_db)):
+async def get_patient_sessions(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
+    can_patient(db, user, patient_id)
     sessions = db.query(ChatSession).filter(
         ChatSession.patient_id == patient_id
     ).order_by(ChatSession.started_at.desc()).all()
@@ -454,18 +453,14 @@ async def get_patient_sessions(patient_id: str, db: Session = Depends(get_db)):
     return result
 
 @router.get("/messages/{session_id}")
-async def get_session_messages(session_id: str, db: Session = Depends(get_db)):
-    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def get_session_messages(session_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
+    session = can_session(db, user, session_id)
     messages = json.loads(session.messages or "[]")
     return messages
 
 @router.get("/session/{session_id}")
-async def get_session(session_id: str, db: Session = Depends(get_db)):
-    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+async def get_session(session_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
+    session = can_session(db, user, session_id)
         
     assessment = None
     if session.ai_assessment:

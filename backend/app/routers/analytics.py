@@ -5,8 +5,25 @@ from app.database import get_db
 from app.models.verdict import Verdict
 from app.models.patient import Patient
 from app.models.hospital import Hospital
+from app.services.authz import current_doctor
 
-router = APIRouter()
+# Clinicians only. Counts below MIN_CELL are folded together so a rare
+# diagnosis in a small area can't point to one person.
+router = APIRouter(dependencies=[Depends(current_doctor)])
+MIN_CELL = 5
+OTHER = "Other conditions (fewer than 5 cases each)"
+
+
+def _suppress(counts: dict) -> dict:
+    out, other = {}, 0
+    for k, v in counts.items():
+        if v < MIN_CELL:
+            other += v
+        else:
+            out[k] = v
+    if other:
+        out[OTHER] = other
+    return out
 
 # ── ANALYTICS: SUMMARY STATS ──
 @router.get("/summary")
@@ -148,7 +165,9 @@ async def get_diseases_by_county(
     result = []
     for county, diseases in county_diseases.items():
         total_cases = sum(diseases.values())
-        top_disease = max(diseases.items(), key=lambda x: x[1])[0] if diseases else "N/A"
+        diseases = _suppress(diseases)
+        named = {k: v for k, v in diseases.items() if k != OTHER}
+        top_disease = max(named.items(), key=lambda x: x[1])[0] if named else "Not shown (few cases)"
         
         result.append({
             "county": county,

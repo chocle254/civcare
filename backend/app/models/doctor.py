@@ -36,6 +36,7 @@ class Doctor(Base):
 
     # ── AUTH ──
     password_hash      = Column(String, nullable=False)
+    password_set_at    = Column(DateTime, nullable=True)  # None = still signing in with National ID
     otp_code           = Column(String, nullable=True)
     otp_expires_at     = Column(DateTime, nullable=True)
     is_verified        = Column(Boolean, default=False)

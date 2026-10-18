@@ -811,15 +811,6 @@ async def process_message(
         result["response"] = URGENT_CHECK_MSG
         return result
 
-    print(f"[DEBUG] Turn: {turn_count}")
-    print(f"[DEBUG] Summary: {result['updated_summary']}")
-    print(f"[DEBUG] Fields: {fields_collected}, Ready: {ready_to_route}")
-    print(f"[DEBUG] symptom={result['updated_summary'].get('symptom')}")
-    print(f"[DEBUG] duration={result['updated_summary'].get('duration')}")
-    print(f"[DEBUG] associated={result['updated_summary'].get('associated')}")
-    print(f"[DEBUG] character={result['updated_summary'].get('character')}")
-    print(f"[DEBUG] fever={result['updated_summary'].get('fever')}")
-    print(f"[DEBUG] can_travel={result['updated_summary'].get('can_travel')}")
 
     if ready_to_route:
         transcript = "\n".join(

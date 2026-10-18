@@ -135,28 +135,32 @@ async def get_nearby_hospitals(lat: float, lon: float, radius_km: int = 30):
     No API key needed — completely free.
     """
     radius_m = radius_km * 1000
+    # OpenStreetMap only needs the rough area, so the exact position never
+    # leaves CivCare: round to ~1 km before querying. Distances below are
+    # still worked out from the exact position, on our server.
+    q_lat, q_lon = round(lat, 2), round(lon, 2)
 
     # Overpass query — finds hospital nodes and ways within radius
     query = f"""
     [out:json][timeout:12];
     (
-      node["amenity"="hospital"](around:{radius_m},{lat},{lon});
-      node["amenity"="clinic"](around:{radius_m},{lat},{lon});
-      node["healthcare"="hospital"](around:{radius_m},{lat},{lon});
-      way["amenity"="hospital"](around:{radius_m},{lat},{lon});
-      way["amenity"="clinic"](around:{radius_m},{lat},{lon});
+      node["amenity"="hospital"](around:{radius_m},{q_lat},{q_lon});
+      node["amenity"="clinic"](around:{radius_m},{q_lat},{q_lon});
+      node["healthcare"="hospital"](around:{radius_m},{q_lat},{q_lon});
+      way["amenity"="hospital"](around:{radius_m},{q_lat},{q_lon});
+      way["amenity"="clinic"](around:{radius_m},{q_lat},{q_lon});
     );
     out center;
     """
 
-    cache_key = (round(lat, 2), round(lon, 2), radius_km)
+    cache_key = (q_lat, q_lon, radius_km)
     cached = _CACHE.get(cache_key)
     if cached and time.time() - cached[0] < _CACHE_SECONDS:
         elements = cached[1]
     else:
         elements = await _query_overpass(query)
         if not elements:
-            elements = await _query_nominatim(lat, lon, radius_km)
+            elements = await _query_nominatim(q_lat, q_lon, radius_km)
         if elements:
             _CACHE[cache_key] = (time.time(), elements)
     data = {"elements": elements}

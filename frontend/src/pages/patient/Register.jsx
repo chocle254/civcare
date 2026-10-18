@@ -2,6 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { registerPatient, loginPatient } from '../../api/auth';
 import { normalizeKePhone, PHONE_HINT, PHONE_ERROR } from '../../utils/phone';
+import { PRIVACY_VERSION } from '../../utils/privacy';
+
+const ageFrom = (dob) => {
+  const d = new Date(dob);
+  if (!dob || Number.isNaN(d.getTime())) return null;
+  const t = new Date();
+  return t.getFullYear() - d.getFullYear() - ((t.getMonth() < d.getMonth() || (t.getMonth() === d.getMonth() && t.getDate() < d.getDate())) ? 1 : 0);
+};
+const WEAK_PINS = ['0000', '1234', '1111'];
 
 const Icon = ({ name, size = 20 }) => {
   const paths = {
@@ -144,6 +153,7 @@ export default function Register() {
   const [loginForm, setLoginForm] = useState({
     phone_number: '',
     identity_number: '',
+    pin: '',
   });
 
   const [regForm, setRegForm] = useState({
@@ -155,13 +165,20 @@ export default function Register() {
     sex: '',
     location: '',
     allergies: '',
+    pin: '',
+    pin_confirm: '',
+    guardian_name: '',
+    guardian_relationship: '',
+    consent: false,
   });
+  const regAge = ageFrom(regForm.date_of_birth);
+  const isChild = (regAge !== null && regAge < 18) || regForm.identity_type === 'birth_cert';
 
   const handleLoginChange = (e) =>
     setLoginForm({ ...loginForm, [e.target.name]: e.target.value });
 
   const handleRegChange = (e) =>
-    setRegForm({ ...regForm, [e.target.name]: e.target.value });
+    setRegForm({ ...regForm, [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
 
   const switchMode = (nextMode) => {
     setMode(nextMode);
@@ -216,6 +233,22 @@ export default function Register() {
       setError('Please fill in all required fields.');
       return;
     }
+    if (!/^\d{4}$/.test(regForm.pin) || WEAK_PINS.includes(regForm.pin)) {
+      setError('Choose a 4-digit PIN that isn\'t easy to guess, like 1234 or 0000.');
+      return;
+    }
+    if (regForm.pin !== regForm.pin_confirm) {
+      setError('The two PINs don\'t match.');
+      return;
+    }
+    if (isChild && !regForm.guardian_name.trim()) {
+      setError('Patients under 18 need a parent or guardian to agree. Enter their name.');
+      return;
+    }
+    if (!regForm.consent) {
+      setError('Read and agree to the privacy notice to create an account.');
+      return;
+    }
 
     const phone = normalizeKePhone(regForm.phone_number);
     if (!phone) {
@@ -226,7 +259,8 @@ export default function Register() {
     setLoading(true);
 
     try {
-      const res = await registerPatient({ ...regForm, phone_number: phone });
+      const { pin_confirm, ...body } = regForm;
+      const res = await registerPatient({ ...body, phone_number: phone, consent_version: PRIVACY_VERSION });
       saveAndNavigate(res.data);
     } catch (err) {
       setError(
@@ -702,6 +736,45 @@ export default function Register() {
           display: none;
         }
 
+        .cc-consent {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          margin: 4px 0 16px;
+          padding: 12px 13px;
+          border: 1px solid var(--cc-border);
+          border-radius: 12px;
+          background: var(--cc-surface-soft);
+          color: var(--cc-text);
+          font-size: 12px;
+          line-height: 1.55;
+          cursor: pointer;
+        }
+
+        .cc-consent input {
+          width: 18px;
+          height: 18px;
+          margin-top: 1px;
+          flex: 0 0 18px;
+          accent-color: var(--cc-primary);
+        }
+
+        .cc-consent a,
+        .cc-privacy a {
+          color: var(--cc-primary);
+          font-weight: 700;
+        }
+
+        .cc-guardian-note {
+          margin: 0;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: var(--cc-primary-soft);
+          color: var(--cc-text);
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
         @media (max-width: 800px) {
           .cc-auth-page {
             padding: 18px 14px 28px;
@@ -1019,6 +1092,19 @@ export default function Register() {
                     required
                   />
 
+                  <Field
+                    label="PIN"
+                    name="pin"
+                    value={loginForm.pin}
+                    onChange={handleLoginChange}
+                    placeholder="4 digits"
+                    icon="shield"
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="current-password"
+                    hint="Haven't set a PIN yet? Leave this empty and you'll be asked to choose one."
+                  />
+
                   <button
                     className="cc-submit"
                     type="submit"
@@ -1171,7 +1257,78 @@ export default function Register() {
                         icon="heart"
                       />
                     </div>
+
+                    <Field
+                      label="Choose a PIN"
+                      name="pin"
+                      value={regForm.pin}
+                      onChange={handleRegChange}
+                      placeholder="4 digits"
+                      icon="shield"
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="new-password"
+                      hint="You'll use it to sign in. Don't reuse your M-Pesa PIN."
+                      required
+                    />
+
+                    <Field
+                      label="Repeat PIN"
+                      name="pin_confirm"
+                      value={regForm.pin_confirm}
+                      onChange={handleRegChange}
+                      placeholder="4 digits"
+                      icon="shield"
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="new-password"
+                      required
+                    />
+
+                    {isChild && (
+                      <>
+                        <div className="cc-auth-field full">
+                          <p className="cc-guardian-note">
+                            This patient is under 18, so a parent or guardian needs to agree on their behalf.
+                          </p>
+                        </div>
+                        <Field
+                          label="Parent or guardian's name"
+                          name="guardian_name"
+                          value={regForm.guardian_name}
+                          onChange={handleRegChange}
+                          placeholder="e.g. Mary Achieng"
+                          icon="user"
+                          required
+                        />
+                        <Field
+                          label="Relationship"
+                          name="guardian_relationship"
+                          value={regForm.guardian_relationship}
+                          onChange={handleRegChange}
+                          placeholder="e.g. Mother"
+                          icon="user"
+                        />
+                      </>
+                    )}
                   </div>
+
+                  <label className="cc-consent" htmlFor="consent">
+                    <input
+                      id="consent"
+                      name="consent"
+                      type="checkbox"
+                      checked={regForm.consent}
+                      onChange={handleRegChange}
+                    />
+                    <span>
+                      {isChild ? 'As their parent or guardian, I have read' : 'I have read'} the{' '}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer">privacy notice</a>{' '}
+                      and agree that CivCare may use {isChild ? 'their' : 'my'} health information to guide{' '}
+                      {isChild ? 'them' : 'me'} and share it with the doctors {isChild ? 'they choose' : 'I choose'}.
+                      This includes sending what {isChild ? 'they type' : 'I type'} to an AI service outside Kenya.
+                    </span>
+                  </label>
 
                   <button
                     className="cc-submit"
@@ -1207,9 +1364,8 @@ export default function Register() {
               </button>
 
               <p className="cc-privacy">
-                Your information is handled securely and in accordance
-                with applicable healthcare privacy and data-protection
-                requirements, including the Kenya Data Protection Act 2019.
+                CivCare follows the Kenya Data Protection Act 2019. Read the{' '}
+                <a href="/privacy">privacy notice</a> to see what we collect, who sees it, and your rights.
               </p>
             </section>
           </section>

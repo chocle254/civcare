@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.services.mpesa import stk_push, parse_mpesa_callback
 from app.services.airtel import airtel_payment
+from app.services.authz import Principal, current_user, only_patient
 
 router = APIRouter()
 
@@ -18,12 +19,13 @@ class PaymentRequest(BaseModel):
 
 
 @router.post("/mpesa")
-async def pay_mpesa(data: PaymentRequest, db: Session = Depends(get_db)):
+async def pay_mpesa(data: PaymentRequest, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Initiates M-Pesa STK push to patient's phone.
     Patient enters their M-Pesa PIN on their phone.
     Plug in MPESA credentials in .env to activate.
     """
+    only_patient(user, data.patient_id)
     result = await stk_push(
         phone_number=data.phone_number.replace("+", ""),
         amount=data.amount,
@@ -45,17 +47,18 @@ async def mpesa_callback(request: Request, db: Session = Depends(get_db)):
 
     if result.get("success"):
         # TODO: find consultation by reference and mark payment as confirmed
-        print(f"M-Pesa payment confirmed: {result}")
+        print("M-Pesa payment confirmed")
 
     return {"ResultCode": 0, "ResultDesc": "Accepted"}
 
 
 @router.post("/airtel")
-async def pay_airtel(data: PaymentRequest, db: Session = Depends(get_db)):
+async def pay_airtel(data: PaymentRequest, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Initiates Airtel Money payment.
     Plug in AIRTEL credentials in .env to activate.
     """
+    only_patient(user, data.patient_id)
     result = await airtel_payment(
         phone_number=data.phone_number.replace("+", ""),
         amount=data.amount,

@@ -41,6 +41,14 @@ class Patient(Base):
     otp_code         = Column(String, nullable=True)
     otp_expires_at   = Column(DateTime, nullable=True)
     is_verified      = Column(Boolean, default=False)
+    pin_hash         = Column(String, nullable=True)   # 4-digit PIN, salted hash; None on accounts made before PINs
+
+    # ── CONSENT (Data Protection Act 2019, ss. 30, 32, 33, 49) ──
+    consent_version  = Column(String, nullable=True)   # privacy notice version the patient agreed to
+    consent_at       = Column(DateTime, nullable=True)
+    guardian_name    = Column(String, nullable=True)   # parent/guardian who consented for a child under 18
+    guardian_relationship = Column(String, nullable=True)
+    deleted_at       = Column(DateTime, nullable=True) # set when the patient erased their account
 
     # ── TIMESTAMPS ──
     created_at       = Column(DateTime, default=datetime.utcnow)
@@ -54,4 +62,4 @@ class Patient(Base):
     record_accesses  = relationship("RecordAccess",   back_populates="patient")
 
     def __repr__(self):
-        return f"<Patient {self.full_name} — {self.identity_type}: {self.identity_number}>"
+        return f"<Patient {self.id}>"

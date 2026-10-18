@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { registerDoctor, loginDoctor } from '../../api/auth';
+import client from '../../api/client';
 import Icon from '../../components/Icons';
 
 export default function DoctorLogin() {
@@ -10,9 +11,10 @@ export default function DoctorLogin() {
   const [error, setError] = useState('');
   const [showNatId, setShowNatId] = useState(false);
 
-  const [loginForm, setLoginForm] = useState({ kmpdb_license: '', national_id: '' });
+  const [loginForm, setLoginForm] = useState({ kmpdb_license: '', password: '' });
+  const [pwForm, setPwForm] = useState({ password: '', confirm: '' });
   const [regForm, setRegForm] = useState({
-    full_name: '', phone_number: '', national_id: '', kmpdb_license: '',
+    full_name: '', phone_number: '', password: '', confirm: '', kmpdb_license: '',
     specialisation: '', hospital_name: '', consultation_fee: '',
     shift_start: '08:00', shift_end: '17:00',
   });
@@ -21,7 +23,10 @@ export default function DoctorLogin() {
   // Already signed in? Skip the sign-in screen (e.g. when pressing Back).
   useEffect(() => {
     if (localStorage.getItem('civtech_token') && localStorage.getItem('civtech_doctor')) {
-      navigate('/doctor/dashboard', { replace: true });
+      let doc = {};
+      try { doc = JSON.parse(localStorage.getItem('civtech_doctor') || '{}'); } catch { doc = {}; }
+      if (doc.must_set_password) setMode('setpw');
+      else navigate('/doctor/dashboard', { replace: true });
     }
   }, [navigate]);
 
@@ -47,13 +52,34 @@ export default function DoctorLogin() {
   const saveAndNavigate = (data) => {
     localStorage.setItem('civtech_token', data.access_token);
     localStorage.setItem('civtech_doctor', JSON.stringify(data.doctor));
+    if (data.doctor?.must_set_password) { setMode('setpw'); setError(''); return; }
     navigate('/doctor/dashboard', { replace: true });
+  };
+
+  // Accounts made before passwords existed sign in once with their National
+  // ID, then must choose a real password before reaching patient records.
+  const handleSetPassword = async () => {
+    setError('');
+    if (pwForm.password.length < 8 || /^\d+$/.test(pwForm.password)) {
+      setError('Choose a password of at least 8 characters that isn\'t only numbers.');
+      return;
+    }
+    if (pwForm.password !== pwForm.confirm) { setError('The two passwords don\'t match.'); return; }
+    setLoading(true);
+    try {
+      await client.post('/auth/doctor/set-password', { password: pwForm.password, current_password: loginForm.password });
+      const doc = JSON.parse(localStorage.getItem('civtech_doctor') || '{}');
+      localStorage.setItem('civtech_doctor', JSON.stringify({ ...doc, must_set_password: false }));
+      navigate('/doctor/dashboard', { replace: true });
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not save your password. Try again.');
+    } finally { setLoading(false); }
   };
 
   const handleLogin = async () => {
     setError('');
-    if (!loginForm.kmpdb_license || !loginForm.national_id) {
-      setError('Please enter your KMPDB license number and National ID.');
+    if (!loginForm.kmpdb_license || !loginForm.password) {
+      setError('Enter your KMPDB licence number and password.');
       return;
     }
     setLoading(true);
@@ -64,11 +90,17 @@ export default function DoctorLogin() {
 
   const handleRegister = async () => {
     setError('');
-    const required = ['full_name', 'phone_number', 'national_id', 'kmpdb_license', 'hospital_name'];
+    const required = ['full_name', 'phone_number', 'password', 'kmpdb_license', 'hospital_name'];
     for (const f of required) { if (!regForm[f]) { setError('Please fill in all required fields.'); return; } }
+    if (regForm.password.length < 8 || /^\d+$/.test(regForm.password)) {
+      setError('Choose a password of at least 8 characters that isn\'t only numbers.');
+      return;
+    }
+    if (regForm.password !== regForm.confirm) { setError('The two passwords don\'t match.'); return; }
     setLoading(true);
     try {
-      const res = await registerDoctor({ ...regForm, consultation_fee: parseFloat(regForm.consultation_fee) || 0 });
+      const { confirm, ...body } = regForm;
+      const res = await registerDoctor({ ...body, consultation_fee: parseFloat(regForm.consultation_fee) || 0 });
       saveAndNavigate(res.data);
     } catch (err) { setError(err.response?.data?.detail || 'Registration failed. Please try again.'); }
     finally { setLoading(false); }
@@ -77,7 +109,9 @@ export default function DoctorLogin() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (loading) return;
-    mode === 'login' ? handleLogin() : handleRegister();
+    if (mode === 'setpw') handleSetPassword();
+    else if (mode === 'login') handleLogin();
+    else handleRegister();
   };
 
   const switchMode = (m) => { setMode(m); setError(''); };
@@ -87,7 +121,7 @@ export default function DoctorLogin() {
       type="button"
       className="dl-eye"
       onClick={() => setShowNatId((v) => !v)}
-      aria-label={showNatId ? 'Hide National ID' : 'Show National ID'}
+      aria-label={showNatId ? 'Hide password' : 'Show password'}
       aria-pressed={showNatId}
     >
       {showNatId ? <Icon.EyeOff size={18} /> : <Icon.Eye size={18} />}
@@ -119,14 +153,16 @@ export default function DoctorLogin() {
             <span>CivCare <small>Clinician portal</small></span>
           </div>
 
-          <h1 className="dl-title">{mode === 'login' ? 'Sign in' : 'Create your clinician account'}</h1>
+          <h1 className="dl-title">{mode === 'setpw' ? 'Choose a password' : mode === 'login' ? 'Sign in' : 'Create your clinician account'}</h1>
           <p className="dl-sub">
-            {mode === 'login'
-              ? 'Use your KMPDB licence number and National ID.'
-              : 'You will sign in with your KMPDB licence number and National ID.'}
+            {mode === 'setpw'
+              ? 'Your National ID is no longer enough to protect patient records. Choose a password you\'ll use from now on.'
+              : mode === 'login'
+              ? 'Use your KMPDB licence number and password.'
+              : 'You will sign in with your KMPDB licence number and a password.'}
           </p>
 
-          <div className="dl-tabs" role="tablist" aria-label="Account">
+          {mode !== 'setpw' && <div className="dl-tabs" role="tablist" aria-label="Account">
             {['login', 'register'].map((m) => (
               <button
                 key={m}
@@ -139,7 +175,7 @@ export default function DoctorLogin() {
                 {m === 'login' ? 'Sign in' : 'Register'}
               </button>
             ))}
-          </div>
+          </div>}
 
           {error && (
             <div className="alert alert--error" role="alert">
@@ -158,13 +194,14 @@ export default function DoctorLogin() {
                     value={loginForm.kmpdb_license} onChange={handleLoginChange} />
                 </div>
                 <div className="form-group">
-                  <label className="label" htmlFor="dl-natid">National ID number</label>
+                  <label className="label" htmlFor="dl-pass">Password</label>
                   <div className="dl-pw">
-                    <input id="dl-natid" className="input" name="national_id" inputMode="numeric"
+                    <input id="dl-pass" className="input" name="password" aria-describedby="dl-pass-hint"
                       type={showNatId ? 'text' : 'password'} autoComplete="current-password"
-                      value={loginForm.national_id} onChange={handleLoginChange} />
+                      value={loginForm.password} onChange={handleLoginChange} />
                     {natIdToggle}
                   </div>
+                  <p id="dl-pass-hint" className="dl-hint">First time since passwords were added? Enter your National ID; you'll then choose a password.</p>
                 </div>
                 <button type="submit" className="btn btn--primary" disabled={loading}>
                   {loading && <span className="dl-spin" aria-hidden="true" />}
@@ -174,6 +211,34 @@ export default function DoctorLogin() {
                   First time here?{' '}
                   <button type="button" className="dl-link" onClick={() => switchMode('register')}>Register your account</button>
                 </p>
+              </>
+            )}
+
+            {mode === 'setpw' && (
+              <>
+                <div className="form-group">
+                  <label className="label" htmlFor="dl-newpw">New password</label>
+                  <div className="dl-pw">
+                    <input id="dl-newpw" className="input" type={showNatId ? 'text' : 'password'} autoComplete="new-password"
+                      value={pwForm.password} onChange={(e) => setPwForm({ ...pwForm, password: e.target.value })} />
+                    {natIdToggle}
+                  </div>
+                  <p className="dl-hint">At least 8 characters, not only numbers, and not your National ID.</p>
+                </div>
+                <div className="form-group">
+                  <label className="label" htmlFor="dl-newpw2">Repeat new password</label>
+                  <input id="dl-newpw2" className="input" type={showNatId ? 'text' : 'password'} autoComplete="new-password"
+                    value={pwForm.confirm} onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })} />
+                </div>
+                {!loginForm.password && (
+                  <p className="dl-hint">Sign in again to change your password.{' '}
+                    <button type="button" className="dl-link" onClick={() => { localStorage.clear(); switchMode('login'); }}>Sign in</button>
+                  </p>
+                )}
+                <button type="submit" className="btn btn--primary" disabled={loading || !loginForm.password}>
+                  {loading && <span className="dl-spin" aria-hidden="true" />}
+                  {loading ? 'Saving…' : 'Save password and continue'}
+                </button>
               </>
             )}
 
@@ -192,13 +257,20 @@ export default function DoctorLogin() {
                       value={regForm.phone_number} onChange={handleRegChange} />
                   </div>
                   <div className="form-group">
-                    <label className="label" htmlFor="dl-natid-r">National ID number <Req /></label>
+                    <label className="label" htmlFor="dl-pass-r">Password <Req /></label>
                     <div className="dl-pw">
-                      <input id="dl-natid-r" className="input" name="national_id" inputMode="numeric"
+                      <input id="dl-pass-r" className="input" name="password"
                         type={showNatId ? 'text' : 'password'} autoComplete="new-password"
-                        value={regForm.national_id} onChange={handleRegChange} />
+                        value={regForm.password} onChange={handleRegChange} />
                       {natIdToggle}
                     </div>
+                    <p className="dl-hint">At least 8 characters, not only numbers.</p>
+                  </div>
+                  <div className="form-group">
+                    <label className="label" htmlFor="dl-pass-c">Repeat password <Req /></label>
+                    <input id="dl-pass-c" className="input" name="confirm"
+                      type={showNatId ? 'text' : 'password'} autoComplete="new-password"
+                      value={regForm.confirm} onChange={handleRegChange} />
                   </div>
                 </fieldset>
 
@@ -302,6 +374,7 @@ export default function DoctorLogin() {
         .dl-link:hover { text-decoration: underline; }
         .dl-link--muted { color: var(--cc-muted); font-weight: 500; font-size: 14px; }
         .dl-req { color: var(--cc-danger); }
+        .dl-hint { font-size: 13px; color: var(--cc-muted); margin-top: 6px; line-height: 1.45; }
         .dl-foot { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--cc-border); display: flex; flex-direction: column; align-items: center; gap: 10px; }
         .dl-foot p { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--cc-muted); text-align: center; }
         @media (max-width: 900px) {

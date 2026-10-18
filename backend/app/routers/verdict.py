@@ -8,6 +8,7 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.prescription import Prescription
 from app.models.doctor import Doctor, DoctorStatus
 from app.services.rlhf import submit_ai_rating
+from app.services.authz import Principal, current_user, current_doctor, must_be_doctor, can_patient, doctor_cares_for, log_access
 
 router = APIRouter()
 
@@ -32,7 +33,7 @@ class VerdictSubmit(BaseModel):
 
 # ── DOCTOR SUBMITS VERDICT ──
 @router.post("/submit")
-async def submit_verdict(data: VerdictSubmit, db: Session = Depends(get_db)):
+async def submit_verdict(data: VerdictSubmit, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     Doctor submits their diagnosis and prescriptions.
     - Prescriptions saved to patient profile (feeds MedScan)
@@ -44,8 +45,12 @@ async def submit_verdict(data: VerdictSubmit, db: Session = Depends(get_db)):
     # The verdict screen is used after hospital visits (an appointment) and
     # after online consultations (a consultation id). Only link real
     # appointments; a consultation id there breaks the foreign key.
+    must_be_doctor(user, data.doctor_id)
+    if not doctor_cares_for(db, user.id, data.patient_id):
+        raise HTTPException(status_code=403, detail="You can only write a verdict for your own patient.")
     appointment = db.query(Appointment).filter(
-        Appointment.id == data.appointment_id
+        Appointment.id == data.appointment_id,
+        Appointment.patient_id == data.patient_id,
     ).first()
     appointment_id = appointment.id if appointment else None
 
@@ -103,6 +108,7 @@ async def submit_verdict(data: VerdictSubmit, db: Session = Depends(get_db)):
         notes=data.notes or "",
     )
 
+    log_access(db, user, data.patient_id, "wrote a diagnosis and prescription", data.diagnosis[:120])
     return {
         "message":    "Verdict submitted successfully.",
         "verdict_id": verdict.id,
@@ -110,14 +116,17 @@ async def submit_verdict(data: VerdictSubmit, db: Session = Depends(get_db)):
 
 # ── PATIENT VIEWS DIAGNOSIS HISTORY ──
 @router.get("/history/{patient_id}")
-async def get_patient_history(patient_id: str, db: Session = Depends(get_db)):
+async def get_patient_history(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Patient views their past diagnoses and verdicts.
     Returns verdicts newest first, with doctor info and severity.
     """
     from app.models.doctor import Doctor
     from app.models.prescription import Prescription
-    
+    can_patient(db, user, patient_id)
+    if user.is_doctor:
+        log_access(db, user, patient_id, "viewed past diagnoses")
+
     verdicts = db.query(Verdict).filter(
         Verdict.patient_id == patient_id
     ).order_by(Verdict.submitted_at.desc()).all()

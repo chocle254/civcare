@@ -55,7 +55,7 @@ async def send_due_reminders():
                 reminder.is_sent = True
                 reminder.sent_at = now
                 db.commit()
-                print(f"Reminder sent to {patient.phone_number} for {prescription.medication_name}")
+                print(f"Reminder sent for prescription {prescription.id[:8]}")
 
     except Exception as e:
         print(f"Reminder scheduler error: {e}")
@@ -147,7 +147,7 @@ async def check_doctor_inactivity():
         ).all()
 
         for doctor in inactive:
-            print(f"Doctor {doctor.full_name} marked offline due to inactivity")
+            print(f"Doctor {doctor.id[:8]} marked offline due to inactivity")
             doctor.status = DoctorStatus.OFFLINE
 
             # Notify doctor via SMS
@@ -162,6 +162,43 @@ async def check_doctor_inactivity():
 
     except Exception as e:
         print(f"Inactivity check error: {e}")
+    finally:
+        db.close()
+
+
+# How long a health-assistant conversation that never led to a visit or a
+# consultation is kept (DPA s. 39: no longer than needed). Conversations that
+# led to care are part of the clinical record and are kept.
+UNUSED_CHAT_RETENTION_DAYS = 365
+
+
+async def purge_unused_chats():
+    """Runs daily. Empties old conversations that never led to care."""
+    from app.models.session import ChatSession
+    from app.models.appointment import Appointment
+    db: Session = SessionLocal()
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=UNUSED_CHAT_RETENTION_DAYS)
+        used = db.query(Appointment.session_id).filter(Appointment.session_id.isnot(None))
+        used_consult = db.query(Consultation.session_id).filter(Consultation.session_id.isnot(None))
+        old = db.query(ChatSession).filter(
+            ChatSession.started_at < cutoff,
+            ChatSession.messages != "[]",
+            ~ChatSession.id.in_(used),
+            ~ChatSession.id.in_(used_consult),
+        ).all()
+        for s in old:
+            s.messages = "[]"
+            s.triage_summary = None
+            s.case_file_cache = None
+            s.ai_assessment = None
+            s.clash_details = None
+        if old:
+            db.commit()
+            print(f"Retention: emptied {len(old)} unused conversation(s)")
+    except Exception as e:
+        db.rollback()
+        print(f"Retention job error: {type(e).__name__}")
     finally:
         db.close()
 
@@ -193,6 +230,13 @@ def start_scheduler():
         check_doctor_inactivity,
         trigger=IntervalTrigger(minutes=5),
         id="doctor_inactivity",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        purge_unused_chats,
+        trigger=IntervalTrigger(hours=24),
+        id="retention_unused_chats",
         replace_existing=True,
     )
 

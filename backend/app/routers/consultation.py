@@ -7,6 +7,8 @@ from app.models.consultation import Consultation, ConsultationStatus, PaymentSta
 from app.models.doctor import Doctor, DoctorStatus
 from app.models.patient import Patient
 from app.services.africastalking import send_consultation_request
+from app.services.authz import Principal, current_user, current_doctor, only_patient, must_be_doctor, can_consultation, log_access
+from app.services.consent import has_consent
 
 router = APIRouter()
 
@@ -32,16 +34,19 @@ class ConsultRate(BaseModel):
 
 
 @router.post("/initiate")
-async def initiate_consultation(data: ConsultInit, db: Session = Depends(get_db)):
+async def initiate_consultation(data: ConsultInit, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Called after payment is confirmed.
     Creates consultation record and notifies doctor to call patient.
     """
+    only_patient(user, data.patient_id)
     doctor  = db.query(Doctor).filter(Doctor.id == data.doctor_id).first()
     patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
 
     if not doctor or not patient:
         raise HTTPException(status_code=404, detail="Doctor or patient not found.")
+    if not has_consent(patient):
+        raise HTTPException(status_code=403, detail="consent_required")
 
     # Calculate platform commission (15%)
     commission    = round(data.fee_amount * 0.15, 2)
@@ -88,8 +93,9 @@ async def initiate_consultation(data: ConsultInit, db: Session = Depends(get_db)
     }
 
 @router.get("/pending")
-async def get_pending_consultations(doctor_id: str, db: Session = Depends(get_db)):
+async def get_pending_consultations(doctor_id: str, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """Doctor dashboard polls this for the Consultations tab."""
+    must_be_doctor(user, doctor_id)
     consultations = db.query(Consultation).filter(
         Consultation.doctor_id == doctor_id,
         Consultation.status.in_([
@@ -125,12 +131,8 @@ async def get_pending_consultations(doctor_id: str, db: Session = Depends(get_db
     return result
 
 @router.get("/status/{consultation_id}")
-async def get_consultation_status(consultation_id: str, db: Session = Depends(get_db)):
-    consult = db.query(Consultation).filter(
-        Consultation.id == consultation_id
-    ).first()
-    if not consult:
-        raise HTTPException(status_code=404, detail="Consultation not found")
+async def get_consultation_status(consultation_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
+    consult = can_consultation(db, user, consultation_id)
     return {"status": consult.status}
 
 
@@ -138,12 +140,8 @@ class MarkCalled(BaseModel):
     consultation_id: str
 
 @router.post("/mark-called")
-async def mark_consultation_called(data: MarkCalled, db: Session = Depends(get_db)):
-    consult = db.query(Consultation).filter(
-        Consultation.id == data.consultation_id
-    ).first()
-    if not consult:
-        raise HTTPException(status_code=404, detail="Not found")
+async def mark_consultation_called(data: MarkCalled, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
+    consult = can_consultation(db, user, data.consultation_id)
     consult.status = "called"
     db.commit()
     return {"message": "Marked as called"}
@@ -151,15 +149,12 @@ async def mark_consultation_called(data: MarkCalled, db: Session = Depends(get_d
 
 
 @router.get("/{consultation_id}")
-async def get_consultation(consultation_id: str, db: Session = Depends(get_db)):
+async def get_consultation(consultation_id: str, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """Doctor views consultation details during active call."""
-    consult = db.query(Consultation).filter(
-        Consultation.id == consultation_id
-    ).first()
-    if not consult:
-        raise HTTPException(status_code=404, detail="Consultation not found.")
+    consult = can_consultation(db, user, consultation_id)
 
     patient = db.query(Patient).filter(Patient.id == consult.patient_id).first()
+    log_access(db, user, consult.patient_id, "opened consultation file", f"online consultation {consult.id[:8]}")
 
 
     # Pull symptoms and AI assessment from triage session if available
@@ -208,12 +203,13 @@ async def get_consultation(consultation_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/complete")
-async def complete_consultation(data: ConsultComplete, db: Session = Depends(get_db)):
+async def complete_consultation(data: ConsultComplete, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     Doctor marks consultation as complete.
     Triggers payment release from escrow to doctor.
     Doctor status switches back to available.
     """
+    must_be_doctor(user, data.doctor_id)
     consult = db.query(Consultation).filter(
         Consultation.id       == data.consultation_id,
         Consultation.doctor_id == data.doctor_id,
@@ -237,17 +233,15 @@ async def complete_consultation(data: ConsultComplete, db: Session = Depends(get
 
 
 @router.post("/rate")
-async def rate_consultation(data: ConsultRate, db: Session = Depends(get_db)):
+async def rate_consultation(data: ConsultRate, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Patient rates their experience (1-5 stars).
     This ALSO releases the payment — patient does not know this 😂
     If already released by doctor, just saves the rating.
     """
-    consult = db.query(Consultation).filter(
-        Consultation.id == data.consultation_id
-    ).first()
-    if not consult:
-        raise HTTPException(status_code=404, detail="Consultation not found.")
+    consult = can_consultation(db, user, data.consultation_id)
+    if not user.is_patient:
+        raise HTTPException(status_code=403, detail="Only the patient can rate a consultation.")
 
     consult.patient_rating          = str(data.patient_rating)
     consult.patient_feedback        = data.patient_feedback

@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -11,6 +11,8 @@ from app.models.patient import Patient
 from app.routers import analytics
 from app.websocket.queue import connect, disconnect, broadcast_queue_update
 from app.services.scheduler import start_scheduler
+from app.services.security import mask
+from app.services.authz import Principal, current_doctor, must_be_doctor, websocket_user, log_access
 import json
 
 
@@ -19,37 +21,69 @@ from app.routers import (
     auth, triage, hospitals, doctors,
     records, medscan, consultation,
     payment, reminders, verdict,
-    ussd, sms, prescriptions, video
+    ussd, sms, prescriptions, video, privacy
 )
 
+import os
+import re
+
+# The interactive API docs list every endpoint; keep them off in production
+# unless SHOW_API_DOCS=1 is set.
+_docs = os.environ.get("SHOW_API_DOCS") == "1"
 app = FastAPI(
     title=settings.APP_NAME,
     description="AI-powered healthcare platform for Africa",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
 )
 
 # ── CORS ──
+# Only CivCare's own web app may call the API from a browser. Extra origins
+# can be added with ALLOWED_ORIGINS (comma-separated).
+_ORIGIN_RE = r"https://civcare[a-z0-9-]*\.vercel\.app|http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?"
+_EXTRA_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_EXTRA_ORIGINS,
+    allow_origin_regex=_ORIGIN_RE,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+def _origin_ok(origin: str) -> bool:
+    return bool(origin) and (origin in _EXTRA_ORIGINS or re.fullmatch(_ORIGIN_RE, origin) is not None)
+
 
 # ── PREFLIGHT HANDLER ──
 @app.options("/{rest_of_path:path}")
 async def preflight_handler(rest_of_path: str, request: Request):
+    origin = request.headers.get("origin", "")
+    if not _origin_ok(origin):
+        return JSONResponse(content={}, status_code=400)
     return JSONResponse(
         content={},
         headers={
-            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Vary": "Origin",
         }
     )
+
+
+# ── SECURITY HEADERS ──
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = response.headers.get("Cache-Control", "no-store")
+    return response
 
 # ── REGISTER ROUTERS ──
 app.include_router(auth.router,          prefix="/auth",         tags=["Authentication"])
@@ -67,6 +101,7 @@ app.include_router(sms.router,           prefix="/sms",          tags=["SMS"])
 app.include_router(prescriptions.router, prefix="/prescriptions",tags=["Prescriptions"])
 app.include_router(video.router,         prefix="/video",        tags=["Video"])
 app.include_router(analytics.router,     prefix="/analytics",    tags=["analytics"])
+app.include_router(privacy.router,       prefix="/privacy",      tags=["Privacy"])
 
 # ── STARTUP ──
 @app.on_event("startup")
@@ -97,6 +132,10 @@ async def websocket_queue(websocket: WebSocket, hospital_id: str):
     When a patient confirms arrival, all connected doctors at that hospital
     receive the updated queue instantly — no page refresh needed.
     """
+    user = websocket_user(websocket)
+    if not user or not user.is_doctor or (user.hospital_id and user.hospital_id != hospital_id):
+        await websocket.close(code=4401)
+        return
     await connect(websocket, hospital_id)
     try:
         while True:
@@ -108,11 +147,12 @@ async def websocket_queue(websocket: WebSocket, hospital_id: str):
 
 # ── QUEUE ENDPOINT (initial load + broadcast helper) ──
 @app.get("/triage/queue")
-async def get_queue(hospital_id: str, doctor_id: str):
+async def get_queue(hospital_id: str, doctor_id: str, user: Principal = Depends(current_doctor)):
     """
     Returns current patient queue for a doctor's dashboard.
     Also used internally after each arrival to broadcast updates.
     """
+    must_be_doctor(user, doctor_id)
     db = SessionLocal()
     try:
         appointments = db.query(Appointment).filter(
@@ -158,8 +198,9 @@ def _transfer_info(db, appt):
 
 # ── APPOINTMENT PROFILE ENDPOINT ──
 @app.get("/triage/appointment/{appointment_id}")
-async def get_appointment(appointment_id: str, doctor_id: str):
+async def get_appointment(appointment_id: str, doctor_id: str, user: Principal = Depends(current_doctor)):
     """Full patient profile for doctor view."""
+    must_be_doctor(user, doctor_id)
     db = SessionLocal()
     try:
         appt = db.query(Appointment).filter(
@@ -172,6 +213,7 @@ async def get_appointment(appointment_id: str, doctor_id: str):
             raise HTTPException(status_code=404, detail="Appointment not found.")
 
         patient  = db.query(Patient).filter(Patient.id == appt.patient_id).first()
+        log_access(db, user, appt.patient_id, "opened case file", f"hospital visit {appt.id[:8]}")
 
         # Load conversation from session
         from app.models.session import ChatSession
@@ -275,7 +317,8 @@ Rules:
             "patient_sex":       (patient.sex or "").capitalize() if patient else "",
             "patient_location":  patient.location if patient else "—",
             "identity_type":     patient.identity_type if patient else "—",
-            "identity_number":   patient.identity_number if patient else "—",
+            # Only the last digits: enough to match a hospital file, not enough to misuse.
+            "identity_number":   mask(patient.identity_number) if patient else "—",
             "risk_score":        appt.risk_score or "moderate",
             "risk_numeric":      session.risk_score_numeric if session and session.risk_score_numeric else appt.risk_numeric or "50",
             "ai_assessment":     session.ai_assessment if session else "",

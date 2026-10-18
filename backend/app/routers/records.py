@@ -8,6 +8,7 @@ from app.models.patient import Patient
 from app.models.doctor import Doctor
 from app.services.encryption import generate_key_two, verify_key_two, decrypt_record
 from app.agents.records_agent import generate_patient_summary
+from app.services.authz import Principal, current_doctor, must_be_doctor, doctor_cares_for, log_access
 
 router = APIRouter()
 
@@ -26,12 +27,15 @@ class AccessVerify(BaseModel):
 
 
 @router.post("/request-access")
-async def request_access(data: AccessRequest, db: Session = Depends(get_db)):
+async def request_access(data: AccessRequest, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     Doctor requests access to patient records.
     System generates Key 2 and returns it to the doctor.
     Key 2 expires automatically after 24 hours.
     """
+    must_be_doctor(user, data.doctor_id)
+    if not doctor_cares_for(db, user.id, data.patient_id):
+        raise HTTPException(status_code=403, detail="You can only open records for your own patients.")
     patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found.")
@@ -63,11 +67,12 @@ async def request_access(data: AccessRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/view")
-async def view_record(data: AccessVerify, db: Session = Depends(get_db)):
+async def view_record(data: AccessVerify, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """
     Doctor views patient record using both keys.
     Returns a structured summary — never raw patient data.
     """
+    must_be_doctor(user, data.doctor_id)
     access = db.query(RecordAccess).filter(
         RecordAccess.id        == data.access_id,
         RecordAccess.patient_id == data.patient_id,
@@ -90,6 +95,7 @@ async def view_record(data: AccessVerify, db: Session = Depends(get_db)):
 
     # Build patient data for summary
     patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
+    log_access(db, user, data.patient_id, "opened record summary")
 
     raw_record = {
         "name":             patient.full_name,

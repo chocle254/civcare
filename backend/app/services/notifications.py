@@ -34,4 +34,4 @@ async def notify_consultation_request(doctor_id: str, patient_name: str):
     Currently handled via SMS in africastalking.py.
     Future: send via WebSocket or FCM push notification.
     """
-    print(f"[Notification] Consultation request for Dr. {doctor_id} from {patient_name}")
+    print(f"[Notification] Consultation request for doctor {doctor_id[:8]}")

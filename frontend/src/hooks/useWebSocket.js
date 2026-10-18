@@ -11,7 +11,8 @@ export default function useWebSocket(hospitalId, onMessage) {
   useEffect(() => {
     if (!hospitalId) return;
 
-    const url = `${process.env.REACT_APP_WS_URL || 'ws://localhost:8000'}/ws/queue/${hospitalId}`;
+    const token = encodeURIComponent(localStorage.getItem('civtech_token') || '');
+    const url = `${process.env.REACT_APP_WS_URL || 'ws://localhost:8000'}/ws/queue/${hospitalId}?token=${token}`;
     let reconnectTimer = null;
     let active = true;
 

@@ -217,6 +217,13 @@ export default function Dashboard() {
     }
   });
 
+  // Signed out, or still on the old National ID login: back to sign-in.
+  useEffect(() => {
+    if (!doctor.id || !localStorage.getItem("civtech_token") || doctor.must_set_password) {
+      navigate("/doctor", { replace: true });
+    }
+  }, [doctor.id, doctor.must_set_password, navigate]);
+
   // ── Ping ──
   // Keeps the doctor marked active and shows the status the server actually
   // has: opening a case file or a long time away can change it.

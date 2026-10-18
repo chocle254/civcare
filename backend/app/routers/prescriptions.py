@@ -3,12 +3,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.prescription import Prescription
 from app.models.patient import Patient
+from app.services.authz import Principal, current_user, can_patient
 
 router = APIRouter()
 
 @router.get("/active/{patient_id}")
-async def get_active_prescriptions(patient_id: str, db: Session = Depends(get_db)):
+async def get_active_prescriptions(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """Fetch active prescriptions for a patient."""
+    can_patient(db, user, patient_id)
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found.")
