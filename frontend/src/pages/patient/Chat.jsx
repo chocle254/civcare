@@ -224,8 +224,8 @@ export default function Chat() {
                 <div key={i} style={s.rowLeft}>
                   <div style={s.aiBadge}><Icon.Hospital size={15} /></div>
                   <div style={s.bubbleAi}>
-                    <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: color.ink }}>Hospital Care Recommended</p>
-                    <p style={{ fontSize: 13, marginBottom: 10, color: color.inkDim }}>We recommend visiting a hospital for further evaluation.</p>
+                    <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: color.ink }}>Hospitals near you</p>
+                    <p style={{ fontSize: 13, marginBottom: 10, color: color.inkDim }}>Choose one and your file will be ready when you arrive.</p>
                     <button style={s.actionBtn} className="cc-press" onClick={() => { localStorage.setItem('civtech_session_id', sessionId || msg.sessionId); navigate('/hospitals'); }}>
                       Find Hospitals on Map →
                     </button>
@@ -240,7 +240,7 @@ export default function Chat() {
                   <div style={s.aiBadge}><Icon.Stethoscope size={15} /></div>
                   <div style={s.bubbleAi}>
                     <p style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: color.ink }}>Speak to a Doctor Online</p>
-                    <p style={{ fontSize: 13, marginBottom: 10, color: color.inkDim }}>A doctor is available right now from wherever you are.</p>
+                    <p style={{ fontSize: 13, marginBottom: 10, color: color.inkDim }}>Choose a doctor to speak with from wherever you are.</p>
                     <button style={s.actionBtn} className="cc-press" onClick={() => { localStorage.setItem('civtech_session_id', sessionId); navigate('/consultation'); }}>
                       See Available Doctors →
                     </button>

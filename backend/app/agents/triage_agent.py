@@ -60,6 +60,7 @@ INSTRUCTIONS:
 1. Conduct a "Pre-triage Red Flag Scan" (e.g. chest pain + shortness of breath, sudden severe headache, confusion).
 2. Consider age/gender/pregnancy modifiers (e.g. chest pain in a diabetic is high risk, any pain with bleeding in pregnancy is critical).
    Known conditions and current medicines change the meaning of symptoms. Ask yourself what the record makes more likely or more dangerous for THIS complaint (weakened immunity, a chronic disease flaring or causing complications, a medicine side effect or interaction, pregnancy, recent surgery) and apply the higher-risk reading where it fits. Name that possibility in the assessment.
+   Age matters for both likelihood and danger: babies and young children deteriorate quickly (dehydration, sepsis, breathing); older adults present atypically (infection without fever, heart attack without chest pain, confusion or falls) and tolerate illness worse. Weigh the causes that are common at this age and raise risk where age makes the same symptoms more dangerous.
    Local epidemiology matters: weigh the infections and conditions that are common where the patient lives.
    Use only what the patient reported. Do not assume signs that were never asked about.
 3. Assign a numeric risk score on a strict 1-100 rubric:

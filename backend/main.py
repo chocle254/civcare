@@ -258,6 +258,7 @@ Feel the severity — is this mild discomfort or a body in crisis?
 Notice what symptoms appear together — combinations tell the real story, not individual symptoms in isolation.
 Ask yourself: if a colleague described this patient to you in a hallway, what would you immediately think?
 Consider the whole person — age, location, history. A past diagnosis matters when today's symptoms fit it: malaria recurs, cancer spreads, chronic illness lowers defences. Weigh it honestly, neither ignoring it nor letting it override what the patient reports today.
+Age shapes both what is likely and what is dangerous: think about the diseases common at this patient's age, and remember that babies, young children and older adults can be seriously ill with mild or atypical symptoms.
 When considering geography, always ask: is this the MOST COMMON disease in this region that matches these symptoms, or am I reaching for a rare dramatic diagnosis? Common diseases are common everywhere. Dengue is far more prevalent across Kenya than Viral Hemorrhagic Fever. Typhoid is far more common than Brucellosis. Malaria is far more common than Trypanosomiasis. Always default to the most probable, not the most exotic.
 Trust your clinical instinct. The most elegant diagnosis is usually the correct one — the one that explains everything naturally without forcing it.
 

@@ -61,6 +61,11 @@ Build the picture turn by turn. When you feel you have enough to understand what
 
 CONTEXT THAT CHANGES THE CAUSE
 For every complaint, find out the one piece of context that most changes what is likely going on, unless they've already said it. Think about what fits THIS complaint: recent travel or where they live (infections common in that area), contact with sick people, an injury or fall, what they ate, new or changed medicines, pregnancy, sexual exposure, work or chemical exposure. Ask only what is relevant; never run through all of these.
+AGE CHANGES EVERYTHING: the same symptom means different things at different ages. Use the Age in the profile (ask if it's unknown and matters):
+  - Babies and young children: get worse fast; ask about feeding, drinking, wet nappies, activity, breathing.
+  - Teens and young adults: different common causes (infections, injuries, mental health, sexual health, pregnancy).
+  - Middle age: chronic disease starts to matter (blood pressure, diabetes, heart).
+  - Older adults: illness often shows up atypically (infection without fever, heart trouble without chest pain, confusion or falls as the only sign); ask about their usual self and their medicines.
 SEX AND AGE: use the Sex and Age in the patient profile. Never ask about or suggest conditions that cannot apply to the patient's sex (no pregnancy or period questions for a male; no prostate or testicle questions for a female). If Sex is "Not recorded", don't guess from the name; ask only if it matters for this complaint.
 If the patient is female (or sex not recorded) and could be of childbearing age (roughly 12-50), and the complaint involves the belly, pelvis, urine, bleeding, or anything likely to need medicine, ask whether she could be pregnant, unless she has already said.
 
@@ -90,7 +95,7 @@ Ask clarifying questions naturally. Do not force a goodbye; the backend will han
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RED FLAGS — FOR SEVERE ESCALATION ONLY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ONLY if the patient describes any of the following in combination, express urgency and ask if they can go NOW:
+ONLY if the patient describes any of the following in combination, say plainly that this should be checked by a clinician quickly, give the emergency numbers 999 or 112, and ask whether they want to go to a hospital now or speak to a doctor online now:
   - Chest pain + shortness of breath + sweating (possible cardiac event)
   - Sudden worst-ever headache + neck stiffness (possible meningitis/bleed)
   - Difficulty breathing at rest, lips turning blue
@@ -106,8 +111,12 @@ A headache ALONE is NOT a red flag. A mild fever ALONE is NOT a red flag. Use cl
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STRICT PROHIBITIONS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+YOU ARE NOT THE CLINICIAN. You gather information; doctors make clinical decisions. So:
+  - Never recommend a hospital over an online doctor or the reverse; the patient chooses.
+  - Never tell the patient how serious their condition is, what it probably is, or what treatment they need.
 NEVER say:
   - "I am going to route you" / "I will connect you to a doctor" / "I'm sending you somewhere"
+  - "I recommend you go to hospital" / "you need to see a doctor in person" / "this is serious" / "this is critical"
   - "That sounds mild" / "You probably just need rest" / "It is likely nothing serious"
   - "You should be fine" / "Don't worry" / "It's probably just..."
   - Any specific drug name as a recommendation
@@ -115,6 +124,37 @@ NEVER say:
 
 ALWAYS end with ONE question OR a brief reassuring statement + one question.
 """
+
+
+# ── Patient-facing wording ───────────────────────────────────────────────────
+# Fixed text, not model-written, so the assistant never appears to make a
+# clinical decision (diagnosis, seriousness, or where the patient should go).
+# Where to get care is always the patient's choice.
+SAFETY_NET = "If anything gets worse, call 999 or 112."
+URGENT_MARKER = "should be checked by a clinician quickly"
+URGENT_CHECK_MSG = (
+    f"Thank you for telling me. What you've described {URGENT_MARKER}. {SAFETY_NET} "
+    "Would you like to go to a hospital now, or speak to a doctor online now?"
+)
+
+
+def _first_name(patient_data: dict) -> str:
+    name = (patient_data.get("name") or "").strip().split(" ")[0]
+    return f", {name}" if name else ""
+
+
+def hospital_route_msg(patient_data: dict) -> str:
+    return (
+        f"Thank you{_first_name(patient_data)}. I've written up everything you told me for the doctor. "
+        f"Choose a hospital near you below and your file will be ready when you arrive. {SAFETY_NET}"
+    )
+
+
+def online_route_msg(patient_data: dict) -> str:
+    return (
+        f"Thank you{_first_name(patient_data)}. I've written up everything you told me for the doctor. "
+        f"Choose a doctor below to speak with online. {SAFETY_NET}"
+    )
 
 
 # ── SUMMARY EXTRACTION AGENT ─────────────────────────────────────────────────
@@ -362,6 +402,7 @@ HIGH indicators (urgent, needs hospital within 1 hour):
 - Severe head injury with confusion
 - Severe abdominal pain with rigidity
 - Moderate active bleeding that's hard to control
+- Symptoms that are more dangerous at the patient's age (babies and young children, older adults)
 - Symptoms that are urgent BECAUSE of the patient's record or what they've said, e.g. fever in
   someone whose immunity is weakened by treatment or illness, or a warning sign of a known
   complication of a condition they have
@@ -585,26 +626,17 @@ async def process_message(
     if emergency_classification.get("severity") == "CRITICAL":
         emergency_type = emergency_classification.get("emergency_type")
 
-        if emergency_type == "airway" or emergency_type == "breathing":
-            emergency_msg = (
-                "This is a LIFE-THREATENING EMERGENCY. "
-                "CALL EMERGENCY SERVICES NOW (112 or your local emergency number). "
-                "If trained, begin CPR immediately. "
-                "WE ARE ROUTING YOU TO THE NEAREST HOSPITAL NOW."
-            )
-        elif emergency_type == "circulation" or emergency_type == "severe_bleed":
-            emergency_msg = (
-                "This is a LIFE-THREATENING EMERGENCY. "
-                "CALL EMERGENCY SERVICES NOW (112 or your local emergency number). "
-                "Apply direct pressure to control bleeding if possible. "
-                "WE ARE ROUTING YOU TO THE NEAREST HOSPITAL NOW."
-            )
-        else:
-            emergency_msg = (
-                "This is a LIFE-THREATENING EMERGENCY. "
-                "CALL EMERGENCY SERVICES NOW (112 or your local emergency number). "
-                "WE ARE ROUTING YOU TO THE NEAREST HOSPITAL NOW."
-            )
+        # A possible life threat: give the emergency numbers and basic safety
+        # steps, without naming a diagnosis. Nearby hospitals are shown too.
+        emergency_msg = (
+            "What you're describing can be an emergency. Call 999 or 112 now, "
+            "or get to the nearest hospital emergency department."
+        )
+        if emergency_type in ("airway", "breathing"):
+            emergency_msg += " If someone isn't breathing and you're trained, start CPR."
+        elif emergency_type in ("circulation", "severe_bleed"):
+            emergency_msg += " If there's heavy bleeding, press firmly on the wound with a clean cloth."
+        emergency_msg += " Nearby hospitals are below."
 
         result["response"] = emergency_msg
         result["action"] = "route_hospital"
@@ -633,16 +665,10 @@ async def process_message(
             )
         elif can_travel is False:
             result["action"] = "route_consultation"
-            result["response"] = (
-                "I understand. I'm going to connect you with a qualified doctor "
-                "who can speak to you right now online."
-            )
+            result["response"] = online_route_msg(patient_data)
         elif can_travel is True:
             result["action"] = "route_hospital"
-            result["response"] = (
-                "Thank you for that information. "
-                "I'm recommending you visit a hospital for a proper evaluation."
-            )
+            result["response"] = hospital_route_msg(patient_data)
         return result
 
     # ── STEP 2: Build conversation history for Gemini ────────────────────────
@@ -745,8 +771,8 @@ async def process_message(
         medscan_result["clash_detected"] = clash
         if clash:
             medscan_result["recommendation"] = (
-                f"Please don't take more {medication} until a doctor has checked it against "
-                f"your other medicines and conditions. Your doctor will see this note."
+                f"We've noted {medication} for your doctor, who will check it against your "
+                f"other medicines and conditions. Please ask them before taking more."
             )
             detail = (medscan_result.get("clash_details") or "").strip()
             result["allergy_flag"] = f"Medication check: patient mentioned {medication}. {detail}".strip()
@@ -782,10 +808,7 @@ async def process_message(
     elif is_red_flag and result["updated_summary"].get("can_travel") is None:
         # Red flag but travel question not asked yet — force the question now
         result["action"] = "continue"
-        result["response"] = (
-            "This sounds very serious and you need medical attention urgently. "
-            "Are you able to get to a hospital right now?"
-        )
+        result["response"] = URGENT_CHECK_MSG
         return result
 
     print(f"[DEBUG] Turn: {turn_count}")
@@ -808,7 +831,7 @@ async def process_message(
             patient_data=patient_data,
             transcript=transcript,
             escalated=is_red_flag or any(
-                "need medical attention urgently" in (m.get("content") or "")
+                URGENT_MARKER in (m.get("content") or "")
                 for m in conversation_history if m.get("role") == "ai"
             ),
         )
@@ -832,31 +855,11 @@ async def process_message(
 
         if can_travel is True:
             result["action"] = "route_hospital"
-            routing_prompt = f"""
-The patient has shared enough clinical information for safe routing.
-Current time: {current_time}.
-Triage assessment: {triage_result.get('preliminary_assessment', '')}.
-Risk level: {triage_result.get('risk_score', 'moderate')}.
-
-Patient's first name: {(patient_data.get('name') or '').split(' ')[0] or 'not known'}.
-
-Write a warm, professional 2-sentence chat message from a senior nurse telling the patient you have gathered what you need
-and you are recommending they visit a hospital. If the risk level is critical, tell them to go now, without delay.
-Never mention the risk level, a score, or words like "critical", "severe" or "serious condition" to the patient.
-Do NOT name a specific hospital. Do NOT give a diagnosis. This is a chat message, not a letter: no "Dear", no sign-off,
-and never a placeholder like [Name]. Use the first name only if it is known.
-"""
-            result["response"] = await ask_gemini(routing_prompt, model="llama-3.1-8b-instant")
+            result["response"] = hospital_route_msg(patient_data)
 
         elif can_travel is False:
             result["action"] = "route_consultation"
-            routing_prompt = f"""
-The patient cannot travel to a hospital right now.
-Write a warm, professional 2-sentence message from a senior nurse telling them you understand completely,
-and that you are going to connect them with a qualified doctor they can speak to right now online.
-Do NOT give a diagnosis. Be reassuring and caring.
-"""
-            result["response"] = await ask_gemini(routing_prompt, model="llama-3.1-8b-instant")
+            result["response"] = online_route_msg(patient_data)
 
         elif can_travel is None:
             # Symptoms gathered but travel preference not asked yet
