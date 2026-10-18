@@ -17,7 +17,7 @@ import json
 from app.services.ai_client import ask_gemini
 from app.services.patient_info import patient_age, patient_sex
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def _fmt_date(dt) -> str:
@@ -118,7 +118,12 @@ Use ALL of it. Age, sex, where they live, allergies, current medicines, past dia
 went can each change what today's symptoms most likely mean, what is dangerous, and what is safe to prescribe.
 Rules:
 - Use only reported facts. Never invent vitals, exam findings, test results or a timeline.
-- If something important is unknown, say so in "not_yet_asked" instead of assuming.
+- If something important is unknown, say so in "not_yet_asked" instead of assuming. Before listing a question
+  there, check the conversation AND the record: never list something the patient already answered (including a
+  "no") or that the record already shows (e.g. recent antibiotics prescribed at a past visit).
+- Keep time straight: findings from past visits (vitals, test results, exam notes) are history. Say when they
+  were found, e.g. "HR 104 at the 17 Oct visit", and never present them as today's findings.
+- Mention how past treatment went (completed courses, still unwell or better) when it bears on today.
 - Prefer common causes for this age, sex and place; name dangerous alternatives with how to rule them out.
 - Prescribing cautions must come from this patient's allergies, current medicines, age, sex/pregnancy and history.
 - This supports the doctor's judgement; it is not a decision.
