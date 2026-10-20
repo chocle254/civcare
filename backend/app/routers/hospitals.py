@@ -32,18 +32,36 @@ _CACHE: dict = {}
 _CACHE_SECONDS = 15 * 60
 
 
-async def _query_overpass(query: str) -> list:
-    """Return OSM elements from the first Overpass server that answers."""
-    async with httpx.AsyncClient(timeout=httpx.Timeout(10, connect=4)) as client:
-        for url in OVERPASS_URLS:
-            try:
-                res = await client.post(url, data={"data": query}, headers=OVERPASS_HEADERS)
-                res.raise_for_status()
-                elements = res.json().get("elements", [])
-                print(f"Overpass OK via {url}: {len(elements)} elements")
-                return elements
-            except Exception as e:
-                print(f"Overpass error via {url}: {type(e).__name__}: {e}")
+async def _query_overpass(query: str, budget: float = 8.0) -> list:
+    """
+    Ask every Overpass server at once and use the first one that answers.
+    Trying them one after another took up to 40 seconds when they were busy;
+    now the patient waits at most `budget` seconds before the fallback.
+    """
+    async def one(client, url):
+        res = await client.post(url, data={"data": query}, headers=OVERPASS_HEADERS)
+        res.raise_for_status()
+        elements = res.json().get("elements", [])
+        if not elements:
+            raise ValueError("empty")
+        print(f"Overpass OK via {url}: {len(elements)} elements")
+        return elements
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(budget, connect=4)) as client:
+        tasks = [asyncio.create_task(one(client, u)) for u in OVERPASS_URLS]
+        try:
+            for done in asyncio.as_completed(tasks, timeout=budget):
+                try:
+                    return await done
+                except asyncio.TimeoutError:
+                    raise
+                except Exception as e:
+                    print(f"Overpass error: {type(e).__name__}: {e}")
+        except asyncio.TimeoutError:
+            print(f"Overpass: no server answered within {budget}s")
+        finally:
+            for t in tasks:
+                t.cancel()
     return []
 
 
@@ -58,7 +76,7 @@ async def _query_nominatim(lat: float, lon: float, radius_km: int) -> list:
     d_lon = radius_km / (111.0 * max(math.cos(math.radians(lat)), 0.1))
     viewbox = f"{lon - d_lon},{lat + d_lat},{lon + d_lon},{lat - d_lat}"
     elements = []
-    async with httpx.AsyncClient(timeout=httpx.Timeout(10, connect=4)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(6, connect=4)) as client:
         for i, amenity in enumerate(("hospital", "clinic")):
             if i:
                 await asyncio.sleep(1.1)
@@ -165,9 +183,13 @@ async def get_nearby_hospitals(lat: float, lon: float, radius_km: int = 30):
     if cached and time.time() - cached[0] < _CACHE_SECONDS:
         elements = cached[1]
     else:
-        elements = await _query_overpass(query)
-        if not elements:
-            elements = await _query_nominatim(q_lat, q_lon, radius_km)
+        # The fuller Overpass list is preferred; the Nominatim backup runs at
+        # the same time so a busy Overpass costs no extra wait.
+        overpass, nominatim = await asyncio.gather(
+            _query_overpass(query, budget=6.0),
+            _query_nominatim(q_lat, q_lon, radius_km),
+        )
+        elements = overpass or nominatim
         if elements:
             _CACHE[cache_key] = (time.time(), elements)
     data = {"elements": elements}

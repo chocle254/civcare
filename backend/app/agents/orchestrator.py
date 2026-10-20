@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime
 from app.services.ai_client import ask_gemini, ask_gemini_with_history
@@ -620,11 +621,22 @@ async def process_message(
            if patient_data.get("uploaded_records") else "")
     )
 
-    emergency_classification = await classify_emergency_severity(
-        patient_message=patient_message,
-        conversation_history=conversation_history,
+    # Pulling facts out of the conversation doesn't depend on the emergency
+    # check, so both AI calls run at once instead of one after the other.
+    summary_task = asyncio.create_task(extract_conversation_summary(
+        conversation_history=conversation_history + [{"role": "patient", "content": patient_message}],
+        existing_summary=result["updated_summary"],
         patient_record=patient_record,
-    )
+    ))
+    try:
+        emergency_classification = await classify_emergency_severity(
+            patient_message=patient_message,
+            conversation_history=conversation_history,
+            patient_record=patient_record,
+        )
+    except Exception:
+        summary_task.cancel()
+        raise
 
     if emergency_classification.get("severity") == "CRITICAL":
         emergency_type = emergency_classification.get("emergency_type")
@@ -645,6 +657,7 @@ async def process_message(
         result["action"] = "route_hospital"
         result["emergency_severity"] = "CRITICAL"
         result["emergency_type"] = emergency_type
+        summary_task.cancel()
             # ── STEP 6: Fix goodbye-without-routing issue ────────────────────────────
     goodbye_phrases = [
         "our team will take it from here",
@@ -704,11 +717,7 @@ async def process_message(
     # just given; otherwise the reply can re-ask it.
     # History holds both sides of the chat; only the patient's messages are turns.
     turn_count = sum(1 for m in conversation_history if m.get("role") == "patient") + 1
-    result["updated_summary"] = await extract_conversation_summary(
-        conversation_history=conversation_history + [{"role": "patient", "content": patient_message}],
-        existing_summary=result["updated_summary"],
-        patient_record=patient_record,
-    )
+    result["updated_summary"] = await summary_task
     summary_now = result["updated_summary"]
 
     # ── STEP 3: Get AI response ──────────────────────────────────────────────

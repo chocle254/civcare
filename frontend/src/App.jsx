@@ -1,36 +1,43 @@
-
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import Loader from './components/Loader';
 import ErrorBoundary from './components/ErrorBoundary';
 import PatientSidebar from './components/PatientSidebar';
 import PrivacyGate from './components/PrivacyGate';
-import Privacy from './pages/Privacy';
 import Register       from './pages/patient/Register';
-import Chat           from './pages/patient/Chat';
-import HospitalSelect from './pages/patient/HospitalSelect';
-import ArrivalConfirm from './pages/patient/ArrivalConfirm';
-import Medications    from './pages/patient/Medications';
-import Consultation   from './pages/patient/Consultation';
-import Payment        from './pages/patient/Payment';
-import RateExperience from './pages/patient/RateExperience';
-import DoctorLogin    from './pages/doctor/Login';
-import Dashboard      from './pages/doctor/Dashboard';
-import PatientProfile from './pages/doctor/PatientProfile';
-import Verdict        from './pages/doctor/Verdict';
-import RateAI         from './pages/doctor/RateAI';
-import ActiveConsult  from './pages/doctor/ActiveConsult';
 import './index.css';
-import SessionDashboard from './pages/patient/SessionDashboard';
-import Profile from './pages/patient/Profile';
-import ConsultationWaiting from './pages/patient/ConsultationWaiting';
-import DiagnosisHistory from './pages/patient/DiagnosisHistory';
-import Analytics from './pages/analytics/Analytics';
-import Admin from './pages/admin/Admin';
-import HospitalRegister from './pages/HospitalRegister';
 
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Chat = lazy(() => import('./pages/patient/Chat'));
+const HospitalSelect = lazy(() => import('./pages/patient/HospitalSelect'));
+const ArrivalConfirm = lazy(() => import('./pages/patient/ArrivalConfirm'));
+const Medications = lazy(() => import('./pages/patient/Medications'));
+const Consultation = lazy(() => import('./pages/patient/Consultation'));
+const Payment = lazy(() => import('./pages/patient/Payment'));
+const RateExperience = lazy(() => import('./pages/patient/RateExperience'));
+const DoctorLogin = lazy(() => import('./pages/doctor/Login'));
+const Dashboard = lazy(() => import('./pages/doctor/Dashboard'));
+const PatientProfile = lazy(() => import('./pages/doctor/PatientProfile'));
+const Verdict = lazy(() => import('./pages/doctor/Verdict'));
+const RateAI = lazy(() => import('./pages/doctor/RateAI'));
+const ActiveConsult = lazy(() => import('./pages/doctor/ActiveConsult'));
+const SessionDashboard = lazy(() => import('./pages/patient/SessionDashboard'));
+const Profile = lazy(() => import('./pages/patient/Profile'));
+const ConsultationWaiting = lazy(() => import('./pages/patient/ConsultationWaiting'));
+const DiagnosisHistory = lazy(() => import('./pages/patient/DiagnosisHistory'));
+const Analytics = lazy(() => import('./pages/analytics/Analytics'));
+const Admin = lazy(() => import('./pages/admin/Admin'));
+const HospitalRegister = lazy(() => import('./pages/HospitalRegister'));
 
 function GuardedRoutes({ children }) {
   const { pathname } = useLocation();
-  return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+  // Each page downloads only when first opened, so the first screen doesn't
+  // wait for maps, charts and PDF tools it never uses.
+  return (
+    <ErrorBoundary resetKey={pathname}>
+      <Suspense fallback={<Loader />}>{children}</Suspense>
+    </ErrorBoundary>
+  );
 }
 
 export default function App() {
