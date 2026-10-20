@@ -185,11 +185,20 @@ async def get_nearby_hospitals(lat: float, lon: float, radius_km: int = 30):
     else:
         # The fuller Overpass list is preferred; the Nominatim backup runs at
         # the same time so a busy Overpass costs no extra wait.
-        overpass, nominatim = await asyncio.gather(
-            _query_overpass(query, budget=6.0),
-            _query_nominatim(q_lat, q_lon, radius_km),
-        )
-        elements = overpass or nominatim
+        # Hard cap: the patient never waits more than ~8 s for the list.
+        op = asyncio.create_task(_query_overpass(query, budget=6.0))
+        nm = asyncio.create_task(_query_nominatim(q_lat, q_lon, radius_km))
+        ok = lambda t: t.done() and not t.cancelled() and not t.exception() and t.result()
+        started = time.time()
+        await asyncio.wait({op}, timeout=6.5)
+        elements = op.result() if ok(op) else []
+        if not elements:
+            await asyncio.wait({nm}, timeout=max(8.0 - (time.time() - started), 0.1))
+            elements = nm.result() if ok(nm) else []
+        for t in (op, nm):
+            t.cancel()
+        if not elements:
+            print("Hospital search: no map server answered within 8 s")
         if elements:
             _CACHE[cache_key] = (time.time(), elements)
     data = {"elements": elements}

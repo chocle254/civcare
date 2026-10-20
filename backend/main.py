@@ -125,7 +125,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "version": (os.environ.get("RAILWAY_GIT_COMMIT_SHA") or "")[:7] or None}
 
 
 # ── LIVE QUEUE WebSocket ──
