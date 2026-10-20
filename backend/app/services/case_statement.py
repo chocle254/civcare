@@ -83,6 +83,10 @@ def build_dossier(db, patient, appt, session) -> str:
         for o in outcomes
     ] or ["- No completed courses recorded"]
 
+    from app.routers.documents import records_for_ai
+    lines += ["", "RECORDS THE PATIENT UPLOADED (patient's own files; the assistant only copied the text of written reports and never read the images)"]
+    lines += [f"- {r}" for r in records_for_ai(db, patient.id)] or ["- None uploaded"]
+
     lines += ["", "TODAY'S VISIT"]
     if session:
         lines.append(f"- Triage risk: {session.risk_score or 'n/a'} ({session.risk_score_numeric or 'n/a'}/100), "

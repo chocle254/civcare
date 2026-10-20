@@ -218,7 +218,7 @@ class DoctorRegister(BaseModel):
     kmpdb_license:     str        # Kenya Medical Practitioners Board license number
     password:          str | None = None   # at least 8 characters
     specialisation:    str | None = None
-    hospital_name:     str        # Name of their hospital — we find or create it
+    hospital_name:     str        # Name of an approved hospital on CivCare
     consultation_fee:  float = 0.0
     shift_start:       str | None = "08:00"
     shift_end:         str | None = "17:00"
@@ -255,7 +255,7 @@ def _doctor_out(doctor, hospital_name: str) -> dict:
 async def register_doctor(data: DoctorRegister, db: Session = Depends(get_db)):
     """
     Doctor registers using their KMPDB license number + National ID.
-    Hospital is matched by name — created if it does not exist yet.
+    The hospital must already be on CivCare (approved by the team).
     No email or password needed for now.
     """
     if not _valid_password(data.password):
@@ -271,22 +271,18 @@ async def register_doctor(data: DoctorRegister, db: Session = Depends(get_db)):
             detail="This KMPDB license is already registered. Please login instead."
         )
 
-    # Find or create hospital by name
+    # The hospital must have joined CivCare and been approved
+    from sqlalchemy import or_
     hospital = db.query(Hospital).filter(
-        Hospital.name.ilike(f"%{data.hospital_name}%")
+        Hospital.name == (data.hospital_name or "").strip(),
+        Hospital.is_active == True,  # noqa: E712
+        or_(Hospital.status == "approved", Hospital.status.is_(None)),
     ).first()
-
     if not hospital:
-        # Create the hospital so the doctor can register
-        hospital = Hospital(
-            name=data.hospital_name,
-            facility_code=f"AUTO-{data.kmpdb_license}",
-            county="Unknown",
-            town="Unknown",
-            is_active=True,
+        raise HTTPException(
+            status_code=400,
+            detail="Your hospital isn't on CivCare yet. Ask your hospital's administrator to register it at /hospital/register.",
         )
-        db.add(hospital)
-        db.flush()   # Get the ID without committing yet
 
     password_hash = hash_secret(data.password)
 

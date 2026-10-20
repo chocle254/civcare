@@ -28,6 +28,21 @@ class Hospital(Base):
 
     # ── STATUS ──
     is_active        = Column(Boolean, default=True)  # CivTech admin can deactivate
+    # Hospitals that apply through /hospitals/apply start "pending" and are
+    # hidden until the CivCare team approves them; older rows are "approved".
+    status           = Column(String, default="approved")   # pending / approved / rejected
+    ownership        = Column(String, nullable=True)        # public / private / faith-based / NGO
+    level            = Column(String, nullable=True)        # KEPH level, e.g. "Level 4"
+
+    # ── APPLICATION ──
+    contact_name     = Column(String, nullable=True)        # person who applied for the hospital
+    contact_role     = Column(String, nullable=True)
+    contact_phone    = Column(String, nullable=True)
+    contact_email    = Column(String, nullable=True)
+    applied_at       = Column(DateTime, nullable=True)
+    reviewed_at      = Column(DateTime, nullable=True)
+    reviewed_by      = Column(String, nullable=True)        # admin email
+    review_note      = Column(String, nullable=True)
 
     # ── TIMESTAMPS ──
     created_at       = Column(DateTime, default=datetime.utcnow)

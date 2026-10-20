@@ -4,6 +4,7 @@ import { updateDoctorStatus, getTransferTargets, transferPatient } from '../../a
 import { callPatient } from '../../api/triage';
 import client from '../../api/client';
 import Icon from '../../components/Icons';
+import { PatientRecords } from '../../components/MedicalRecords';
 
 export default function PatientProfile() {
   const { id } = useParams();   // appointment id
@@ -285,6 +286,8 @@ export default function PatientProfile() {
                 </div>
               </dl>
             </section>
+
+            <PatientRecords patientId={profile.patient_id} />
 
             <section className="pp-card">
               <h2 className="pp-h">Not the right fit?</h2>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { theme } from '../../styles/theme';
 import PrivacyPanel from '../../components/PrivacyPanel';
+import MedicalRecords from '../../components/MedicalRecords';
 
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
@@ -41,6 +42,7 @@ const TABS = [
   { id: 'diagnoses', label: 'Diagnoses' },
   { id: 'medications', label: 'Medications' },
   { id: 'history', label: 'History' },
+  { id: 'records', label: 'Records' },
   { id: 'privacy', label: 'Your privacy' },
 ];
 
@@ -162,7 +164,7 @@ export default function Profile() {
           ))}
         </div>
 
-        {loading && tab !== 'privacy' && <p style={{ color: color.inkFaint, fontSize: 13, padding: '20px 0' }}>Loading…</p>}
+        {loading && tab !== 'privacy' && tab !== 'records' && <p style={{ color: color.inkFaint, fontSize: 13, padding: '20px 0' }}>Loading…</p>}
 
         {!loading && tab === 'diagnoses' && (
           <div>
@@ -200,6 +202,8 @@ export default function Profile() {
             ))}
           </div>
         )}
+
+        {tab === 'records' && <MedicalRecords />}
 
         {tab === 'privacy' && (
           <PrivacyPanel

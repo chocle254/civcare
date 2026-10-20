@@ -8,6 +8,8 @@ from app.models.consultation import Consultation, ConsultationStatus, PaymentSta
 from app.models.verdict      import Verdict
 from app.models.rlhf         import AIFeedback
 from app.models.data_access  import DataAccessLog
+from app.models.admin        import Admin
+from app.models.document     import MedicalDocument
 
 __all__ = [
     "Patient", "IdentityType",
@@ -20,4 +22,6 @@ __all__ = [
     "Verdict",
     "AIFeedback",
     "DataAccessLog",
+    "Admin",
+    "MedicalDocument",
 ]

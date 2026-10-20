@@ -287,6 +287,7 @@ export default function DoctorLogin() {
                       <option value="">{hospitals.length ? 'Select your hospital' : 'Loading hospitals…'}</option>
                       {hospitals.map((h) => <option key={h.id} value={h.name}>{h.name}</option>)}
                     </select>
+                    <p className="dl-hint">Hospital not listed? It has to join CivCare first: <a href="/hospital/register">register your hospital</a>.</p>
                   </div>
                   <div className="form-group">
                     <label className="label" htmlFor="dl-spec">Specialisation</label>
@@ -325,7 +326,7 @@ export default function DoctorLogin() {
           </form>
 
           <div className="dl-foot">
-            <p><Icon.Shield size={15} /> Doctor accounts are verified against KMPDB records.</p>
+            <p><Icon.Shield size={15} /> The CivCare team checks every licence on the KMPDC register.</p>
             <button type="button" className="dl-link dl-link--muted" onClick={() => navigate('/')}>
               <Icon.ChevronLeft size={16} /> Patient sign-in
             </button>

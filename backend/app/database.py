@@ -25,6 +25,7 @@ def get_db():
 
 
 def create_tables():
+    import app.models  # noqa: F401  (registers every table, including new ones)
     Base.metadata.create_all(bind=engine)
 
 def run_migrations():
@@ -47,6 +48,18 @@ def run_migrations():
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS guardian_relationship TEXT;",
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;",
         "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS password_set_at TIMESTAMP;",
+        # Hospital applications (hospitals that join through the website)
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'approved';",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS ownership TEXT;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS level TEXT;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS contact_name TEXT;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS contact_role TEXT;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS contact_phone TEXT;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS contact_email TEXT;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS applied_at TIMESTAMP;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS reviewed_by TEXT;",
+        "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS review_note TEXT;",
         # RLHF self-training columns
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS ai_risk_score TEXT;",
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS doctor_notes TEXT;",

@@ -31,7 +31,7 @@ export default function PrivacyGate() {
   }, [pathname]);
 
   if (!patient || !localStorage.getItem('civtech_token')) return null;
-  if (OPEN_PATHS.includes(pathname) || pathname.startsWith('/doctor')) return null;
+  if (OPEN_PATHS.includes(pathname) || ['/doctor', '/admin', '/hospital'].some((p) => pathname.startsWith(p))) return null;
 
   const needsConsent = patient.consent_version !== PRIVACY_VERSION || patient.needs_consent;
   const needsPin = patient.needs_pin === true;

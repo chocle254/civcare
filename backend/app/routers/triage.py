@@ -15,6 +15,7 @@ from app.routers.hospitals import get_nearby_hospitals
 import json
 import pytz
 from app.services.patient_info import patient_age, patient_sex
+from app.routers.documents import records_for_ai
 from app.services.authz import Principal, current_user, only_patient, can_session, can_appointment, can_patient, must_be_doctor
 from app.services.consent import has_consent
 
@@ -127,6 +128,7 @@ async def send_message(data: MessageInput, user: Principal = Depends(current_use
     "current_medications": medications,
     "allergies":           patient.allergies or "None on record",
     "past_history":        past_history,
+    "uploaded_records":    records_for_ai(db, patient.id),
 }
 
     # ── Get current Nairobi time ──
@@ -276,7 +278,8 @@ async def confirm_arrival(data: ArrivalConfirm, user: Principal = Depends(curren
     # Find an available doctor at this hospital
     # ── KNH TESTING OVERRIDE: always route to Dr. Waweru Jackson ──
     doctor = None
-    if data.hospital_id == "knh-nairobi-testing" or "knh" in data.hospital_id.lower():
+    from app.routers.hospitals import KNH_TEST_ROUTING
+    if KNH_TEST_ROUTING and (data.hospital_id == "knh-nairobi-testing" or "knh" in data.hospital_id.lower()):
         doctor = db.query(Doctor).filter(
             Doctor.full_name.ilike("%waweru%")
         ).first()

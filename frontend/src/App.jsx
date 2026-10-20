@@ -24,6 +24,8 @@ import Profile from './pages/patient/Profile';
 import ConsultationWaiting from './pages/patient/ConsultationWaiting';
 import DiagnosisHistory from './pages/patient/DiagnosisHistory';
 import Analytics from './pages/analytics/Analytics';
+import Admin from './pages/admin/Admin';
+import HospitalRegister from './pages/HospitalRegister';
 
 
 function GuardedRoutes({ children }) {
@@ -62,6 +64,10 @@ export default function App() {
         <Route path="/doctor/consult/:id"  element={<ActiveConsult />} />
 
         {/* Catch all */}
+        {/* CivCare team and hospitals */}
+        <Route path="/admin"             element={<Admin />} />
+        <Route path="/hospital/register" element={<HospitalRegister />} />
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       </GuardedRoutes>

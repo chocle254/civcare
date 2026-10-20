@@ -19,6 +19,8 @@ Section numbers refer to the Data Protection Act 2019 and the Data Protection (G
 | Right to erasure | s. 40 | Profile → Delete my account (`POST /privacy/delete-account`). It erases identity, conversations and check-in answers. Doctor-written diagnoses and prescriptions are kept without identifiers, because facilities must keep health records. |
 | Data minimisation | s. 25(c) | The AI gets the first name only, never the phone or ID number. OpenStreetMap gets coordinates rounded to about 1 km. Doctors see only the last three digits of the ID number. Doctors' National ID numbers are no longer collected. Logs don't print phone numbers, names or symptoms. |
 | Retention limits | s. 39 | A daily job (`purge_unused_chats`) empties conversations older than 12 months that never led to a visit or consultation. |
+| Uploaded medical records | ss. 30, 32, 41, 46 | Patients upload X-rays, scans and reports in Profile → Records. Each upload needs its own consent box (`consented_at`). Files sit in the private Supabase Storage bucket `medical-records` and open only through 5-minute signed links, for the patient or a doctor caring for them. Each doctor view is logged. The assistant copies the text of written reports (`app/agents/document_reader.py`) and never reads X-ray or scan images. Patients can delete a file at any time; account erasure deletes all their files. |
+| CivCare team dashboard | s. 25(c) | `/admin` shows totals, money and ratings. Admins can't open patient records: their token fails every patient-record check. Feedback lists show the doctor and hospital, never the patient. |
 | Security by design and by default | s. 41 | See below. |
 
 ### Security controls (s. 41)
@@ -34,7 +36,9 @@ Section numbers refer to the Data Protection Act 2019 and the Data Protection (G
   - Both are hashed with salted PBKDF2-SHA256 (200,000 iterations).
   - Old unsalted hashes are upgraded at the next sign-in.
   - Doctors still on their National ID must choose a password before reaching the dashboard.
-- **Brute-force protection.** Five wrong attempts lock an account for 15 minutes.
+- **Brute-force protection.** Five wrong attempts lock an account for 15 minutes. This applies to admins too.
+- **Admins.** The first admin is created from `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `ADMIN_NAME` on Railway (password of at least 10 characters). Admin tokens last 8 hours. Remove `ADMIN_PASSWORD` from Railway once you have signed in.
+- **Hospitals.** Hospitals apply at `/hospital/register` and stay hidden until an admin approves them. Doctors can only register at an approved hospital.
 - **Video.** Rooms are private, and each person joins with a 2-hour meeting token.
 - **Analytics.** Clinicians only. Disease counts below 5 in a county are merged so rare cases can't identify anyone.
 - **Network.**
@@ -64,7 +68,8 @@ Section numbers refer to the Data Protection Act 2019 and the Data Protection (G
    - `data_access_log` and Railway's logs are the starting points for an investigation.
 7. **Set a health-records retention period** with the partner hospitals, according to Ministry of Health rules. Then decide whether finished clinical records should be archived or deleted after that period. The app currently keeps them indefinitely.
 8. **Limit operator database access.** Use separate Supabase accounts with multi-factor authentication. Keep `SUPABASE_SERVICE_ROLE_KEY` and `SECRET_KEY` only in Railway's secrets. Rotate `SECRET_KEY` if it was ever shared; this signs everyone out.
-9. **Turn off test shortcuts before real patients use the app.** The Kenyatta National Hospital testing override in `app/routers/hospitals.py` and `app/routers/triage.py` routes every KNH arrival to one test doctor.
+9. **Turn off test shortcuts before real patients use the app.** Set `KNH_TEST_ROUTING=0` on Railway. While it is on, every Kenyatta National Hospital arrival goes to one test doctor (`app/routers/hospitals.py`, `app/routers/triage.py`).
+10. **Check every hospital and doctor.** Before approving a hospital, check its code on the Kenya Master Health Facility List and call the applicant. Check each doctor's licence on the KMPDC register; suspend any you can't confirm in `/admin` → Doctors.
 
 ## Known gaps
 

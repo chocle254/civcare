@@ -21,7 +21,8 @@ from app.routers import (
     auth, triage, hospitals, doctors,
     records, medscan, consultation,
     payment, reminders, verdict,
-    ussd, sms, prescriptions, video, privacy
+    ussd, sms, prescriptions, video, privacy,
+    admin, documents,
 )
 
 import os
@@ -102,12 +103,15 @@ app.include_router(prescriptions.router, prefix="/prescriptions",tags=["Prescrip
 app.include_router(video.router,         prefix="/video",        tags=["Video"])
 app.include_router(analytics.router,     prefix="/analytics",    tags=["analytics"])
 app.include_router(privacy.router,       prefix="/privacy",      tags=["Privacy"])
+app.include_router(admin.router,         prefix="/admin",        tags=["Admin"])
+app.include_router(documents.router,     prefix="/documents",    tags=["Medical records"])
 
 # ── STARTUP ──
 @app.on_event("startup")
 async def startup():
     create_tables()
     run_migrations()          # ← add this line
+    admin.ensure_bootstrap_admin()
     start_scheduler()
     print(f"✅ {settings.APP_NAME} started")
     print(f"📦 Database connected")

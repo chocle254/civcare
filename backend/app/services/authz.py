@@ -32,7 +32,7 @@ NOT_YOURS = "You don't have access to this record."
 @dataclass
 class Principal:
     id: str
-    role: str                 # "patient" or "doctor"
+    role: str                 # "patient", "doctor" or "admin" (CivCare team)
     hospital_id: str | None = None
 
     @property
@@ -43,6 +43,10 @@ class Principal:
     def is_patient(self) -> bool:
         return self.role == "patient"
 
+    @property
+    def is_admin(self) -> bool:
+        return self.role == "admin"
+
 
 def decode_token(token: str | None) -> Principal | None:
     if not token:
@@ -51,7 +55,7 @@ def decode_token(token: str | None) -> Principal | None:
         data = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except JWTError:
         return None
-    if not data.get("sub") or data.get("role") not in ("patient", "doctor"):
+    if not data.get("sub") or data.get("role") not in ("patient", "doctor", "admin"):
         return None
     return Principal(id=data["sub"], role=data["role"], hospital_id=data.get("hospital_id"))
 
@@ -72,6 +76,13 @@ def current_doctor(user: Principal = Depends(current_user)) -> Principal:
 def current_patient(user: Principal = Depends(current_user)) -> Principal:
     if not user.is_patient:
         raise HTTPException(status_code=403, detail="Only the patient can do this.")
+    return user
+
+
+def current_admin(user: Principal = Depends(current_user)) -> Principal:
+    """The CivCare team. Admins see totals, never individual patient records."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Only the CivCare team can do this.")
     return user
 
 

@@ -17,6 +17,9 @@ pydantic[email]==2.7.1
 google-generativeai==0.5.4
 groq
 
+# ── DOCUMENTS (reading text from uploaded PDF reports) ──
+pypdf==4.2.0
+
 # ── WEBSOCKET ──
 websockets==12.0
 

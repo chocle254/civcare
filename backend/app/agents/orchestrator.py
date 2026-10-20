@@ -615,6 +615,9 @@ async def process_message(
         f"Sex: {patient_data.get('sex', 'Not recorded')}, age: {patient_data.get('age', 'Unknown')}\n"
         f"Conditions: {patient_data.get('conditions') or 'None on record'}\n"
         f"Current medicines: {', '.join(patient_data.get('current_medications', []) or []) or 'None'}"
+        + (f"\nRecords the patient uploaded (not checked by a clinician):\n"
+           + "\n".join(f"- {r}" for r in patient_data["uploaded_records"])
+           if patient_data.get("uploaded_records") else "")
     )
 
     emergency_classification = await classify_emergency_severity(
@@ -720,7 +723,14 @@ async def process_message(
         f"Past Conditions: {patient_data.get('conditions')}\n"
         f"Current Medications: {', '.join(patient_data.get('current_medications', [])) or 'None'}\n"
         f"Allergies: {patient_data.get('allergies')}\n"
-        f"IMPORTANT INSTRUCTIONS FOR PATIENT CONTEXT:\n"
+        + (
+            "Records the patient uploaded (their own files, not yet checked by a clinician):\n"
+            + "\n".join(f"  - {r}" for r in patient_data["uploaded_records"]) + "\n"
+            "- Use these like a returning patient's history: past surgery, scans and results can change what today's complaint means, so you may ask one kind question about how they relate.\n"
+            "- NEVER say what an X-ray or scan image shows, and never judge a result as normal or abnormal. The doctor reviews the files.\n"
+            if patient_data.get("uploaded_records") else ""
+        )
+        + f"IMPORTANT INSTRUCTIONS FOR PATIENT CONTEXT:\n"
         f"- If Past Conditions or Current Medications are present, you ALREADY know this patient.\n"
         f"- On the FIRST message of a new session, briefly acknowledge their history naturally.\n"
         f"  Example: 'Good to have you back — I can see you've previously consulted us about {patient_data.get('conditions', 'a few things')}. What brings you in today?'\n"

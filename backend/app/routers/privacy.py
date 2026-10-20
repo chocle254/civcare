@@ -85,6 +85,7 @@ async def export_my_data(user: Principal = Depends(current_patient), db: Session
     from app.models.medication_outcome import DoseCheckin, CourseOutcome
     from app.models.doctor import Doctor
     from app.models.data_access import DataAccessLog
+    from app.models.document import MedicalDocument
 
     p = _me(db, user)
     doctors = {d.id: d.full_name for d in db.query(Doctor).all()}
@@ -149,6 +150,11 @@ async def export_my_data(user: Principal = Depends(current_patient), db: Session
             "date": _iso(o.created_at), "medicines": o.medications,
             "still_unwell": o.still_unwell,
         } for o in db.query(CourseOutcome).filter(CourseOutcome.patient_id == p.id).all()],
+        "uploaded_records": [{
+            "title": d.title, "kind": d.kind, "taken_on": d.taken_on, "facility": d.facility,
+            "uploaded_at": _iso(d.uploaded_at), "file": d.file_name,
+            "what_the_assistant_copied": d.extracted,
+        } for d in db.query(MedicalDocument).filter(MedicalDocument.patient_id == p.id).all()],
         "who_opened_your_record": [{
             "when": _iso(l.created_at), "who": l.actor_name or l.actor_role, "what": l.action,
         } for l in db.query(DataAccessLog).filter(DataAccessLog.patient_id == p.id)
@@ -197,6 +203,14 @@ async def delete_account(data: DeleteIn, user: Principal = Depends(current_patie
         raise HTTPException(status_code=400, detail="Type DELETE to confirm.")
     p = _me(db, user)
     stub = f"deleted-{p.id[:8]}"
+
+    # Uploaded files go first: if storage can't be reached, nothing is erased yet
+    from app.routers.documents import delete_all_for
+    try:
+        await delete_all_for(db, p.id)
+    except Exception as e:
+        print(f"Record files not deleted: {type(e).__name__}")
+        raise HTTPException(status_code=502, detail="Could not delete your uploaded records. Please try again.")
 
     for s in db.query(ChatSession).filter(ChatSession.patient_id == p.id).all():
         s.messages = "[]"

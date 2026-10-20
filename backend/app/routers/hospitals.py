@@ -1,8 +1,13 @@
 import asyncio
 import math
+import os
+import re
 import time
+from datetime import datetime
+
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -110,7 +115,9 @@ def estimate_travel_time(distance_km: float) -> str:
 
 
 # ── KNH TESTING OVERRIDE ──────────────────────────────────────────────────
-# Always injected at the top of the list for testing purposes.
+# Injected at the top of the list for testing. Set KNH_TEST_ROUTING=0 on
+# Railway before real patients use the app.
+KNH_TEST_ROUTING = os.environ.get("KNH_TEST_ROUTING", "1") != "0"
 KNH_OVERRIDE = {
     "id":           "knh-nairobi-testing",
     "name":         "Kenyatta National Hospital (KNH)",
@@ -207,6 +214,27 @@ async def get_nearby_hospitals(lat: float, lon: float, radius_km: int = 30):
     # Sort by nearest first
     hospitals.sort(key=lambda h: h["distance_km"])
 
+    # ── Hospitals on CivCare come first: they have doctors who can receive the patient ──
+    joined = []
+    for h in _approved_hospitals():
+        if h.latitude is None or h.longitude is None:
+            continue
+        d = haversine_km(lat, lon, h.latitude, h.longitude)
+        if d > radius_km:
+            continue
+        joined.append({
+            "id": h.id, "name": h.name, "town": h.town, "county": h.county,
+            "phone": h.phone_number or "", "address": h.address or "",
+            "distance_km": round(d, 1), "travel_time": estimate_travel_time(d),
+            "lat": h.latitude, "lon": h.longitude, "source": "civcare", "on_civcare": True,
+        })
+    joined.sort(key=lambda h: h["distance_km"])
+    taken = {h["name"].strip().lower() for h in joined}
+    hospitals = [h for h in hospitals if h["name"].strip().lower() not in taken]
+
+    if not KNH_TEST_ROUTING:
+        return (joined + hospitals)[:15]
+
     # ── Inject KNH at the top with real calculated distance ──
     knh = KNH_OVERRIDE.copy()
     knh["distance_km"] = round(haversine_km(lat, lon, knh["lat"], knh["lon"]), 1)
@@ -215,8 +243,9 @@ async def get_nearby_hospitals(lat: float, lon: float, radius_km: int = 30):
     # Avoid duplicates if KNH is already in OSM results
     hospitals = [h for h in hospitals if "kenyatta national" not in h["name"].lower()]
 
-    # Return KNH first, then up to 14 others
-    return [knh] + hospitals[:14]
+    joined = [h for h in joined if "kenyatta national" not in h["name"].lower()]
+    # Return KNH first, then hospitals on CivCare, then others: 15 in all
+    return ([knh] + joined + hospitals)[:15]
 
 
 @router.get("/registered")
@@ -228,9 +257,102 @@ async def get_registered_hospitals(db=None):
     from app.database import SessionLocal
     from app.models.hospital import Hospital
 
+    return [{"id": h.id, "name": h.name, "town": h.town} for h in _approved_hospitals()]
+
+
+def _approved_hospitals() -> list:
+    """Active hospitals the CivCare team has approved (older rows count as approved)."""
+    from app.database import SessionLocal
+    from app.models.hospital import Hospital
+    from sqlalchemy import or_
+
     db = SessionLocal()
     try:
-        hospitals = db.query(Hospital).filter(Hospital.is_active == True).all()
-        return [{"id": h.id, "name": h.name} for h in hospitals]
+        return db.query(Hospital).filter(
+            Hospital.is_active == True,  # noqa: E712
+            or_(Hospital.status == "approved", Hospital.status.is_(None)),
+        ).order_by(Hospital.name).all()
+    finally:
+        db.close()
+
+
+# ── HOSPITAL APPLICATIONS ──
+# A hospital asks to join; the CivCare team reviews it in the admin
+# dashboard. Until approved it isn't listed to patients or doctors.
+
+class HospitalApply(BaseModel):
+    name:          str
+    facility_code: str                 # KMHFL code (Kenya Master Health Facility List)
+    county:        str
+    town:          str
+    address:       str | None = None
+    ownership:     str | None = None   # public / private / faith-based / NGO
+    level:         str | None = None   # KEPH level
+    phone_number:  str | None = None
+    email:         str | None = None
+    latitude:      float | None = None
+    longitude:     float | None = None
+    contact_name:  str
+    contact_role:  str
+    contact_phone: str
+    contact_email: str | None = None
+    agree:         bool = False        # agreed to CivCare's hospital terms and data processing
+
+
+_applies: dict[str, list[float]] = {}
+
+
+def _too_many(ip: str) -> bool:
+    """At most 5 applications per address per hour; the form is public."""
+    now = time.time()
+    _applies[ip] = [t for t in _applies.get(ip, []) if now - t < 3600]
+    return len(_applies[ip]) >= 5
+
+
+@router.post("/apply")
+async def apply_hospital(data: HospitalApply, request: Request):
+    from app.database import SessionLocal
+    from app.models.hospital import Hospital
+    from app.services.phone import normalize_ke_phone
+
+    ip = request.client.host if request.client else "?"
+    if _too_many(ip):
+        raise HTTPException(status_code=429, detail="Too many applications from here. Try again in an hour.")
+    if not data.agree:
+        raise HTTPException(status_code=400, detail="Please agree to the terms to apply.")
+    name = re.sub(r"\s+", " ", data.name).strip()
+    code = re.sub(r"\s+", "", data.facility_code).upper()
+    required = {"Hospital name": name, "Facility code": code, "County": data.county.strip(),
+                "Town": data.town.strip(), "Your name": data.contact_name.strip(),
+                "Your role": data.contact_role.strip(), "Your phone": data.contact_phone.strip()}
+    missing = [k for k, v in required.items() if not v]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Please fill in: {', '.join(missing)}.")
+    if not re.fullmatch(r"[A-Z0-9-]{3,20}", code):
+        raise HTTPException(status_code=400, detail="The facility code should be the KMHFL code, e.g. 13023.")
+    for lat_lon in ((data.latitude, -5.0, 5.5), (data.longitude, 33.5, 42.5)):
+        if lat_lon[0] is not None and not (lat_lon[1] <= lat_lon[0] <= lat_lon[2]):
+            raise HTTPException(status_code=400, detail="The location is outside Kenya. Use the button again at the hospital.")
+    contact_phone = normalize_ke_phone(data.contact_phone)
+    if not contact_phone:
+        raise HTTPException(status_code=400, detail="Enter a Kenyan phone number for yourself, e.g. 0712 345 678.")
+
+    db = SessionLocal()
+    try:
+        if db.query(Hospital).filter(Hospital.facility_code == code).first():
+            raise HTTPException(status_code=400, detail="A hospital with this facility code has already applied or joined. Contact the CivCare team if that's wrong.")
+        h = Hospital(
+            name=name, facility_code=code, county=data.county.strip(), town=data.town.strip(),
+            address=(data.address or "").strip() or None, ownership=data.ownership, level=data.level,
+            phone_number=(data.phone_number or "").strip() or None, email=(data.email or "").strip() or None,
+            latitude=data.latitude, longitude=data.longitude,
+            contact_name=data.contact_name.strip(), contact_role=data.contact_role.strip(),
+            contact_phone=contact_phone, contact_email=(data.contact_email or "").strip() or None,
+            status="pending", is_active=False, applied_at=datetime.utcnow(),
+        )
+        db.add(h)
+        db.commit()
+        _applies.setdefault(ip, []).append(time.time())
+        return {"message": "Application received. The CivCare team will call you to confirm.", "reference": h.id[:8].upper()}
     finally:
         db.close()
