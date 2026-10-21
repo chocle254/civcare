@@ -55,20 +55,21 @@ function walk(root) {
 
 export function translateDom() {
   if (getLang() === 'en') return;
-  let queued = new Set();
+  const queued = new Set();
+  const add = (n) => queued.add(n);
   let timer = null;
   const flush = () => {
     timer = null;
-    if (!active()) { queued = new Set(); return; }
-    const batch = queued; queued = new Set();
+    const batch = [...queued];
+    queued.clear();
+    if (!active()) return;
     batch.forEach((n) => n.isConnected && walk(n));
   };
   const obs = new MutationObserver((list) => {
-    for (const m of list) {
-      if (m.type === 'characterData') queued.add(m.target);
-      else if (m.type === 'attributes') queued.add(m.target);
-      else m.addedNodes.forEach((n) => queued.add(n));
-    }
+    list.forEach((m) => {
+      if (m.type === 'childList') m.addedNodes.forEach(add);
+      else add(m.target);
+    });
     if (!timer) timer = requestAnimationFrame(flush);
   });
   obs.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
