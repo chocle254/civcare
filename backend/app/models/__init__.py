@@ -10,6 +10,7 @@ from app.models.rlhf         import AIFeedback
 from app.models.data_access  import DataAccessLog
 from app.models.admin        import Admin
 from app.models.document     import MedicalDocument
+from app.models.push         import PushSubscription, AppSecret
 
 __all__ = [
     "Patient", "IdentityType",
@@ -24,4 +25,5 @@ __all__ = [
     "DataAccessLog",
     "Admin",
     "MedicalDocument",
+    "PushSubscription", "AppSecret",
 ]

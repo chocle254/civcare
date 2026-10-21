@@ -240,5 +240,7 @@ async def delete_account(data: DeleteIn, user: Principal = Depends(current_patie
     p.consent_at = None
     p.consent_version = None
     p.deleted_at = datetime.utcnow()
+    from app.models.push import PushSubscription
+    db.query(PushSubscription).filter(PushSubscription.owner_id == p.id).delete()
     db.commit()
     return {"message": "Your account and personal details have been erased."}

@@ -20,7 +20,8 @@ async def send_due_reminders():
     db: Session = SessionLocal()
     try:
         now  = datetime.utcnow()
-        window_start = now - timedelta(minutes=1)
+        # 15 minutes, so a dose isn't lost if the server restarted at that minute
+        window_start = now - timedelta(minutes=15)
 
         due_reminders = db.query(Reminder).filter(
             Reminder.scheduled_at >= window_start,
@@ -44,12 +45,22 @@ async def send_due_reminders():
             if not patient:
                 continue
 
-            # Send SMS reminder
+            # Phone notification (works with the app closed). The lock screen
+            # never names the medicine.
+            from app.services.push import notify
+            local = (reminder.scheduled_at + timedelta(hours=3)).strftime("%-I:%M %p")
+            pushed = await notify(
+                patient.id, "Time for your medicine",
+                f"Your {local} dose is due. Tap to log it.",
+                url="/medications", tag=f"dose-{reminder.id}",
+            )
+
+            # SMS too, for phones without data
             sent = await send_medication_reminder(
                 phone_number=patient.phone_number,
                 medication=prescription.medication_name,
                 dosage=prescription.dosage_notation or "",
-            )
+            ) or pushed > 0
 
             if sent:
                 reminder.is_sent = True

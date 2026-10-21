@@ -214,6 +214,9 @@ async def my_courses(patient_id: str, user: Principal = Depends(current_user), d
             .filter(
                 Reminder.prescription_id == p.id,
                 Reminder.is_responded == False,    # noqa: E712
+                # A dose more than 3 h overdue is missed; otherwise one missed
+                # dose would show "due now" for the rest of the course.
+                Reminder.scheduled_at >= datetime.utcnow() - DUE_WINDOW,
             )
             .order_by(Reminder.scheduled_at.asc())
             .first()

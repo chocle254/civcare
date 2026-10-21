@@ -342,6 +342,9 @@ async def call_patient(data: CallPatient, user: Principal = Depends(current_user
     await broadcast_queue_update(doctor.hospital_id)
 
     await send_doctor_call_notification(patient.phone_number, doctor.full_name)
+    from app.services.push import notify
+    await notify(patient.id, "The doctor is ready for you",
+                 f"{doctor.full_name} is calling you in now.", url="/dashboard", tag=f"call-{appointment.id}")
 
     return {"message": f"Patient {patient.full_name} has been notified."}
 

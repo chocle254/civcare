@@ -4,6 +4,7 @@ import axios from 'axios';
 import { theme } from '../../styles/theme';
 import PrivacyPanel from '../../components/PrivacyPanel';
 import MedicalRecords from '../../components/MedicalRecords';
+import { pushSignOut } from '../../utils/push';
 
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
@@ -100,7 +101,7 @@ export default function Profile() {
     fetchAll();
   }, [fetchAll, navigate, patient.id]);
 
-  const handleLogout = () => { localStorage.clear(); navigate('/', { replace: true }); };
+  const handleLogout = () => { pushSignOut().finally(() => { localStorage.clear(); navigate('/', { replace: true }); }); };
 
   // Snapshot chips — allergies and location are real patient fields today.
   // Blood type / height / weight aren't collected at registration yet;

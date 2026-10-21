@@ -1,0 +1,13 @@
+{
+  "name": "CivCare",
+  "short_name": "CivCare",
+  "description": "Describe how you feel, find care, and keep track of your medicines.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#1769aa",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

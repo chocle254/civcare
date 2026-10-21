@@ -5,6 +5,7 @@ import { theme } from '../../styles/theme';
 import BottomNav from '../../components/BottomNav';
 import NextDose from '../../components/NextDose';
 import RecordsShortcut from '../../components/RecordsShortcut';
+import PushPrompt from '../../components/PushPrompt';
 
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
@@ -577,6 +578,7 @@ export default function SessionDashboard() {
         {/* MEDICATIONS */}
 
         <div className="cc-a-meds">
+        <PushPrompt />
         <NextDose
           data={doses}
           hasMedicines={prescriptions.length > 0}

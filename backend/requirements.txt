@@ -20,6 +20,9 @@ groq
 # ── DOCUMENTS (reading text from uploaded PDF reports) ──
 pypdf==4.2.0
 
+# ── PHONE NOTIFICATIONS (Web Push, like Fedha) ──
+pywebpush==1.14.1
+
 # ── WEBSOCKET ──
 websockets==12.0
 

@@ -22,7 +22,7 @@ from app.routers import (
     records, medscan, consultation,
     payment, reminders, verdict,
     ussd, sms, prescriptions, video, privacy,
-    admin, documents,
+    admin, documents, push,
 )
 
 import os
@@ -105,6 +105,7 @@ app.include_router(analytics.router,     prefix="/analytics",    tags=["analytic
 app.include_router(privacy.router,       prefix="/privacy",      tags=["Privacy"])
 app.include_router(admin.router,         prefix="/admin",        tags=["Admin"])
 app.include_router(documents.router,     prefix="/documents",    tags=["Medical records"])
+app.include_router(push.router,          prefix="/push",         tags=["Notifications"])
 
 # ── STARTUP ──
 @app.on_event("startup")
