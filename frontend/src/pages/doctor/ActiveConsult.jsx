@@ -4,6 +4,7 @@ import { completeConsultation } from '../../api/consultation';
 import { startVideo } from '../../api/video';
 import client from '../../api/client';
 import Icon from '../../components/Icons';
+import { PatientRecords } from '../../components/MedicalRecords';
 
 const initials = (name) => (name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 const fmtTimer = (sec) => {
@@ -215,6 +216,7 @@ export default function ActiveConsult() {
           </section>
 
           <section className="ac-card">{report}</section>
+          {consult.patient_id && <PatientRecords patientId={consult.patient_id} />}
         </div>
 
         <aside className="ac-col">

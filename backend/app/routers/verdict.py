@@ -132,19 +132,31 @@ async def get_patient_history(patient_id: str, user: Principal = Depends(current
     ).order_by(Verdict.submitted_at.desc()).all()
     
     result = []
+    from app.models.appointment import Appointment
+    from app.models.consultation import Consultation
+    from app.models.hospital import Hospital
     for v in verdicts:
         doctor = db.query(Doctor).filter(Doctor.id == v.doctor_id).first()
+        # Where it happened: the hospital visit, or an online consultation
+        place = None
+        appt = db.query(Appointment).filter(Appointment.id == v.appointment_id).first() if v.appointment_id else None
+        if appt:
+            h = db.query(Hospital).filter(Hospital.id == appt.hospital_id).first()
+            place = h.name if h else None
+        elif v.appointment_id and db.query(Consultation.id).filter(Consultation.id == v.appointment_id).first():
+            place = "Online consultation"
         prescriptions = db.query(Prescription).filter(
             Prescription.verdict_id == v.id
         ).all()
         
         result.append({
             "id": v.id,
-            "date": v.submitted_at.isoformat() if v.submitted_at else None,
+            "date": v.submitted_at.isoformat() + "Z" if v.submitted_at else None,
             "diagnosis": v.diagnosis,
             "severity": v.severity_confirmed,
             "notes": v.notes,
             "doctor_name": doctor.full_name if doctor else "Unknown Doctor",
+            "hospital_name": place,
             "prescriptions": [
                 {"name": p.medication_name, "notes": p.notes}
                 for p in prescriptions

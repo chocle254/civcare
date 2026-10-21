@@ -291,7 +291,7 @@ async def register_doctor(data: DoctorRegister, db: Session = Depends(get_db)):
     password_hash = hash_secret(data.password)
 
     doctor = Doctor(
-        full_name=data.full_name,
+        full_name=re.sub(r"^\s*(dr\.?\s+)+", "", data.full_name.strip(), flags=re.I),
         phone_number=data.phone_number,
         email=f"{data.kmpdb_license}@civtech.local",  # Placeholder email
         kmpdb_license=data.kmpdb_license,

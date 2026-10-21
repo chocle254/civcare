@@ -308,6 +308,10 @@ async def confirm_arrival(data: ArrivalConfirm, user: Principal = Depends(curren
         arrived_at       = datetime.utcnow()
     )
     db.add(appointment)
+    if session:
+        # The conversation did its job: it ended in a hospital visit
+        session.status = SessionStatus.COMPLETED
+        session.completed_at = datetime.utcnow()
     db.commit()
     db.refresh(appointment)
 
@@ -459,7 +463,7 @@ async def get_patient_sessions(patient_id: str, user: Principal = Depends(curren
             "risk_score": s.risk_score,
             "ai_assessment": s.ai_assessment,
             "symptoms_summary": title,
-            "started_at": s.started_at.isoformat() if s.started_at else None
+            "started_at": s.started_at.isoformat() + "Z" if s.started_at else None
         })
     return result
 

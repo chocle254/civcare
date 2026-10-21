@@ -61,6 +61,8 @@ def run_migrations():
         "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS reviewed_by TEXT;",
         "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS review_note TEXT;",
         "ALTER TABLE patients ADD COLUMN IF NOT EXISTS language TEXT;",
+        # Names were saved as "Dr. Jane"; the app adds "Dr." itself
+        "UPDATE doctors SET full_name = regexp_replace(full_name, '^\\s*(dr\\.?\\s+)+', '', 'i') WHERE full_name ~* '^\\s*dr\\.?\\s';",
         # Notification bookkeeping (each nudge is sent once)
         "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS missed_nudged_at TIMESTAMP;",
         "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS followup_nudged_at TIMESTAMP;",

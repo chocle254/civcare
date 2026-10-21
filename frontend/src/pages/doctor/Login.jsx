@@ -248,7 +248,7 @@ export default function DoctorLogin() {
                   <legend>About you</legend>
                   <div className="form-group">
                     <label className="label" htmlFor="dl-name">Full name <Req /></label>
-                    <input id="dl-name" className="input" name="full_name" placeholder="Dr. Jane Wanjiru" autoComplete="name"
+                    <input id="dl-name" className="input" name="full_name" placeholder="Jane Wanjiru" autoComplete="name"
                       value={regForm.full_name} onChange={handleRegChange} />
                   </div>
                   <div className="form-group">

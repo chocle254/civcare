@@ -92,6 +92,9 @@ async def start_video(data: VideoStart, user: Principal = Depends(current_doctor
 async def get_room(consultation_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """Patient polls this to learn whether the doctor has started the call yet."""
     consult = can_consultation(db, user, consultation_id)
+    if getattr(consult.status, "value", consult.status) in ("completed", "refunded", "expired"):
+        # The doctor ended it: tell the patient's screen to move on
+        return {"ready": False, "ended": True, "status": consult.status}
 
     name = _room_name(consultation_id)
     async with httpx.AsyncClient(timeout=15) as http:

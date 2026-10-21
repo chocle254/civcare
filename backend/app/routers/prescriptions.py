@@ -28,6 +28,6 @@ async def get_active_prescriptions(patient_id: str, user: Principal = Depends(cu
             "medication_name": p.medication_name,
             "dosage_notation": p.dosage_notation,
             "duration_days": p.duration_days,
-            "reminders_start_at": p.reminders_start_at.isoformat() if p.reminders_start_at else None,
+            "reminders_start_at": p.reminders_start_at.isoformat() + "Z" if p.reminders_start_at else None,
         })
     return result

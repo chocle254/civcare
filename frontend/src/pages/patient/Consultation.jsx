@@ -133,7 +133,8 @@ export default function Consultation() {
             const busy = selected === doc.id;
             const name = doc.full_name || doc.name || 'Doctor';
             return (
-              <div key={doc.id} style={{ ...s.card, animationDelay: `${i * 0.06}s` }} className="cc-cardhover">
+              <div key={doc.id} style={{ ...s.card, animationDelay: `${i * 0.06}s`, cursor: selected ? 'default' : 'pointer' }} className="cc-cardhover"
+                onClick={() => !selected && handleConsult(doc)}>
                 <div style={s.avatarWrap}>
                   <div style={{ ...s.avatar, background: spec.tintDim, color: spec.tint }}>{initials(name)}</div>
                   <span style={s.onlineDot} />
@@ -153,12 +154,13 @@ export default function Consultation() {
                 <button
                   style={{ ...s.feeBtn, background: busy ? color.surfaceMuted : spec.tint, color: busy ? color.inkFaint : color.onPrimary }}
                   className="cc-press"
-                  onClick={() => handleConsult(doc)}
+                  onClick={(e) => { e.stopPropagation(); handleConsult(doc); }}
                   disabled={!!selected}
+                  aria-label={`Consult Dr. ${name.replace(/^Dr\.?\s*/i, '')}, KSh ${doc.consultation_fee || 0}`}
                 >
                   {busy ? '···' : (
                     <>
-                      <span style={s.feeCurrency}>KSh</span>
+                      <span style={s.feeCurrency}>Consult · KSh</span>
                       <span style={s.feeAmount}>{doc.consultation_fee?.toLocaleString() || '—'}</span>
                     </>
                   )}

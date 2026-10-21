@@ -1,5 +1,12 @@
 from dotenv import load_dotenv
 load_dotenv()
+
+# Every time CivCare stores is UTC without a zone. Send them with their "Z"
+# so phones convert them to Kenya time; without it they were read as local
+# time and were 3 hours off (dose countdowns, "requested 3h ago").
+import datetime as _dt
+from fastapi.encoders import ENCODERS_BY_TYPE as _ENC
+_ENC[_dt.datetime] = lambda d: d.isoformat() + ("Z" if d.tzinfo is None else "")
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -181,7 +188,7 @@ async def get_queue(hospital_id: str, doctor_id: str, user: Principal = Depends(
                 "risk_numeric":    appt.risk_numeric or "50",
                 "symptoms_summary":appt.symptoms_summary or "—",
                 "status":          appt.status,
-                "arrived_at":      appt.arrived_at.isoformat() if appt.arrived_at else None,
+                "arrived_at":      appt.arrived_at.isoformat() + "Z" if appt.arrived_at else None,
             })
 
         return queue_data

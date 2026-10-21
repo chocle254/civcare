@@ -19,9 +19,14 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    // An expired session signs the person out. A wrong password on a
+    // sign-in form is also a 401, but that must show its error instead.
+    const url = err.config?.url || '';
+    const signingIn = /\/auth\/(patient|doctor)\/(login|register)|\/admin\/login/.test(url);
+    if (err.response?.status === 401 && !signingIn) {
+      const doctor = window.location.pathname.startsWith('/doctor');
       localStorage.clear();
-      window.location.href = '/';
+      window.location.href = doctor ? '/doctor' : '/';
     }
     return Promise.reject(err);
   }

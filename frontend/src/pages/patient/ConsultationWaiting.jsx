@@ -19,11 +19,13 @@ export default function ConsultationWaiting() {
   const [roomUrl, setRoomUrl] = useState(null);
   const [joined, setJoined]   = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [ended, setEnded]     = useState(false);
 
   const poll = useCallback(async () => {
     if (!consultationId) return;
     try {
       const res = await getVideoRoom(consultationId);
+      if (res.data.ended) { setEnded(true); return; }
       if (res.data.ready && res.data.room_url) {
         setReady(true);
         setRoomUrl(res.data.room_url);
@@ -32,11 +34,11 @@ export default function ConsultationWaiting() {
   }, [consultationId]);
 
   useEffect(() => {
-    if (!consultationId || joined) return;
+    if (!consultationId || joined || ended) return;
     poll();
     const t = setInterval(poll, 4000);
     return () => clearInterval(t);
-  }, [poll, consultationId, joined]);
+  }, [poll, consultationId, joined, ended]);
 
   // Live call timer, running only once the patient has joined.
   useEffect(() => {
@@ -77,6 +79,24 @@ export default function ConsultationWaiting() {
           </button>
         </footer>
         <style>{CSS}</style>
+      </div>
+    );
+  }
+
+  // ── FINISHED: the doctor ended the consultation ──
+  if (ended) {
+    return (
+      <div className="cw">
+        <main className="cw-wrap">
+          <section className="cw-hero is-ready" aria-live="polite">
+            <span className="cw-heroicon" aria-hidden="true"><Icon.Check size={28} /></span>
+            <h1>Your consultation has ended</h1>
+            <p>Your diagnosis and any medicines the doctor prescribed are now in your medical history.</p>
+            <button type="button" className="btn btn--primary cw-join" onClick={() => navigate('/rate')}>Rate your consultation</button>
+            <button type="button" className="btn btn--outline cw-join" onClick={() => navigate('/medications')}>Set up medicine reminders</button>
+            <button type="button" className="btn btn--ghost cw-join" onClick={() => navigate('/diagnosis-history')}>View my diagnosis</button>
+          </section>
+        </main>
       </div>
     );
   }

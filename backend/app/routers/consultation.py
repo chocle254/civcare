@@ -70,6 +70,12 @@ async def initiate_consultation(data: ConsultInit, user: Principal = Depends(cur
         auto_release_at=auto_release_at,
     )
     db.add(consult)
+    if data.session_id:
+        from app.models.session import ChatSession, SessionStatus
+        s = db.query(ChatSession).filter(ChatSession.id == data.session_id, ChatSession.patient_id == data.patient_id).first()
+        if s:
+            s.status = SessionStatus.COMPLETED
+            s.completed_at = datetime.utcnow()
 
     # Doctor goes busy
     doctor.status = DoctorStatus.WITH_PATIENT
@@ -145,7 +151,7 @@ async def get_pending_consultations(doctor_id: str, user: Principal = Depends(cu
             "fee_amount":       c.fee_amount,
             "payment_status":   c.payment_status,
             "symptoms_summary": symptoms,
-            "started":          c.created_at.isoformat(),
+            "started":          c.created_at.isoformat() + "Z",
         })
 
     return result

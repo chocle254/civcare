@@ -22,7 +22,7 @@ router = APIRouter()
 
 
 def _iso(dt):
-    return dt.isoformat() if dt else None
+    return dt.isoformat() + "Z" if dt else None
 
 
 def _me(db: Session, user: Principal) -> Patient:
