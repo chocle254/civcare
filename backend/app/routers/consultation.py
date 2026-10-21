@@ -96,6 +96,22 @@ async def initiate_consultation(data: ConsultInit, user: Principal = Depends(cur
         "auto_release_at": auto_release_at,
     }
 
+@router.get("/mine")
+async def my_open_consultation(user: Principal = Depends(current_user), db: Session = Depends(get_db)):
+    """The patient's online consultation that is still waiting or under way, for the home screen."""
+    if not user.is_patient:
+        raise HTTPException(status_code=403, detail="Only the patient can do this.")
+    c = db.query(Consultation).filter(
+        Consultation.patient_id == user.id,
+        Consultation.status.in_([ConsultationStatus.PENDING, ConsultationStatus.IN_PROGRESS]),
+    ).order_by(Consultation.created_at.desc()).first()
+    if not c:
+        return None
+    doctor = db.query(Doctor).filter(Doctor.id == c.doctor_id).first()
+    return {"id": c.id, "status": getattr(c.status, "value", c.status),
+            "doctor_name": doctor.full_name if doctor else None, "doctor_id": c.doctor_id}
+
+
 @router.get("/pending")
 async def get_pending_consultations(doctor_id: str, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     """Doctor dashboard polls this for the Consultations tab."""
@@ -146,7 +162,11 @@ class MarkCalled(BaseModel):
 @router.post("/mark-called")
 async def mark_consultation_called(data: MarkCalled, user: Principal = Depends(current_doctor), db: Session = Depends(get_db)):
     consult = can_consultation(db, user, data.consultation_id)
-    consult.status = "called"
+    # "called" isn't a consultation status the database accepts; the call is
+    # recorded by its time and the consultation is under way.
+    consult.status = ConsultationStatus.IN_PROGRESS
+    if not consult.call_initiated_at:
+        consult.call_initiated_at = datetime.utcnow()
     db.commit()
     from app.services.push import notify_patient
     await notify_patient(consult.patient_id, "phone", url="/consultation/waiting", tag=f"consult-{consult.id}")

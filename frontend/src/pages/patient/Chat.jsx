@@ -190,14 +190,14 @@ export default function Chat() {
 
             if (msg.role === 'patient') return (
               <div key={i} style={s.rowRight}>
-                <div style={s.bubblePatient}>{msg.content}</div>
+                <div style={s.bubblePatient} data-role="patient" data-i18n-skip="">{msg.content}</div>
               </div>
             );
 
             if (msg.role === 'ai') return (
               <div key={i} style={s.rowLeft}>
                 <div style={s.aiBadge}><Icon.Sparkle size={15} /></div>
-                <div style={s.bubbleAi}>{msg.content}</div>
+                <div style={s.bubbleAi} data-role="ai" data-i18n-skip="">{msg.content}</div>
               </div>
             );
 

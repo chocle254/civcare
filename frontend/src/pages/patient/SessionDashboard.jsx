@@ -294,9 +294,7 @@ export default function SessionDashboard() {
       const [sessRes, presRes, pendRes, doseRes] = await Promise.allSettled([
         axios.get(`${API}/triage/sessions/${patient.id}`),
         axios.get(`${API}/prescriptions/active/${patient.id}`),
-        axios.get(`${API}/consultation/pending`, {
-          params: { patient_id: patient.id },
-        }),
+        axios.get(`${API}/consultation/mine`),
         axios.get(`${API}/reminders/today`, {
           params: { patient_id: patient.id },
         }),
