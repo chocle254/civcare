@@ -419,7 +419,6 @@ export default function SessionDashboard() {
   const [loading, setLoading] = useState(true);
   const [resumeSheet, setResumeSheet] = useState(null);
   const [pendingConsult, setPendingConsult] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationRead, setNotificationRead] = useState(() => {
@@ -589,11 +588,6 @@ export default function SessionDashboard() {
     (item) => !item.read
   ).length;
 
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate('/', { replace: true });
-  };
-
   const handleCardTap = (session) => {
     if (session.status === 'active') {
       setResumeSheet(session);
@@ -632,15 +626,6 @@ export default function SessionDashboard() {
         {/* HEADER */}
 
         <header style={s.header}>
-          <button
-            style={s.iconButton}
-            className="cc-press cc-hide-desktop"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
-          >
-            <Icon name="menu" size={20} />
-          </button>
-
           <button
             style={{
               ...s.iconButton,
@@ -1062,93 +1047,6 @@ export default function SessionDashboard() {
         </>
       )}
 
-      {/* MENU */}
-
-      {menuOpen && (
-        <>
-          <div
-            style={s.overlay}
-            onClick={() => setMenuOpen(false)}
-          />
-
-          <div style={s.menuSheet}>
-            <div style={s.sheetHandle} />
-
-            <div style={s.profileHeader}>
-              <div style={s.profileAvatar}>
-                <Icon
-                  name="profile"
-                  size={22}
-                  stroke={color.blue}
-                />
-              </div>
-
-              <div>
-                <p style={s.menuName}>
-                  {patient.name || 'Patient'}
-                </p>
-
-                <p style={s.menuSub}>
-                  {patient.phone || ''}
-                </p>
-              </div>
-            </div>
-
-            <button
-              style={s.menuItem}
-              onClick={() => {
-                setMenuOpen(false);
-                navigate('/profile');
-              }}
-            >
-              <Icon
-                name="profile"
-                size={18}
-              />
-              Profile
-            </button>
-
-            <button
-              style={s.menuItem}
-              onClick={() => {
-                setMenuOpen(false);
-                navigate('/diagnosis-history');
-              }}
-            >
-              <Icon
-                name="history"
-                size={18}
-              />
-              Medical history
-            </button>
-
-            <button
-              style={s.menuItem}
-              onClick={() => {
-                setMenuOpen(false);
-                navigate('/medications');
-              }}
-            >
-              <Icon
-                name="pill"
-                size={18}
-              />
-              Medications
-            </button>
-
-            <button
-              style={{
-                ...s.menuItem,
-                color: color.coral,
-              }}
-              onClick={handleLogout}
-            >
-              Sign out
-            </button>
-          </div>
-        </>
-      )}
-
       {/* RESUME SESSION */}
 
       {resumeSheet && (
@@ -1371,7 +1269,7 @@ const s = {
   header: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     marginBottom: 24,
   },
 

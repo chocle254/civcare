@@ -16,7 +16,6 @@ const TABS = [
 const MORE_ITEMS = [
   { icon: 'Hospital', title: 'Hospitals nearby',  sub: 'Find care near you',     path: '/hospitals' },
   { icon: 'History',  title: 'Diagnosis history', sub: 'Past consultations',     path: '/diagnosis-history' },
-  { icon: 'Profile',  title: 'Profile',           sub: 'Your details',           path: '/profile' },
   { icon: 'Logout',   title: 'Sign out',          sub: 'Log out of CivCare',     action: 'logout', danger: true },
 ];
 
@@ -25,6 +24,8 @@ export default function BottomNav({ active }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [doctorCount, setDoctorCount] = useState(null);
   const sheetRef = useRef(null);
+  const patient = (() => { try { return JSON.parse(localStorage.getItem('civtech_patient') || '{}'); } catch { return {}; } })();
+  const name = patient.name || patient.full_name || 'Patient';
 
   useEffect(() => {
     let alive = true;
@@ -95,6 +96,13 @@ export default function BottomNav({ active }) {
                 <Icon.Close size={18} />
               </button>
             </div>
+            <button type="button" className="ccnav__me" onClick={() => handleMoreItem({ path: '/profile' })}>
+              <span className="ccnav__avatar" aria-hidden="true">{name[0].toUpperCase()}</span>
+              <span className="ccnav__itemtext">
+                <span className="ccnav__itemtitle">{name}</span>
+                {(patient.phone || patient.phone_number) && <span className="ccnav__itemsub">{patient.phone || patient.phone_number}</span>}
+              </span>
+            </button>
             <ul className="ccnav__list">
               {MORE_ITEMS.map((item) => {
                 const ItemIcon = Icon[item.icon];
@@ -176,6 +184,16 @@ export default function BottomNav({ active }) {
           display: inline-flex; align-items: center; justify-content: center;
         }
         .ccnav__close:hover { background: var(--cc-surface-2); color: var(--cc-text); }
+        .ccnav__me {
+          width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
+          padding: 10px 8px 14px; margin-bottom: 6px; border: none; border-bottom: 1px solid var(--cc-border);
+          background: none; color: var(--cc-text); border-radius: 12px 12px 0 0;
+        }
+        .ccnav__avatar {
+          width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+          display: inline-flex; align-items: center; justify-content: center;
+          background: linear-gradient(160deg, #1769aa, #12578e); color: #fff; font-weight: 700; font-size: 16px;
+        }
         .ccnav__list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
         .ccnav__item {
           width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
