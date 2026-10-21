@@ -5,6 +5,7 @@ import { theme } from '../../styles/theme';
 import PrivacyPanel from '../../components/PrivacyPanel';
 import MedicalRecords from '../../components/MedicalRecords';
 import { pushSignOut } from '../../utils/push';
+import LanguagePicker from '../../components/LanguagePicker';
 
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
@@ -156,6 +157,13 @@ export default function Profile() {
         </div>
 
         <div className="cc-prof-body">
+        <div style={s.langRow}>
+          <div>
+            <p style={s.langTitle}>Language</p>
+            <p style={s.langSub}>Language for the app, the assistant, SMS and notifications.</p>
+          </div>
+          <LanguagePicker />
+        </div>
         <div style={s.tabRow}>
           {TABS.map((t) => (
             <button
@@ -279,6 +287,9 @@ const s = {
   sexBtn: { flex: 1, minHeight: 40, borderRadius: radius.md, border: '1px solid var(--cc-primary-border)', background: 'var(--cc-surface)', color: 'var(--cc-primary)', fontWeight: 600, fontSize: 14, cursor: 'pointer' },
   sexErr: { fontSize: 13, color: 'var(--cc-danger)', margin: '8px 0 0' },
 
+  langRow: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  langTitle: { fontSize: 14, fontWeight: 600, margin: 0, color: color.ink },
+  langSub: { fontSize: 12.5, color: color.inkFaint, margin: '2px 0 0' },
   tabRow: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18, borderBottom: `1px solid ${color.hairline}`, paddingBottom: 2 },
   tabBtn: {
     background: 'none', border: 'none', color: color.inkFaint, fontSize: 13.5, fontWeight: 500,

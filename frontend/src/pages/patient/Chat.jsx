@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { sendMessage } from '../../api/triage';
 import { theme } from '../../styles/theme';
 import Icon from '../../components/Icons';
+import { t } from '../../i18n';
 
 const { color, font, radius } = theme;
 
@@ -49,20 +50,20 @@ export default function Chat() {
               role: m.role,
               content: m.content,
             }));
-            setMessages(history.length ? history : [{ role: 'ai', content: 'Session resumed. How can I help?' }]);
+            setMessages(history.length ? history : [{ role: 'ai', content: t('Session resumed. How can I help?') }]);
           })
           .catch(() => {
             setMessages([{ role: 'ai', content: 'Could not load previous messages.' }]);
           });
       });
     } else {
-      let welcomeMsg = `Hello${firstName ? ` ${firstName}` : ''}, I'm CivCare, your health assistant. It's good to see you. How are you feeling today?`;
+      let welcomeMsg = t("Hello{name}, I'm CivCare, your health assistant. It's good to see you. How are you feeling today?", { name: firstName ? ` ${firstName}` : '' });
       if (mode === 'pre_hospital') {
         const h = JSON.parse(localStorage.getItem('civtech_hospital') || '{}');
-        welcomeMsg = `You've selected ${h.name}. To prepare your file for the doctor, please describe the symptoms you are experiencing.`;
+        welcomeMsg = t("You've selected {hospital}. To prepare your file for the doctor, please describe the symptoms you are experiencing.", { hospital: h.name });
       } else if (mode === 'pre_consultation') {
         const d = JSON.parse(localStorage.getItem('civtech_selected_doctor') || '{}');
-        welcomeMsg = `You're about to consult Dr. ${d.full_name || d.name}. Please describe your symptoms to speed up the consultation.`;
+        welcomeMsg = t("You're about to consult Dr. {doctor}. Please describe your symptoms to speed up the consultation.", { doctor: d.full_name || d.name });
       }
       setMessages([{ role: 'ai', content: welcomeMsg }]);
     }
@@ -136,7 +137,7 @@ export default function Chat() {
                 localStorage.setItem('civtech_consultation_id', initRes.data.consultation_id);
                 navigate('/consultation/waiting');
               } catch (e) {
-                alert('Failed to connect to doctor. Please try again.');
+                alert(t('Failed to connect to doctor. Please try again.'));
                 navigate('/consultation');
               }
             });
@@ -156,7 +157,7 @@ export default function Chat() {
     } catch {
       setIsTyping(false);
       setMessages((prev) => [...prev, {
-        role: 'ai', content: 'I am having trouble connecting. Please try again.',
+        role: 'ai', content: t('I am having trouble connecting. Please try again.'),
       }]);
     }
   };

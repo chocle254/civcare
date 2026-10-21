@@ -16,10 +16,11 @@ You NEVER jump to conclusions. You gather information step by step before anythi
 IDENTITY & TONE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - You are warm, professional, and deeply empathetic — like the best nurse a patient has ever met.
-- LANGUAGE MIRRORING: Reply in the SAME language the patient is using.
-    - If they write in English, reply in simple, clear English.
-    - If they write in Swahili or Sheng, reply in the casual, everyday Swahili spoken on the streets of Nairobi — NOT formal/coastal/Tanzanian "Kiswahili sanifu". Mix in English words naturally.
-    - If they mix languages (Sheng), mirror that same casual mix back.
+- LANGUAGE: The PATIENT PROFILE below gives the language the patient chose for the app. Start in that language. If they then write in a different one, follow them: always reply in the language and style the patient is actually using.
+    - English: simple, clear English.
+    - Kiswahili: correct, clear Kiswahili sanifu as spoken in Kenya (many coast patients speak it perfectly). Plain everyday words, no Sheng. Use the words Kenyans use for health ("dawa", "dozi", "homa", "kliniki").
+    - Sheng: the casual Nairobi / Gen Z mix of Kiswahili, English and Sheng, the way young Kenyans text (e.g. "Pole sana, hiyo homa imeanza lini?", "Unajiskia aje saa hii?"). Mirror their mix back.
+    - In every language, say danger signs, emergency numbers and medicine instructions plainly, never in slang that could be misread.
 - Keep it warm and human. Avoid deep or rare vocabulary most Kenyans wouldn't use in daily speech.
 - Use empathetic openers: "I'm sorry to hear that...", "That must be uncomfortable...", "Thank you for telling me..."
 - Keep every response to 1-2 SHORT sentences maximum. Never write paragraphs.
@@ -131,12 +132,25 @@ ALWAYS end with ONE question OR a brief reassuring statement + one question.
 # Fixed text, not model-written, so the assistant never appears to make a
 # clinical decision (diagnosis, seriousness, or where the patient should go).
 # Where to get care is always the patient's choice.
-SAFETY_NET = "If anything gets worse, call 999 or 112."
-URGENT_MARKER = "should be checked by a clinician quickly"
-URGENT_CHECK_MSG = (
-    f"Thank you for telling me. What you've described {URGENT_MARKER}. {SAFETY_NET} "
-    "Would you like to go to a hospital now, or speak to a doctor online now?"
-)
+# Each comes in English, Kiswahili and Sheng (app/services/i18n.py), in the
+# language the patient chose for the app.
+from app.services.i18n import msg, all_versions, clean_lang
+
+SAFETY_NET = msg("safety_net")                  # English versions, kept for older imports
+URGENT_MARKER = msg("urgent_marker")
+URGENT_MARKERS = all_versions("urgent_marker")
+
+
+def _lang(patient_data: dict) -> str:
+    return clean_lang(patient_data.get("language"))
+
+
+def urgent_check_msg(patient_data: dict) -> str:
+    lang = _lang(patient_data)
+    return msg("urgent_check", lang, marker=msg("urgent_marker", lang), safety=msg("safety_net", lang))
+
+
+URGENT_CHECK_MSG = urgent_check_msg({})
 
 
 def _first_name(patient_data: dict) -> str:
@@ -145,17 +159,13 @@ def _first_name(patient_data: dict) -> str:
 
 
 def hospital_route_msg(patient_data: dict) -> str:
-    return (
-        f"Thank you{_first_name(patient_data)}. I've written up everything you told me for the doctor. "
-        f"Choose a hospital near you below and your file will be ready when you arrive. {SAFETY_NET}"
-    )
+    lang = _lang(patient_data)
+    return msg("route_hospital", lang, name=_first_name(patient_data), safety=msg("safety_net", lang))
 
 
 def online_route_msg(patient_data: dict) -> str:
-    return (
-        f"Thank you{_first_name(patient_data)}. I've written up everything you told me for the doctor. "
-        f"Choose a doctor below to speak with online. {SAFETY_NET}"
-    )
+    lang = _lang(patient_data)
+    return msg("route_online", lang, name=_first_name(patient_data), safety=msg("safety_net", lang))
 
 
 # ── SUMMARY EXTRACTION AGENT ─────────────────────────────────────────────────
@@ -557,6 +567,32 @@ def detect_red_flag(conversation_history: list, current_message: str) -> bool:
         ["can't urinate", "severe pain"],
         ["kidney pain", "fever", "vomiting"],
 
+        # ── KISWAHILI AND SHENG (same emergencies, as patients say them) ──
+        ["maumivu ya kifua", "kupumua"], ["maumivu ya kifua", "pumzi"], ["kifua kinauma", "pumzi"],
+        ["kifua kinauma", "kupumua"], ["kifua kinabana"], ["kifua", "jasho jingi"],
+        ["chest inauma", "pumzi"], ["chest inauma", "breathe"],
+        ["siwezi kupumua"], ["nashindwa kupumua"], ["hawezi kupumua"], ["anashindwa kupumua"],
+        ["sipati pumzi"], ["pumzi inakatika"], ["siezi breathe"], ["siwezi breathe"], ["hapumui"],
+        ["midomo ni ya bluu"], ["midomo imekuwa bluu"],
+        ["uso umepinda"], ["mdomo umepinda"], ["hawezi kuongea", "ghafla"], ["upande mmoja", "hauna nguvu"],
+        ["shingo ngumu", "homa"], ["shingo imekaza", "homa"],
+        ["natapika damu"], ["anatapika damu"], ["kutapika damu"], ["nakohoa damu"], ["kukohoa damu"],
+        ["damu nyingi"], ["damu mingi"], ["damu haikomi"], ["damu haiishi"],
+        ["tumbo limekuwa gumu"], ["tumbo ngumu", "maumivu makali"],
+        ["kisukari", "hajitambui"], ["sukari", "amechanganyikiwa"],
+        ["koo linafunga"], ["ulimi umevimba"], ["uso umevimba", "kupumua"],
+        ["mjamzito", "damu"], ["nina mimba", "damu"], ["ana mimba", "damu"],
+        ["mtoto tumboni hachezi"], ["mtoto hachezi tumboni"], ["maji yamevunjika", "maumivu"],
+        ["degedege"], ["kifafa"], ["amezimia"], ["nimezimia"], ["hajitambui"], ["amepoteza fahamu"],
+        ["ameanguka", "hajitambui"], ["ameblackout"],
+        ["mtoto", "hapumui"], ["mtoto", "degedege"], ["mtoto", "homa kali", "shingo"],
+        ["amegongwa na gari"], ["ajali ya barabarani"], ["amedungwa kisu"], ["risasi"],
+        ["ameanguka kutoka juu"], ["jeraha la kichwa", "hajitambui"],
+        ["amekunywa sumu"], ["nimekunywa sumu"], ["amemeza sumu"], ["amemeza dawa nyingi"], ["nimemeza dawa nyingi"],
+        ["homa kali", "amechanganyikiwa"],
+        ["nataka kujiua"], ["nataka kufa"], ["kujiua"], ["kujidhuru"], ["sitaki kuishi"],
+        ["nataka kujimaliza"], ["kujimaliza"],
+
         # ── MENTAL HEALTH CRISIS ──
         ["want to kill myself"],
         ["want to die"],
@@ -571,7 +607,7 @@ def detect_red_flag(conversation_history: list, current_message: str) -> bool:
     return False
 
 
-NEGATIONS = ("no ", "not ", "without ", "never ", "don't have ", "dont have ", "haven't had ", "hakuna ", "sina ")
+NEGATIONS = ("no ", "not ", "without ", "never ", "don't have ", "dont have ", "haven't had ", "hakuna ", "sina ", "sijawahi ", "hana ", "hakuwa na ")
 
 
 def _mentioned(term: str, text: str) -> bool:
@@ -643,15 +679,13 @@ async def process_message(
 
         # A possible life threat: give the emergency numbers and basic safety
         # steps, without naming a diagnosis. Nearby hospitals are shown too.
-        emergency_msg = (
-            "What you're describing can be an emergency. Call 999 or 112 now, "
-            "or get to the nearest hospital emergency department."
-        )
+        lang = _lang(patient_data)
+        emergency_msg = msg("emergency", lang)
         if emergency_type in ("airway", "breathing"):
-            emergency_msg += " If someone isn't breathing and you're trained, start CPR."
+            emergency_msg += msg("emergency_airway", lang)
         elif emergency_type in ("circulation", "severe_bleed"):
-            emergency_msg += " If there's heavy bleeding, press firmly on the wound with a clean cloth."
-        emergency_msg += " Nearby hospitals are below."
+            emergency_msg += msg("emergency_bleed", lang)
+        emergency_msg += msg("emergency_tail", lang)
 
         result["response"] = emergency_msg
         result["action"] = "route_hospital"
@@ -675,10 +709,7 @@ async def process_message(
 
         if can_travel is None:
             result["action"] = "continue"
-            result["response"] = (
-                "Are you able to travel to a nearby hospital or clinic today, "
-                "or would you prefer to speak to a doctor online?"
-            )
+            result["response"] = msg("ask_travel", _lang(patient_data))
         elif can_travel is False:
             result["action"] = "route_consultation"
             result["response"] = online_route_msg(patient_data)
@@ -732,6 +763,7 @@ async def process_message(
         f"Past Conditions: {patient_data.get('conditions')}\n"
         f"Current Medications: {', '.join(patient_data.get('current_medications', [])) or 'None'}\n"
         f"Allergies: {patient_data.get('allergies')}\n"
+        f"Chosen app language: {({'sw': 'Kiswahili', 'sheng': 'Sheng'}).get(_lang(patient_data), 'English')}\n"
         + (
             "Records the patient uploaded (their own files, not yet checked by a clinician):\n"
             + "\n".join(f"  - {r}" for r in patient_data["uploaded_records"]) + "\n"
@@ -767,7 +799,8 @@ async def process_message(
         system_context=dynamic_context,
         model="llama-3.3-70b-versatile",
     )
-    result["response"] = ai_response
+    from app.services.ai_client import FALLBACK_REPLY
+    result["response"] = msg("fallback", _lang(patient_data)) if ai_response == FALLBACK_REPLY else ai_response
 
     # ── Medication check ────────────────────────────────────────────────
     # The check informs the doctor; it never ends triage early (a fever in a
@@ -827,7 +860,7 @@ async def process_message(
     elif is_red_flag and result["updated_summary"].get("can_travel") is None:
         # Red flag but travel question not asked yet — force the question now
         result["action"] = "continue"
-        result["response"] = URGENT_CHECK_MSG
+        result["response"] = urgent_check_msg(patient_data)
         return result
 
 
@@ -841,7 +874,7 @@ async def process_message(
             patient_data=patient_data,
             transcript=transcript,
             escalated=is_red_flag or any(
-                URGENT_MARKER in (m.get("content") or "")
+                any(mk in (m.get("content") or "") for mk in URGENT_MARKERS)
                 for m in conversation_history if m.get("role") == "ai"
             ),
         )
@@ -854,11 +887,11 @@ async def process_message(
         # Fast-track routing for pre-selected destination modes
         if mode == "pre_hospital":
             result["action"] = "route_hospital"
-            result["response"] = "Thank you, I have gathered enough information. Preparing your file now..."
+            result["response"] = msg("pre_hospital", _lang(patient_data))
             return result
         elif mode == "pre_consultation":
             result["action"] = "route_consultation"
-            result["response"] = "Thank you. Your file is ready. Connecting you to the doctor now..."
+            result["response"] = msg("pre_consult", _lang(patient_data))
             return result
 
         can_travel = result["updated_summary"].get("can_travel")
@@ -874,10 +907,6 @@ async def process_message(
         elif can_travel is None:
             # Symptoms gathered but travel preference not asked yet
             result["action"] = "continue"
-            result["response"] = (
-                "Thank you for sharing all of that with me. "
-                "Are you able to travel to a nearby hospital or clinic today, "
-                "or would you prefer to speak to a doctor online?"
-            )
+            result["response"] = msg("ask_travel_thanks", _lang(patient_data)) + msg("ask_travel", _lang(patient_data))
 
     return result

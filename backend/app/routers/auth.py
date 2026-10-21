@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.patient import Patient, IdentityType
 from app.models.doctor import Doctor, DoctorStatus
 from app.models.hospital import Hospital
+from app.services.i18n import clean_lang
 from app.services.encryption import generate_key_one
 from app.services.security import hash_secret, verify_secret, needs_rehash, is_locked, record_failure, clear_failures
 from app.services.authz import Principal, current_patient, current_doctor, log_access
@@ -49,6 +50,7 @@ def _patient_out(patient) -> dict:
         "consent_version": patient.consent_version,
         "needs_consent":   not has_consent(patient),
         "needs_pin":       not patient.pin_hash,
+        "language":        patient.language or "en",
     }
 
 
@@ -86,6 +88,7 @@ class PatientRegister(BaseModel):
     # A child under 18 needs a parent or guardian to consent (DPA s. 33).
     guardian_name:   str | None = None
     guardian_relationship: str | None = None
+    language:        str | None = None   # en / sw / sheng
 
 
 class PatientLogin(BaseModel):
@@ -152,6 +155,7 @@ async def register_patient(data: PatientRegister, db: Session = Depends(get_db))
         sex=_clean_sex(data.sex),
         location=data.location,
         allergies=data.allergies,
+        language=clean_lang(data.language),
         key_one_hash=key_one_hash,
         is_verified=True,   # No OTP for now — verified on registration
         pin_hash=hash_secret(data.pin),
@@ -377,6 +381,7 @@ class UpdateProfile(BaseModel):
     allergies:     str | None = None
     location:      str | None = None
     sex:           str | None = None
+    language:      str | None = None   # en / sw / sheng
 
 
 @router.patch("/patient/profile/update")
@@ -396,6 +401,9 @@ async def update_profile(data: UpdateProfile, user: Principal = Depends(current_
         patient.location = data.location; changed.append("location")
     if data.sex is not None and _clean_sex(data.sex):
         patient.sex = _clean_sex(data.sex); changed.append("sex")
+    if data.language is not None:
+        from app.services.i18n import clean_lang
+        patient.language = clean_lang(data.language); changed.append("language")
     db.commit()
     if changed:
         log_access(db, user, patient.id, "updated profile", ", ".join(changed))

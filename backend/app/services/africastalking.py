@@ -42,23 +42,14 @@ async def send_otp_sms(phone_number: str, otp: str) -> bool:
     return await send_sms(phone_number, message)
 
 
-async def send_medication_reminder(phone_number: str, medication: str, dosage: str) -> bool:
-    message = (
-        f"CivTech Reminder\n"
-        f"Time to take: {medication} — {dosage}\n"
-        f"Reply TAKEN if you have taken this dose.\n"
-        f"Reply SKIP if you cannot take it right now."
-    )
-    return await send_sms(phone_number, message)
+async def send_medication_reminder(phone_number: str, medication: str, dosage: str, lang: str | None = None) -> bool:
+    from app.services.i18n import msg
+    return await send_sms(phone_number, msg("sms_dose", lang or "en", med=medication, dose=dosage))
 
 
-async def send_doctor_call_notification(phone_number: str, doctor_name: str) -> bool:
-    message = (
-        f"CivTech Care System\n"
-        f"Dr. {doctor_name} is ready to see you now.\n"
-        f"Please proceed to the consultation room."
-    )
-    return await send_sms(phone_number, message)
+async def send_doctor_call_notification(phone_number: str, doctor_name: str, lang: str | None = None) -> bool:
+    from app.services.i18n import msg
+    return await send_sms(phone_number, msg("sms_called", lang or "en", doctor=doctor_name))
 
 
 async def send_consultation_request(doctor_phone: str, patient_name: str, patient_phone: str) -> bool:

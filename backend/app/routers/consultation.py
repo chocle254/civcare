@@ -148,10 +148,8 @@ async def mark_consultation_called(data: MarkCalled, user: Principal = Depends(c
     consult = can_consultation(db, user, data.consultation_id)
     consult.status = "called"
     db.commit()
-    from app.services.push import notify
-    await notify(consult.patient_id, "Your doctor is calling you",
-                 "Pick up your phone: the doctor for your online consultation is calling now.",
-                 url="/consultation/waiting", tag=f"consult-{consult.id}")
+    from app.services.push import notify_patient
+    await notify_patient(consult.patient_id, "phone", url="/consultation/waiting", tag=f"consult-{consult.id}")
     return {"message": "Marked as called"}
 
 

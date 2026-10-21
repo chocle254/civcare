@@ -32,6 +32,7 @@ class Patient(Base):
     allergies        = Column(String, nullable=True)
     allergy_flags    = Column(Text, nullable=True)   # AI-detected allergy/med conflicts for doctor + AI
     location         = Column(String, nullable=True)   # General area e.g Kisumu, Turkana
+    language         = Column(String, nullable=True)   # en / sw / sheng: app, assistant, SMS and notifications
 
     # ── ENCRYPTION KEYS ──
     # Key 1 — permanent, held by patient, stored as hash never plain text

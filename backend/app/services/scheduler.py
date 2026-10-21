@@ -47,19 +47,16 @@ async def send_due_reminders():
 
             # Phone notification (works with the app closed). The lock screen
             # never names the medicine.
-            from app.services.push import notify
+            from app.services.push import notify_patient
             local = (reminder.scheduled_at + timedelta(hours=3)).strftime("%-I:%M %p")
-            pushed = await notify(
-                patient.id, "Time for your medicine",
-                f"Your {local} dose is due. Tap to log it.",
-                url="/medications", tag=f"dose-{reminder.id}",
-            )
+            pushed = await notify_patient(patient.id, "dose", url="/medications", tag=f"dose-{reminder.id}", time=local)
 
             # SMS too, for phones without data
             sent = await send_medication_reminder(
                 phone_number=patient.phone_number,
                 medication=prescription.medication_name,
                 dosage=prescription.dosage_notation or "",
+                lang=patient.language,
             ) or pushed > 0
 
             if sent:
@@ -219,8 +216,7 @@ async def send_missed_dose_nudges():
     Runs every 5 minutes. One gentle notification per dose that is an
     hour past due and still not logged. Push only; no extra SMS.
     """
-    from app.services.push import notify
-    from app.models.patient import Patient  # noqa: F401
+    from app.services.push import notify_patient
     db: Session = SessionLocal()
     try:
         now = datetime.utcnow()
@@ -238,9 +234,7 @@ async def send_missed_dose_nudges():
                 continue                                         # one message per patient per run
             nudged.add(rx.patient_id)
             local = (reminder.scheduled_at + timedelta(hours=3)).strftime("%-I:%M %p")
-            await notify(rx.patient_id, "Did you take your medicine?",
-                         f"You haven't logged your {local} dose yet. Tap to log it, or tell us why you skipped it.",
-                         url="/medications", tag=f"dose-{reminder.id}")
+            await notify_patient(rx.patient_id, "missed", url="/medications", tag=f"dose-{reminder.id}", time=local)
         db.commit()
     except Exception as e:
         print(f"Missed-dose nudge error: {e}")
@@ -254,7 +248,7 @@ async def send_course_followups():
     asks once how the patient feels, unless they already did the
     end-of-treatment review.
     """
-    from app.services.push import notify
+    from app.services.push import notify_patient
     from app.models.medication_outcome import CourseOutcome
     from sqlalchemy import func
     db: Session = SessionLocal()
@@ -287,9 +281,7 @@ async def send_course_followups():
                 p.followup_nudged_at = now
             if reviewed:
                 continue
-            await notify(patient_id, "How are you feeling now?",
-                         "Your treatment has finished. Tell us how you feel, and we'll help if you're still unwell.",
-                         url="/medications", tag=f"followup-{meds[0].id}")
+            await notify_patient(patient_id, "followup", url="/medications", tag=f"followup-{meds[0].id}")
         db.commit()
     except Exception as e:
         print(f"Course follow-up error: {e}")

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { registerPatient, loginPatient } from '../../api/auth';
 import { normalizeKePhone, PHONE_HINT, PHONE_ERROR } from '../../utils/phone';
 import { PRIVACY_VERSION } from '../../utils/privacy';
+import axios from 'axios';
+import LanguagePicker from '../../components/LanguagePicker';
+import { getLang, t } from '../../i18n';
 
 const ageFrom = (dob) => {
   const d = new Date(dob);
@@ -187,7 +190,22 @@ export default function Register() {
 
   const saveAndNavigate = (data) => {
     localStorage.setItem('civtech_token', data.access_token);
-    localStorage.setItem('civtech_patient', JSON.stringify(data.patient));
+    // Language: a choice made on this screen wins and is saved to the account;
+    // otherwise the account's saved language is used on this phone too.
+    let chosen = null;
+    try { chosen = localStorage.getItem('civcare_lang'); } catch { /* private mode */ }
+    const serverLang = data.patient?.language || 'en';
+    const patient = { ...data.patient, language: chosen || serverLang };
+    localStorage.setItem('civtech_patient', JSON.stringify(patient));
+    if (chosen && chosen !== serverLang) {
+      const API = (process.env.REACT_APP_API_URL || 'http://localhost:8000').replace(/\/$/, '');
+      axios.patch(`${API}/auth/patient/profile/update`, { language: chosen }).catch(() => {});
+    }
+    if (!chosen && serverLang !== 'en') {
+      try { localStorage.setItem('civcare_lang', serverLang); } catch { /* private mode */ }
+      window.location.replace('/dashboard');   // reload so the page draws in their language
+      return;
+    }
     // replace: Back from the dashboard shouldn't return to this form
     navigate('/dashboard', { replace: true });
   };
@@ -260,7 +278,7 @@ export default function Register() {
 
     try {
       const { pin_confirm, ...body } = regForm;
-      const res = await registerPatient({ ...body, phone_number: phone, consent_version: PRIVACY_VERSION });
+      const res = await registerPatient({ ...body, phone_number: phone, consent_version: PRIVACY_VERSION, language: getLang() });
       saveAndNavigate(res.data);
     } catch (err) {
       setError(
@@ -337,6 +355,7 @@ export default function Register() {
           margin-bottom: 30px;
         }
 
+        .cc-topbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
         .cc-brand {
           display: flex;
           align-items: center;
@@ -955,9 +974,12 @@ export default function Register() {
               </div>
             </div>
 
-            <div className="cc-secure-pill">
-              <Icon name="shield" size={14} />
-              Secure patient access
+            <div className="cc-topbar-right">
+              <LanguagePicker compact />
+              <div className="cc-secure-pill">
+                <Icon name="shield" size={14} />
+                Secure patient access
+              </div>
             </div>
           </header>
 
@@ -1322,11 +1344,9 @@ export default function Register() {
                       onChange={handleRegChange}
                     />
                     <span>
-                      {isChild ? 'As their parent or guardian, I have read' : 'I have read'} the{' '}
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer">privacy notice</a>{' '}
-                      and agree that CivCare may use {isChild ? 'their' : 'my'} health information to guide{' '}
-                      {isChild ? 'them' : 'me'} and share it with the doctors {isChild ? 'they choose' : 'I choose'}.
-                      This includes sending what {isChild ? 'they type' : 'I type'} to an AI service outside Kenya.
+                      {t(isChild ? 'consent.before.child' : 'consent.before')}{' '}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer">{t('privacy notice')}</a>{' '}
+                      {t(isChild ? 'consent.after.child' : 'consent.after')}
                     </span>
                   </label>
 
@@ -1364,8 +1384,8 @@ export default function Register() {
               </button>
 
               <p className="cc-privacy">
-                CivCare follows the Kenya Data Protection Act 2019. Read the{' '}
-                <a href="/privacy">privacy notice</a> to see what we collect, who sees it, and your rights.
+                {t('notice.before')}{' '}
+                <a href="/privacy">{t('privacy notice')}</a> {t('notice.after')}
               </p>
             </section>
           </section>

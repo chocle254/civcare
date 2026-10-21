@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Icon from './Icons';
 import { pushSignOut } from '../utils/push';
+import LanguagePicker from './LanguagePicker';
 
 const API = process.env.REACT_APP_API_URL;
 
@@ -104,6 +105,7 @@ export default function BottomNav({ active }) {
                 {(patient.phone || patient.phone_number) && <span className="ccnav__itemsub">{patient.phone || patient.phone_number}</span>}
               </span>
             </button>
+            <div className="ccnav__lang"><LanguagePicker compact /></div>
             <ul className="ccnav__list">
               {MORE_ITEMS.map((item) => {
                 const ItemIcon = Icon[item.icon];
@@ -195,6 +197,7 @@ export default function BottomNav({ active }) {
           display: inline-flex; align-items: center; justify-content: center;
           background: linear-gradient(160deg, #1769aa, #12578e); color: #fff; font-weight: 700; font-size: 16px;
         }
+        .ccnav__lang { padding: 0 8px 10px; }
         .ccnav__list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
         .ccnav__item {
           width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;

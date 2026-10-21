@@ -16,7 +16,7 @@ export default function ChatBubble({ message }) {
           CivCare AI
         </span>
       )}
-      <div className={`bubble ${isPatient ? 'bubble--patient' : 'bubble--ai'}`}>
+      <div className={`bubble ${isPatient ? 'bubble--patient' : 'bubble--ai'}`} data-i18n-skip="">
         {message.content}
       </div>
       {message.timestamp && (

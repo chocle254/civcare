@@ -82,10 +82,8 @@ async def start_video(data: VideoStart, user: Principal = Depends(current_doctor
     db.commit()
 
     if first_start:
-        from app.services.push import notify
-        await notify(consult.patient_id, "Your online doctor is ready",
-                     "Your video consultation is starting. Tap to join.",
-                     url="/consultation/waiting", tag=f"consult-{consult.id}")
+        from app.services.push import notify_patient
+        await notify_patient(consult.patient_id, "consult", url="/consultation/waiting", tag=f"consult-{consult.id}")
 
     return {"room_url": join_url, "status": consult.status}
 

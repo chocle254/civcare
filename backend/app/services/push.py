@@ -84,6 +84,30 @@ def _send_one(sub, payload: str) -> str:
         return "error"
 
 
+def patient_lang(patient_id: str) -> str:
+    """The language a patient chose (en / sw / sheng); English if unknown."""
+    from app.models.patient import Patient
+    from app.services.i18n import clean_lang
+    db = SessionLocal()
+    try:
+        p = db.query(Patient.language).filter(Patient.id == patient_id).first()
+        return clean_lang(p[0] if p else None)
+    finally:
+        db.close()
+
+
+async def notify_patient(patient_id: str, key: str, url: str = "/dashboard", tag: str | None = None, **values) -> int:
+    """Patient notification from app/services/i18n.py, in their language.
+    `key` names a pair: push_<key>_title and push_<key>_body."""
+    from app.services.i18n import msg
+    try:
+        lang = patient_lang(patient_id)
+        return await notify(patient_id, msg(f"push_{key}_title", lang), msg(f"push_{key}_body", lang, **values), url, tag)
+    except Exception as e:
+        print(f"Push skipped: {type(e).__name__}")
+        return 0
+
+
 async def notify(owner_id: str, title: str, body: str, url: str = "/dashboard", tag: str | None = None,
                  actions: list | None = None) -> int:
     """Send to every device the person subscribed. Returns how many got it.

@@ -66,8 +66,12 @@ async def unsubscribe(data: Endpoint, user: Principal = Depends(current_user), d
 
 @router.post("/test")
 async def test(user: Principal = Depends(current_user)):
-    n = await notify(user.id, "CivCare notifications are on",
-                     "You'll get dose reminders here, even when CivCare is closed.", "/dashboard", "civcare-test")
+    if user.is_patient:
+        from app.services.push import notify_patient
+        n = await notify_patient(user.id, "test", "/dashboard", "civcare-test")
+    else:
+        n = await notify(user.id, "CivCare notifications are on",
+                         "You'll get new-patient alerts here, even when CivCare is closed.", "/doctor/dashboard", "civcare-test")
     if not n:
         raise HTTPException(status_code=400, detail="This phone isn't set up for notifications yet.")
     return {"message": "Sent. It should appear in a few seconds.", "devices": n}

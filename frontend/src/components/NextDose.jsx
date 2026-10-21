@@ -117,7 +117,7 @@ export default function NextDose({ data, hasMedicines, onOpen, onElapsed }) {
               {timeOf(next.at)} {dayWord(next.at)}
             </p>
             {data.streak >= 2 && (
-              <p className="nd-streak"><span aria-hidden="true">★</span> {data.streak} doses in a row taken</p>
+              <p className="nd-streak"><span aria-hidden="true">★</span> {`${data.streak} doses in a row taken`}</p>
             )}
           </div>
         </div>
@@ -145,7 +145,7 @@ export default function NextDose({ data, hasMedicines, onOpen, onElapsed }) {
             <div className="nd-course__row">
               <span className="nd-course__name">{c.diagnosis}</span>
               <span className="nd-course__meta">
-                {c.day && c.days ? `Day ${c.day} of ${c.days} · ` : ''}{c.doses_taken} of {c.doses_total} doses
+                {c.day && c.days ? `Day ${c.day} of ${c.days} · ${c.doses_taken} of ${c.doses_total} doses` : `${c.doses_taken} of ${c.doses_total} doses`}
               </span>
             </div>
             <div className="nd-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${c.diagnosis} treatment progress`}>

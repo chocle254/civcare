@@ -129,6 +129,7 @@ async def send_message(data: MessageInput, user: Principal = Depends(current_use
     "allergies":           patient.allergies or "None on record",
     "past_history":        past_history,
     "uploaded_records":    records_for_ai(db, patient.id),
+    "language":            getattr(patient, "language", None) or "en",
 }
 
     # ── Get current Nairobi time ──
@@ -346,10 +347,9 @@ async def call_patient(data: CallPatient, user: Principal = Depends(current_user
     from app.websocket.queue import broadcast_queue_update
     await broadcast_queue_update(doctor.hospital_id)
 
-    await send_doctor_call_notification(patient.phone_number, doctor.full_name)
-    from app.services.push import notify
-    await notify(patient.id, "The doctor is ready for you",
-                 f"{doctor.full_name} is calling you in now.", url="/dashboard", tag=f"call-{appointment.id}")
+    await send_doctor_call_notification(patient.phone_number, doctor.full_name, lang=patient.language)
+    from app.services.push import notify_patient
+    await notify_patient(patient.id, "called", url="/dashboard", tag=f"call-{appointment.id}", doctor=doctor.full_name)
 
     return {"message": f"Patient {patient.full_name} has been notified."}
 
