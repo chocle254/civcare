@@ -47,6 +47,99 @@ class ReminderResponse(BaseModel):
     skip_reason: str | None = None
 
 
+def _utc(dt):
+    """UTC timestamp with its 'Z', so the browser converts it to local time."""
+    return dt.isoformat() + "Z" if dt else None
+
+
+DUE_WINDOW = timedelta(hours=3)   # an unanswered dose counts as "due now" this long
+NAIROBI = timedelta(hours=3)
+
+
+@router.get("/today")
+async def today_doses(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
+    """
+    Everything the home screen shows about medicines, from the real
+    reminder schedule: doses due now, the next dose (for the countdown),
+    today's doses, a run of doses taken in a row, and course progress.
+    """
+    only_patient(user, patient_id)
+    from app.models.verdict import Verdict
+    now = datetime.utcnow()
+    rx = db.query(Prescription).filter(
+        Prescription.patient_id == patient_id,
+        Prescription.is_active == True,         # noqa: E712
+    ).all()
+    by_id = {p.id: p for p in rx}
+    if not rx:
+        return {"now": _utc(now), "due": [], "next": None, "today": [], "streak": 0, "courses": []}
+
+    rows = db.query(Reminder).filter(Reminder.prescription_id.in_(list(by_id))) \
+        .order_by(Reminder.scheduled_at.asc()).all()
+
+    def med(r):
+        p = by_id[r.prescription_id]
+        return {"reminder_id": r.id, "prescription_id": p.id, "medication_name": p.medication_name,
+                "dosage_notation": p.dosage_notation, "med_form": p.med_form or "tablet", "at": _utc(r.scheduled_at)}
+
+    def status(r):
+        if r.is_responded:
+            return "taken" if r.response == "taken" else "skipped"
+        if r.scheduled_at > now:
+            return "upcoming"
+        return "due" if now - r.scheduled_at <= DUE_WINDOW else "missed"
+
+    due = [med(r) for r in rows if status(r) == "due"]
+
+    upcoming = [r for r in rows if r.scheduled_at > now and not r.is_responded]
+    nxt = None
+    if upcoming:
+        first = upcoming[0]
+        same = [r for r in upcoming if (r.scheduled_at - first.scheduled_at) <= timedelta(minutes=5)]
+        earlier = [r for r in rows if r.prescription_id == first.prescription_id and r.scheduled_at < first.scheduled_at]
+        nxt = {**med(first), "also": [med(r) for r in same[1:]],
+               "previous_at": _utc(earlier[-1].scheduled_at) if earlier else None}
+
+    local_day = (now + NAIROBI).date()
+    today = [{**med(r), "status": status(r)} for r in rows if (r.scheduled_at + NAIROBI).date() == local_day]
+
+    streak = 0
+    for r in reversed([r for r in rows if r.scheduled_at <= now]):
+        st = status(r)
+        if st == "due":
+            continue             # still time to take it; doesn't break the run
+        if st != "taken":
+            break
+        streak += 1
+
+    courses = {}
+    for p in rx:
+        key = p.verdict_id or p.id
+        c = courses.setdefault(key, {"diagnosis": None, "verdict_id": p.verdict_id, "taken": 0, "total": 0,
+                                     "start": None, "end": None})
+        mine = [r for r in rows if r.prescription_id == p.id]
+        c["total"] += len(mine)
+        c["taken"] += sum(1 for r in mine if r.is_responded and r.response == "taken")
+        if mine:
+            c["start"] = min(filter(None, [c["start"], mine[0].scheduled_at]))
+            c["end"] = max(filter(None, [c["end"], mine[-1].scheduled_at]))
+    out = []
+    for c in courses.values():
+        if c["verdict_id"]:
+            v = db.query(Verdict).filter(Verdict.id == c["verdict_id"]).first()
+            c["diagnosis"] = v.diagnosis if v else None
+        days = day = None
+        if c["start"] and c["end"]:
+            first_day = (c["start"] + NAIROBI).date()
+            days = ((c["end"] + NAIROBI).date() - first_day).days + 1
+            day = min(max((local_day - first_day).days + 1, 0), days)
+        if c["total"]:
+            out.append({"diagnosis": c["diagnosis"] or "Your treatment", "doses_taken": c["taken"],
+                        "doses_total": c["total"], "day": day, "days": days, "ends_at": _utc(c["end"])})
+
+    return {"now": _utc(now), "due": due, "next": nxt, "today": today, "streak": streak, "courses": out}
+
+
 @router.get("/my-meds")
 async def my_medications(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """Returns all active prescriptions for a patient."""
@@ -73,7 +166,7 @@ async def my_medications(patient_id: str, user: Principal = Depends(current_user
             "reminders_active":      p.reminders_active,
             "pills_dispensed":       p.pills_dispensed,
             "duration_days":         p.duration_days,
-            "reminders_end_at":      p.reminders_end_at.isoformat() if p.reminders_end_at else None,
+            "reminders_end_at":      _utc(p.reminders_end_at),
             "notes":                 p.notes,
         }
         for p in prescriptions
@@ -136,8 +229,8 @@ async def my_courses(patient_id: str, user: Principal = Depends(current_user), d
             "reminders_active": p.reminders_active,
             "pills_dispensed":  p.pills_dispensed,
             "duration_days":    p.duration_days,
-            "reminders_end_at": p.reminders_end_at.isoformat() if p.reminders_end_at else None,
-            "next_dose_at":     next_reminder.scheduled_at.isoformat() if next_reminder else None,
+            "reminders_end_at": _utc(p.reminders_end_at),
+            "next_dose_at":     _utc(next_reminder.scheduled_at) if next_reminder else None,
             "notes":            p.notes,
             "doses_total":      total,
             "doses_done":       done,

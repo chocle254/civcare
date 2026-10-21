@@ -68,7 +68,10 @@ export default function Profile() {
       setSavingSex(false);
     }
   };
-  const [tab, setTab] = useState('diagnoses');
+  const [tab, setTab] = useState(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return TABS.some((x) => x.id === t) ? t : 'diagnoses';
+  });
   const [verdicts, setVerdicts] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
   const [sessions, setSessions] = useState([]);

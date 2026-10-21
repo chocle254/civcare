@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { theme } from '../../styles/theme';
 import BottomNav from '../../components/BottomNav';
+import NextDose from '../../components/NextDose';
+import RecordsShortcut from '../../components/RecordsShortcut';
 
 const API = process.env.REACT_APP_API_URL;
 const { color, font, radius } = theme;
@@ -127,166 +129,6 @@ const formatDate = (dateStr) => {
     month: 'short',
   });
 };
-
-const formatCountdown = (ms) => {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m`;
-  return 'Now';
-};
-
-const medicationInterval = (medication) => {
-  const notation = medication?.dosage_notation || '1x1';
-  const timesPerDay = parseInt(notation.split('x')[1], 10) || 1;
-  return (24 / timesPerDay) * 60 * 60 * 1000;
-};
-
-const nextMedicationTime = (medication, now = Date.now()) => {
-  if (!medication?.reminders_start_at) return null;
-
-  const start = new Date(medication.reminders_start_at).getTime();
-  if (!Number.isFinite(start)) return null;
-
-  const interval = medicationInterval(medication);
-
-  if (now <= start) return start;
-
-  const elapsed = now - start;
-  const cycles = Math.floor(elapsed / interval) + 1;
-
-  return start + cycles * interval;
-};
-
-/* ─────────────────────────────────────────────────────────────
-   MEDICATION SUMMARY
-───────────────────────────────────────────────────────────── */
-
-function MedicationSummary({ prescriptions, onOpen }) {
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    if (!prescriptions?.length) return undefined;
-
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [prescriptions]);
-
-  const medicationState = useMemo(() => {
-    return (prescriptions || []).map((medication) => {
-      const next = nextMedicationTime(medication, now);
-      const remaining = next ? Math.max(0, next - now) : null;
-
-      return {
-        ...medication,
-        next,
-        remaining,
-        due: remaining !== null && remaining <= 60000,
-      };
-    });
-  }, [prescriptions, now]);
-
-  if (!medicationState.length) return null;
-
-  const dueNow = medicationState.filter((item) => item.due).length;
-  const upcoming = medicationState
-    .filter((item) => !item.due && item.remaining !== null)
-    .sort((a, b) => a.remaining - b.remaining)
-    .slice(0, 2);
-
-  const due = medicationState.filter((item) => item.due);
-
-  return (
-    <section style={s.section}>
-      <div style={s.sectionHeader}>
-        <div>
-          <p style={s.eyebrow}>Treatment</p>
-          <h2 style={s.sectionTitle}>Your medications</h2>
-        </div>
-
-        <button style={s.textButton} onClick={onOpen}>
-          View all
-        </button>
-      </div>
-
-      <div style={s.medicationCard}>
-        <div style={s.medicationHeader}>
-          <div style={s.medicationIcon}>
-            <Icon name="pill" size={19} stroke={color.blue} />
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={s.medicationHeading}>
-              {dueNow > 0 ? 'Medication due now' : 'Treatment schedule'}
-            </p>
-
-            <p style={s.medicationSubheading}>
-              {dueNow > 0
-                ? `${dueNow} dose${dueNow === 1 ? '' : 's'} need your attention`
-                : `${prescriptions.length} active medication${prescriptions.length === 1 ? '' : 's'}`}
-            </p>
-          </div>
-
-          {dueNow > 0 && (
-            <span style={s.dueBadge}>
-              {dueNow}
-            </span>
-          )}
-        </div>
-
-        {due.length > 0 && (
-          <div style={s.medicationDueBox}>
-            {due.slice(0, 2).map((medication) => (
-              <div key={medication.id || medication.prescription_id} style={s.medicationRow}>
-                <div style={s.medicationStatusDot} />
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={s.medicationName}>
-                    {medication.medication_name || 'Medication'}
-                  </p>
-                  <p style={s.medicationDose}>
-                    {medication.dosage_notation || 'Follow prescribed dose'}
-                  </p>
-                </div>
-
-                <span style={s.takeNow}>Due now</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {due.length === 0 && upcoming.length > 0 && (
-          <div style={s.upcomingDose}>
-            <div style={s.clockCircle}>
-              <Icon name="clock" size={17} stroke={color.blue} />
-            </div>
-
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={s.nextDoseLabel}>Next dose</p>
-              <p style={s.nextDoseName}>
-                {upcoming[0].medication_name || 'Medication'}
-              </p>
-            </div>
-
-            <div style={s.nextDoseTime}>
-              {formatCountdown(upcoming[0].remaining)}
-            </div>
-          </div>
-        )}
-
-        <button
-          style={s.medicationFooter}
-          onClick={onOpen}
-        >
-          <span>Open treatment plan</span>
-          <Icon name="arrow" size={16} stroke={color.blue} />
-        </button>
-      </div>
-    </section>
-  );
-}
 
 /* ─────────────────────────────────────────────────────────────
    NOTIFICATIONS
@@ -431,7 +273,7 @@ export default function SessionDashboard() {
     }
   });
 
-  const [now, setNow] = useState(Date.now());
+  const [doses, setDoses] = useState(null);
   const [dosePopup, setDosePopup] = useState(null);
 
   const firstName = (patient.name || 'there').split(' ')[0];
@@ -448,13 +290,20 @@ export default function SessionDashboard() {
     if (!patient.id) return;
 
     try {
-      const [sessRes, presRes, pendRes] = await Promise.allSettled([
+      const [sessRes, presRes, pendRes, doseRes] = await Promise.allSettled([
         axios.get(`${API}/triage/sessions/${patient.id}`),
         axios.get(`${API}/prescriptions/active/${patient.id}`),
         axios.get(`${API}/consultation/pending`, {
           params: { patient_id: patient.id },
         }),
+        axios.get(`${API}/reminders/today`, {
+          params: { patient_id: patient.id },
+        }),
       ]);
+
+      if (doseRes.status === 'fulfilled') {
+        setDoses(doseRes.value.data || null);
+      }
 
       if (sessRes.status === 'fulfilled') {
         setSessions(sessRes.value.data || []);
@@ -483,45 +332,27 @@ export default function SessionDashboard() {
     fetchData();
   }, [fetchData, navigate, patient.id]);
 
+  // Keep doses fresh: a dose answered on another screen, or one that just
+  // became due, shows up within a minute.
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(fetchData, 60000);
     return () => clearInterval(timer);
-  }, []);
+  }, [fetchData]);
 
   /* ─────────────────────────────────────────────────────────
      REAL-TIME MEDICATION NOTIFICATION
   ───────────────────────────────────────────────────────── */
 
   useEffect(() => {
-    if (!prescriptions.length) return;
-
-    const dueMedication = prescriptions.find((medication) => {
-      const next = nextMedicationTime(medication, now);
-
-      return (
-        next !== null &&
-        now >= next &&
-        now - next < 65000
-      );
-    });
-
+    const dueMedication = doses?.due?.[0];
     if (!dueMedication) return;
 
-    const notificationId =
-      `med-${dueMedication.id || dueMedication.prescription_id}-${Math.floor(now / 60000)}`;
-
-    const alreadyShown =
-      localStorage.getItem(`civcare_popup_${notificationId}`);
-
-    if (!alreadyShown) {
-      localStorage.setItem(
-        `civcare_popup_${notificationId}`,
-        'true'
-      );
-
+    const key = `civcare_popup_med-${dueMedication.reminder_id}`;
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(key, 'true');
       setDosePopup(dueMedication);
     }
-  }, [prescriptions, now]);
+  }, [doses]);
 
   const markNotificationRead = (id) => {
     setNotificationRead((previous) => {
@@ -541,15 +372,8 @@ export default function SessionDashboard() {
   const notifications = useMemo(() => {
     const items = [];
 
-    const dueMedications = prescriptions.filter((medication) => {
-      const next = nextMedicationTime(medication, now);
-
-      return next !== null && now >= next;
-    });
-
-    dueMedications.forEach((medication) => {
-      const id =
-        `med-due-${medication.id || medication.prescription_id}`;
+    (doses?.due || []).forEach((medication) => {
+      const id = `med-due-${medication.reminder_id}`;
 
       items.push({
         id,
@@ -578,10 +402,9 @@ export default function SessionDashboard() {
 
     return items;
   }, [
-    prescriptions,
+    doses,
     pendingConsult,
     notificationRead,
-    now,
   ]);
 
   const unreadCount = notifications.filter(
@@ -754,9 +577,11 @@ export default function SessionDashboard() {
         {/* MEDICATIONS */}
 
         <div className="cc-a-meds">
-        <MedicationSummary
-          prescriptions={prescriptions}
+        <NextDose
+          data={doses}
+          hasMedicines={prescriptions.length > 0}
           onOpen={() => navigate('/medications')}
+          onElapsed={fetchData}
         />
         </div>
 
@@ -869,95 +694,11 @@ export default function SessionDashboard() {
             })}
         </section>
 
-        {/* QUICK ACTIONS */}
+        {/* RECORDS */}
 
-        <section style={s.section} className="cc-a-quick">
-          <div style={s.sectionHeader}>
-            <div>
-              <p style={s.eyebrow}>Quick access</p>
-              <h2 style={s.sectionTitle}>
-                Your care
-              </h2>
-            </div>
-          </div>
-
-          <div style={s.quickGrid}>
-            <button
-              style={s.quickCard}
-              className="cc-press"
-              onClick={() =>
-                navigate('/medications')
-              }
-            >
-              <div
-                style={{
-                  ...s.quickIcon,
-                  background: color.blueDim,
-                }}
-              >
-                <Icon
-                  name="pill"
-                  size={19}
-                  stroke={color.blue}
-                />
-              </div>
-
-              <span style={s.quickLabel}>
-                Medications
-              </span>
-            </button>
-
-            <button
-              style={s.quickCard}
-              className="cc-press"
-              onClick={() =>
-                navigate('/diagnosis-history')
-              }
-            >
-              <div
-                style={{
-                  ...s.quickIcon,
-                  background: color.violetDim,
-                }}
-              >
-                <Icon
-                  name="history"
-                  size={19}
-                  stroke={color.violet}
-                />
-              </div>
-
-              <span style={s.quickLabel}>
-                Medical history
-              </span>
-            </button>
-
-            <button
-              style={s.quickCard}
-              className="cc-press"
-              onClick={() =>
-                navigate('/consultation')
-              }
-            >
-              <div
-                style={{
-                  ...s.quickIcon,
-                  background: color.tealDim,
-                }}
-              >
-                <Icon
-                  name="doctor"
-                  size={19}
-                  stroke={color.teal}
-                />
-              </div>
-
-              <span style={s.quickLabel}>
-                Doctors
-              </span>
-            </button>
-          </div>
-        </section>
+        <div className="cc-a-quick">
+          <RecordsShortcut onOpen={() => navigate('/profile?tab=records')} />
+        </div>
         </div>
         </div>
 
@@ -1227,8 +968,6 @@ export default function SessionDashboard() {
             grid-area: side; display: flex; flex-direction: column;
             position: sticky; top: 24px;
           }
-          .cc-a-quick > div:last-child { grid-template-columns: 1fr !important; }
-          .cc-a-quick button { flex-direction: row !important; align-items: center !important; padding: 12px 14px !important; }
         }
 
         @media (prefers-reduced-motion: reduce) {
