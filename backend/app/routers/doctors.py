@@ -323,6 +323,11 @@ async def transfer_patient(data: TransferPatient, user: Principal = Depends(curr
     await broadcast_queue_update(old_hospital_id)
     if not same_hospital:
         await broadcast_queue_update(target_hospital_id)
+    if target:
+        from app.services.push import notify
+        await notify(target.id, "A patient was transferred to you",
+                     "A colleague handed a case to you. Their reason is in the case file.",
+                     url="/doctor/dashboard", tag=f"queue-{appt.id}")
 
     return {
         "message":       "Patient transferred.",

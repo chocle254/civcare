@@ -45,6 +45,7 @@ class Prescription(Base):
     # ── TIMESTAMPS ──
     prescribed_at   = Column(DateTime, default=datetime.utcnow)
     completed_at    = Column(DateTime, nullable=True)
+    followup_nudged_at = Column(DateTime, nullable=True)  # "how are you feeling now?" sent after the last dose
 
     # ── RELATIONSHIPS ──
     patient         = relationship("Patient",  back_populates="prescriptions")
@@ -81,6 +82,7 @@ class Reminder(Base):
     # ── STATUS ──
     is_sent         = Column(Boolean, default=False)
     is_responded    = Column(Boolean, default=False)
+    missed_nudged_at = Column(DateTime, nullable=True)  # "you haven't logged this dose" sent
 
     # ── RELATIONSHIPS ──
     prescription    = relationship("Prescription", back_populates="reminders")

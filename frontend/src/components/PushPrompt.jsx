@@ -1,14 +1,32 @@
 import { useState } from 'react';
 import { enablePush, isInstalled, isIos, permission, pushSupported, sendTestPush } from '../utils/push';
 
-// Dashboard card that turns on dose reminders for this phone.
+// Dashboard card that turns on notifications for this phone: dose
+// reminders for patients, new and transferred patients for doctors.
 
-export default function PushPrompt() {
+const TEXT = {
+  patient: {
+    title: 'Never miss a dose',
+    sub: 'Turn on notifications and this phone will remind you when each dose is due, and tell you when the doctor is ready, even when CivCare is closed. They never show your medicine’s name on the lock screen.',
+    ios: 'Get dose reminders on this iPhone',
+    blocked: 'To get dose reminders, allow notifications for this site in your browser’s settings, then reload. You’ll still get SMS reminders.',
+  },
+  doctor: {
+    title: 'Know when a patient is waiting',
+    sub: 'Get a notification when a patient arrives in your queue, is transferred to you, or pays for an online consultation, even when this tab is closed.',
+    ios: 'Get queue alerts on this iPhone',
+    blocked: 'Allow notifications for this site in your browser’s settings, then reload, to get queue alerts.',
+  },
+};
+
+export default function PushPrompt({ audience = 'patient' }) {
+  const t = TEXT[audience] || TEXT.patient;
   const [state, setState] = useState(permission);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
-  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem('civcare_push_hide') === '1'; } catch { return false; } });
+  const hideKey = `civcare_push_hide_${audience}`;
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(hideKey) === '1'; } catch { return false; } });
 
   const needsInstall = isIos() && !isInstalled();
   if (hidden || (state === 'granted' && !msg)) return null;
@@ -26,7 +44,7 @@ export default function PushPrompt() {
     } finally { setBusy(false); }
   };
 
-  const hide = () => { try { localStorage.setItem('civcare_push_hide', '1'); } catch { /* private mode */ } setHidden(true); };
+  const hide = () => { try { localStorage.setItem(hideKey, '1'); } catch { /* private mode */ } setHidden(true); };
 
   return (
     <section className="pp2">
@@ -60,20 +78,20 @@ export default function PushPrompt() {
           </>
         ) : needsInstall ? (
           <>
-            <p className="pp2-title">Get dose reminders on this iPhone</p>
+            <p className="pp2-title">{t.ios}</p>
             <p className="pp2-sub">Tap the Share button, then “Add to Home Screen”. Open CivCare from the new icon and turn notifications on here.</p>
             <div className="pp2-row"><button className="pp2-btn pp2-btn--quiet" onClick={hide}>Not now</button></div>
           </>
         ) : state === 'denied' ? (
           <>
             <p className="pp2-title">Notifications are blocked</p>
-            <p className="pp2-sub">To get dose reminders, allow notifications for this site in your browser’s settings, then reload. You’ll still get SMS reminders.</p>
+            <p className="pp2-sub">{t.blocked}</p>
             <div className="pp2-row"><button className="pp2-btn pp2-btn--quiet" onClick={hide}>Hide</button></div>
           </>
         ) : (
           <>
-            <p className="pp2-title">Never miss a dose</p>
-            <p className="pp2-sub">Turn on notifications and this phone will remind you when each dose is due, even when CivCare is closed. They never show your medicine’s name on the lock screen.</p>
+            <p className="pp2-title">{t.title}</p>
+            <p className="pp2-sub">{t.sub}</p>
             {error && <p className="pp2-err" role="alert">{error}</p>}
             <div className="pp2-row">
               <button className="pp2-btn" onClick={turnOn} disabled={busy}>{busy ? 'Turning on…' : 'Turn on notifications'}</button>

@@ -214,6 +214,89 @@ async def purge_unused_chats():
         db.close()
 
 
+async def send_missed_dose_nudges():
+    """
+    Runs every 5 minutes. One gentle notification per dose that is an
+    hour past due and still not logged. Push only; no extra SMS.
+    """
+    from app.services.push import notify
+    from app.models.patient import Patient  # noqa: F401
+    db: Session = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        rows = db.query(Reminder, Prescription).join(Prescription, Reminder.prescription_id == Prescription.id).filter(
+            Prescription.is_active == True,                      # noqa: E712
+            Reminder.is_responded == False,                      # noqa: E712
+            Reminder.missed_nudged_at.is_(None),
+            Reminder.scheduled_at <= now - timedelta(hours=1),
+            Reminder.scheduled_at >= now - timedelta(hours=3),   # don't nag about old doses
+        ).all()
+        nudged = set()
+        for reminder, rx in rows:
+            reminder.missed_nudged_at = now
+            if rx.patient_id in nudged:
+                continue                                         # one message per patient per run
+            nudged.add(rx.patient_id)
+            local = (reminder.scheduled_at + timedelta(hours=3)).strftime("%-I:%M %p")
+            await notify(rx.patient_id, "Did you take your medicine?",
+                         f"You haven't logged your {local} dose yet. Tap to log it, or tell us why you skipped it.",
+                         url="/medications", tag=f"dose-{reminder.id}")
+        db.commit()
+    except Exception as e:
+        print(f"Missed-dose nudge error: {e}")
+    finally:
+        db.close()
+
+
+async def send_course_followups():
+    """
+    Runs every 30 minutes. About 12 hours after a treatment's last dose,
+    asks once how the patient feels, unless they already did the
+    end-of-treatment review.
+    """
+    from app.services.push import notify
+    from app.models.medication_outcome import CourseOutcome
+    from sqlalchemy import func
+    db: Session = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        last = dict(db.query(Reminder.prescription_id, func.max(Reminder.scheduled_at))
+                    .group_by(Reminder.prescription_id).all())
+        rx = db.query(Prescription).filter(
+            Prescription.followup_nudged_at.is_(None),
+            Prescription.reminders_active == True,               # noqa: E712
+        ).all()
+        groups: dict = {}
+        for p in rx:
+            groups.setdefault((p.patient_id, p.verdict_id or p.id), []).append(p)
+        for (patient_id, _), meds in groups.items():
+            ends = [last.get(p.id) for p in meds]
+            if not all(ends):
+                continue
+            end = max(ends)
+            if not (now - timedelta(days=3) <= end <= now - timedelta(hours=12)):
+                if end < now - timedelta(days=3):
+                    for p in meds:
+                        p.followup_nudged_at = now               # too old to ask; never ask
+                continue
+            reviewed = db.query(CourseOutcome).filter(
+                CourseOutcome.patient_id == patient_id,
+                CourseOutcome.prescription_id.in_([p.id for p in meds]),
+            ).first()
+            for p in meds:
+                p.followup_nudged_at = now
+            if reviewed:
+                continue
+            await notify(patient_id, "How are you feeling now?",
+                         "Your treatment has finished. Tell us how you feel, and we'll help if you're still unwell.",
+                         url="/medications", tag=f"followup-{meds[0].id}")
+        db.commit()
+    except Exception as e:
+        print(f"Course follow-up error: {e}")
+    finally:
+        db.close()
+
+
 def start_scheduler():
     """
     Starts all background jobs.
@@ -244,6 +327,18 @@ def start_scheduler():
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        send_missed_dose_nudges,
+        trigger=IntervalTrigger(minutes=5),
+        id="missed_dose_nudges",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        send_course_followups,
+        trigger=IntervalTrigger(minutes=30),
+        id="course_followups",
+        replace_existing=True,
+    )
     scheduler.add_job(
         purge_unused_chats,
         trigger=IntervalTrigger(hours=24),

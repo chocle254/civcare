@@ -5,6 +5,8 @@ import { callPatient } from "../../api/triage";
 import useWebSocket from "../../hooks/useWebSocket";
 import client from "../../api/client";
 import Icon from "../../components/Icons";
+import PushPrompt from "../../components/PushPrompt";
+import { pushSignOut } from "../../utils/push";
 
 // Clinical priority — doctor-facing only. Colour is always paired with a text label.
 const RISK = {
@@ -414,7 +416,7 @@ export default function Dashboard() {
               )}
             </fieldset>
 
-            <button type="button" className="dd-navbtn dd-logout" onClick={() => { localStorage.clear(); navigate("/doctor"); }}>
+            <button type="button" className="dd-navbtn dd-logout" onClick={() => { pushSignOut().finally(() => { localStorage.clear(); navigate("/doctor"); }); }}>
               <Icon.Logout size={18} />
               <span>Sign out</span>
             </button>
@@ -433,6 +435,8 @@ export default function Dashboard() {
               {sCfg.label}
             </span>
           </header>
+
+          <PushPrompt audience="doctor" />
 
           {toast && (
             <div className={`dd-toast dd-toast--${toast.type}`} role={toast.type === "error" ? "alert" : "status"} key={toast.id}>

@@ -85,6 +85,10 @@ async def initiate_consultation(data: ConsultInit, user: Principal = Depends(cur
         )
     except Exception:
         pass
+    from app.services.push import notify
+    await notify(doctor.id, "New online consultation",
+                 "A patient has paid and is waiting for your call.",
+                 url="/doctor/dashboard", tag=f"consult-{consult.id}")
 
     return {
         "consultation_id": consult.id,
@@ -144,6 +148,10 @@ async def mark_consultation_called(data: MarkCalled, user: Principal = Depends(c
     consult = can_consultation(db, user, data.consultation_id)
     consult.status = "called"
     db.commit()
+    from app.services.push import notify
+    await notify(consult.patient_id, "Your doctor is calling you",
+                 "Pick up your phone: the doctor for your online consultation is calling now.",
+                 url="/consultation/waiting", tag=f"consult-{consult.id}")
     return {"message": "Marked as called"}
 
 

@@ -86,7 +86,16 @@ def _send_one(sub, payload: str) -> str:
 
 async def notify(owner_id: str, title: str, body: str, url: str = "/dashboard", tag: str | None = None,
                  actions: list | None = None) -> int:
-    """Send to every device the person subscribed. Returns how many got it."""
+    """Send to every device the person subscribed. Returns how many got it.
+    Never raises: a notification problem must not break the action behind it."""
+    try:
+        return await _notify(owner_id, title, body, url, tag, actions)
+    except Exception as e:
+        print(f"Push skipped: {type(e).__name__}: {str(e)[:120]}")
+        return 0
+
+
+async def _notify(owner_id, title, body, url, tag, actions) -> int:
     from app.models.push import PushSubscription
     db = SessionLocal()
     try:

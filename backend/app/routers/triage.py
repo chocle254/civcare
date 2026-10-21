@@ -312,6 +312,11 @@ async def confirm_arrival(data: ArrivalConfirm, user: Principal = Depends(curren
 
     from app.websocket.queue import broadcast_queue_update
     await broadcast_queue_update(actual_hospital_id)
+    if doctor:
+        from app.services.push import notify
+        await notify(doctor.id, "New patient in your queue",
+                     "A patient has arrived and is waiting to be seen.",
+                     url="/doctor/dashboard", tag=f"queue-{appointment.id}")
 
     return {
         "message": "Arrival confirmed. The doctor will call you shortly.",

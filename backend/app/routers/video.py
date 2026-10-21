@@ -75,10 +75,17 @@ async def start_video(data: VideoStart, user: Principal = Depends(current_doctor
             raise HTTPException(status_code=502, detail="Could not create the video room. Try again.")
         join_url = await _join_url(http, room["url"], name, owner=True)
 
+    first_start = consult.status != ConsultationStatus.IN_PROGRESS
     consult.status = ConsultationStatus.IN_PROGRESS
     if not consult.call_initiated_at:
         consult.call_initiated_at = datetime.utcnow()
     db.commit()
+
+    if first_start:
+        from app.services.push import notify
+        await notify(consult.patient_id, "Your online doctor is ready",
+                     "Your video consultation is starting. Tap to join.",
+                     url="/consultation/waiting", tag=f"consult-{consult.id}")
 
     return {"room_url": join_url, "status": consult.status}
 

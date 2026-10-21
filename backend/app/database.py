@@ -60,6 +60,9 @@ def run_migrations():
         "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;",
         "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS reviewed_by TEXT;",
         "ALTER TABLE hospitals ADD COLUMN IF NOT EXISTS review_note TEXT;",
+        # Notification bookkeeping (each nudge is sent once)
+        "ALTER TABLE reminders ADD COLUMN IF NOT EXISTS missed_nudged_at TIMESTAMP;",
+        "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS followup_nudged_at TIMESTAMP;",
         # RLHF self-training columns
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS ai_risk_score TEXT;",
         "ALTER TABLE ai_training_feedback ADD COLUMN IF NOT EXISTS doctor_notes TEXT;",
