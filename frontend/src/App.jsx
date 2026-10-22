@@ -4,6 +4,7 @@ import Loader from './components/Loader';
 import ErrorBoundary from './components/ErrorBoundary';
 import PatientSidebar from './components/PatientSidebar';
 import PrivacyGate from './components/PrivacyGate';
+import DoseReminder from './components/DoseReminder';
 import Register       from './pages/patient/Register';
 import './index.css';
 
@@ -45,6 +46,7 @@ export default function App() {
     <BrowserRouter>
       <PatientSidebar />
       <PrivacyGate />
+      <DoseReminder />
       <GuardedRoutes>
       <Routes>
         {/* Patient */}

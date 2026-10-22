@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { registerPatient, loginPatient } from '../../api/auth';
+import { registerPatient, loginPatient, forgotPatientPin, resetPatientPin } from '../../api/auth';
 import { normalizeKePhone, PHONE_HINT, PHONE_ERROR } from '../../utils/phone';
 import { PRIVACY_VERSION } from '../../utils/privacy';
 import axios from 'axios';
@@ -174,6 +174,11 @@ export default function Register() {
     guardian_relationship: '',
     consent: false,
   });
+  // Forgot PIN: step 1 sends a code by SMS, step 2 sets a new PIN with it.
+  const [resetForm, setResetForm] = useState({
+    phone_number: '', identity_number: '', code: '', pin: '', pin_confirm: '',
+  });
+  const [resetSent, setResetSent] = useState('');
   const regAge = ageFrom(regForm.date_of_birth);
   const isChild = (regAge !== null && regAge < 18) || regForm.identity_type === 'birth_cert';
 
@@ -186,6 +191,75 @@ export default function Register() {
   const switchMode = (nextMode) => {
     setMode(nextMode);
     setError('');
+  };
+
+  const handleResetChange = (e) =>
+    setResetForm({ ...resetForm, [e.target.name]: e.target.value });
+
+  const startReset = () => {
+    // Carry over what they already typed on the sign-in form.
+    setResetForm((f) => ({
+      ...f,
+      phone_number: f.phone_number || loginForm.phone_number,
+      identity_number: f.identity_number || loginForm.identity_number,
+    }));
+    setResetSent('');
+    switchMode('reset');
+  };
+
+  const handleSendCode = async () => {
+    setError('');
+    if (!resetForm.phone_number || !resetForm.identity_number) {
+      setError('Enter your phone number and ID number.');
+      return;
+    }
+    const phone = normalizeKePhone(resetForm.phone_number);
+    if (!phone) {
+      setError(PHONE_ERROR);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await forgotPatientPin({
+        phone_number: phone,
+        identity_number: resetForm.identity_number,
+      });
+      setResetSent(res.data?.message || 'Code sent. Check your SMS.');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not send the code. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPin = async () => {
+    setError('');
+    if (!/^\d{6}$/.test(resetForm.code.trim())) {
+      setError('Enter the 6-digit code from the SMS.');
+      return;
+    }
+    if (!/^\d{4}$/.test(resetForm.pin) || WEAK_PINS.includes(resetForm.pin)) {
+      setError('Choose a 4-digit PIN that isn\'t easy to guess, like 1234 or 0000.');
+      return;
+    }
+    if (resetForm.pin !== resetForm.pin_confirm) {
+      setError('The two PINs don\'t match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await resetPatientPin({
+        phone_number: normalizeKePhone(resetForm.phone_number),
+        identity_number: resetForm.identity_number,
+        code: resetForm.code.trim(),
+        pin: resetForm.pin,
+      });
+      saveAndNavigate(res.data);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not reset your PIN. Try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveAndNavigate = (data) => {
@@ -703,6 +777,24 @@ export default function Register() {
           opacity: 0.65;
         }
 
+        .cc-forgot {
+          margin: -6px 0 14px;
+          text-align: right;
+          font-size: 12px;
+        }
+
+        .cc-info {
+          padding: 12px 13px;
+          margin-bottom: 18px;
+          border-radius: 12px;
+          color: var(--cc-text);
+          background: var(--cc-primary-soft);
+          border: 1px solid var(--cc-border);
+          font-size: 12px;
+          line-height: 1.45;
+          font-weight: 600;
+        }
+
         .cc-switch-text {
           margin: 18px 0 0;
           text-align: center;
@@ -1066,12 +1158,16 @@ export default function Register() {
                 <h2>
                   {mode === 'login'
                     ? 'Welcome back'
+                    : mode === 'reset'
+                    ? 'Reset your PIN'
                     : 'Create your health account'}
                 </h2>
 
                 <p>
                   {mode === 'login'
                     ? 'Sign in securely to continue to your CivCare dashboard.'
+                    : mode === 'reset'
+                    ? "We'll send a code by SMS to the phone number on your account."
                     : 'Set up your patient profile to start using CivCare.'}
                 </p>
               </div>
@@ -1127,6 +1223,12 @@ export default function Register() {
                     hint="Haven't set a PIN yet? Leave this empty and you'll be asked to choose one."
                   />
 
+                  <p className="cc-forgot">
+                    <button type="button" className="cc-link" onClick={startReset}>
+                      Forgot your PIN?
+                    </button>
+                  </p>
+
                   <button
                     className="cc-submit"
                     type="submit"
@@ -1143,6 +1245,110 @@ export default function Register() {
                       onClick={() => switchMode('register')}
                     >
                       Create an account
+                    </button>
+                  </p>
+                </form>
+              )}
+
+              {mode === 'reset' && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (loading) return;
+                    if (resetSent) handleResetPin();
+                    else handleSendCode();
+                  }}
+                >
+                  {resetSent && (
+                    <div className="cc-info" role="status">{resetSent}</div>
+                  )}
+
+                  <Field
+                    label="Phone number"
+                    name="phone_number"
+                    value={resetForm.phone_number}
+                    onChange={handleResetChange}
+                    placeholder="0712 345 678"
+                    icon="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    required
+                  />
+
+                  <Field
+                    label="Identity number"
+                    name="identity_number"
+                    value={resetForm.identity_number}
+                    onChange={handleResetChange}
+                    placeholder="National ID / Birth Cert / CHF number"
+                    icon="id"
+                    required
+                  />
+
+                  {resetSent && (
+                    <>
+                      <Field
+                        label="Code from the SMS"
+                        name="code"
+                        value={resetForm.code}
+                        onChange={handleResetChange}
+                        placeholder="6 digits"
+                        icon="shield"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        required
+                      />
+
+                      <Field
+                        label="New PIN"
+                        name="pin"
+                        value={resetForm.pin}
+                        onChange={handleResetChange}
+                        placeholder="4 digits"
+                        icon="shield"
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        hint="Don't reuse your M-Pesa PIN."
+                        required
+                      />
+
+                      <Field
+                        label="Repeat new PIN"
+                        name="pin_confirm"
+                        value={resetForm.pin_confirm}
+                        onChange={handleResetChange}
+                        placeholder="4 digits"
+                        icon="shield"
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        required
+                      />
+                    </>
+                  )}
+
+                  <button className="cc-submit" type="submit" disabled={loading}>
+                    {loading
+                      ? 'Please wait...'
+                      : resetSent
+                      ? 'Save new PIN and sign in'
+                      : 'Send me a code'}
+                  </button>
+
+                  <p className="cc-switch-text">
+                    {resetSent && (
+                      <>
+                        No SMS after a minute?{' '}
+                        <button type="button" className="cc-link" onClick={handleSendCode} disabled={loading}>
+                          Send a new code
+                        </button>
+                        {' · '}
+                      </>
+                    )}
+                    <button type="button" className="cc-link" onClick={() => switchMode('login')}>
+                      Back to sign in
                     </button>
                   </p>
                 </form>

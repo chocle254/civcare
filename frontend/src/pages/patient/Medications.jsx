@@ -148,46 +148,52 @@ function Icon({ name, size = 20, strokeWidth = 1.8 }) {
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function NextDoseTimer({ nextDoseAt }) {
+// Always counts down to the next dose. A passed dose that hasn't been logged
+// shows as a separate "due now" chip; it never replaces the countdown.
+function NextDoseTimer({ nextDoseAt, dueAt, onElapsed, onLogDue }) {
   const [now, setNow] = useState(Date.now());
+  const fired = useRef(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  if (!nextDoseAt) return null;
+  const target = nextDoseAt ? new Date(nextDoseAt).getTime() : null;
+  const diff = target ? target - now : null;
 
-  const diff = new Date(nextDoseAt).getTime() - now;
+  // When the countdown reaches zero, refresh once to get the dose after it.
+  useEffect(() => {
+    if (diff !== null && diff <= 0 && fired.current !== nextDoseAt) {
+      fired.current = nextDoseAt;
+      onElapsed?.();
+    }
+  }, [diff, nextDoseAt, onElapsed]);
 
-  if (diff <= 0) {
-    return (
-      <span className="meds-timer meds-timer--due">
-        <span className="meds-live-dot" />
-        Dose due now
-      </span>
-    );
-  }
+  const dueChip = (dueAt || (diff !== null && diff <= 0)) ? (
+    <button type="button" className="meds-timer meds-timer--due meds-due-chip" onClick={onLogDue}>
+      <span className="meds-live-dot" />
+      Dose due now · log it
+    </button>
+  ) : null;
+
+  if (diff === null || diff <= 0) return dueChip;
 
   const h = Math.floor(diff / 3600000);
   const m = Math.floor((diff % 3600000) / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-
-  const label =
-    h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+  const sec = Math.floor((diff % 60000) / 1000);
+  const label = h > 0 ? `${h}h ${m}m ${sec}s` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
 
   return (
-    <span className="meds-timer">
-      <span className="meds-live-dot" />
-      Next dose in {label}
+    <span className="meds-timer-stack">
+      <span className="meds-timer">
+        <span className="meds-live-dot" />
+        Next dose in {label}
+      </span>
+      {dueChip}
     </span>
   );
 }
-
-
-
-
-
 
 export default function Medications() {
   const navigate = useNavigate();
@@ -389,6 +395,8 @@ export default function Medications() {
         new Date(a.next_dose_at) -
         new Date(b.next_dose_at)
     )[0];
+  const dueMed = activeMeds.find((med) => med.due_dose_at);
+  const refreshDoses = () => { loadCourses(); checkDue(); };
 
   const overallProgress =
     totalDoses > 0
@@ -861,6 +869,21 @@ export default function Medications() {
           color: #c44949;
         }
 
+        .meds-timer-stack {
+          display: inline-flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+        }
+
+        .meds-due-chip {
+          padding: 0;
+          border: 0;
+          background: transparent;
+          font-family: inherit;
+          cursor: pointer;
+        }
+
         .meds-live-dot {
           width: 6px;
           height: 6px;
@@ -1127,9 +1150,12 @@ export default function Medications() {
               <div className="meds-stat">
                 <div className="meds-stat-label">Next dose</div>
                 <div className="meds-stat-value">
-                  {nextDose ? (
+                  {nextDose || dueMed ? (
                     <NextDoseTimer
-                      nextDoseAt={nextDose.next_dose_at}
+                      nextDoseAt={nextDose?.next_dose_at}
+                      dueAt={dueMed?.due_dose_at}
+                      onElapsed={refreshDoses}
+                      onLogDue={checkDue}
                     />
                   ) : (
                     '—'
@@ -1389,9 +1415,10 @@ export default function Medications() {
                                 <div className="med-schedule">
                                   <div className="med-next">
                                     <NextDoseTimer
-                                      nextDoseAt={
-                                        med.next_dose_at
-                                      }
+                                      nextDoseAt={med.next_dose_at}
+                                      dueAt={med.due_dose_at}
+                                      onElapsed={refreshDoses}
+                                      onLogDue={checkDue}
                                     />
                                   </div>
 

@@ -208,15 +208,27 @@ async def my_courses(patient_id: str, user: Principal = Depends(current_user), d
             Reminder.is_responded == True,         # noqa: E712
         ).count()
 
-        # Next upcoming dose — drives the live countdown timer on the card
+        # Next dose still ahead: drives the live countdown on the card.
+        now = datetime.utcnow()
         next_reminder = (
             db.query(Reminder)
             .filter(
                 Reminder.prescription_id == p.id,
                 Reminder.is_responded == False,    # noqa: E712
-                # A dose more than 3 h overdue is missed; otherwise one missed
-                # dose would show "due now" for the rest of the course.
-                Reminder.scheduled_at >= datetime.utcnow() - DUE_WINDOW,
+                Reminder.scheduled_at > now,
+            )
+            .order_by(Reminder.scheduled_at.asc())
+            .first()
+        )
+        # A dose whose time has passed but isn't logged yet. Shown next to
+        # the countdown, not instead of it. After 3 h it counts as missed.
+        due_reminder = (
+            db.query(Reminder)
+            .filter(
+                Reminder.prescription_id == p.id,
+                Reminder.is_responded == False,    # noqa: E712
+                Reminder.scheduled_at <= now,
+                Reminder.scheduled_at >= now - DUE_WINDOW,
             )
             .order_by(Reminder.scheduled_at.asc())
             .first()
@@ -234,6 +246,7 @@ async def my_courses(patient_id: str, user: Principal = Depends(current_user), d
             "duration_days":    p.duration_days,
             "reminders_end_at": _utc(p.reminders_end_at),
             "next_dose_at":     _utc(next_reminder.scheduled_at) if next_reminder else None,
+            "due_dose_at":      _utc(due_reminder.scheduled_at) if due_reminder else None,
             "notes":            p.notes,
             "doses_total":      total,
             "doses_done":       done,
@@ -407,17 +420,19 @@ def _unanswered_doses(db: Session, prescriptions: list, exclude_reminder_id: str
 
 
 @router.get("/due")
-async def due_dose(patient_id: str, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
+async def due_dose(patient_id: str, brief: bool = False, user: Principal = Depends(current_user), db: Session = Depends(get_db)):
     """
     Returns the next dose that is due and not yet checked in, plus a warm,
     diagnosis-aware check-in question to show in the pop-up.
     The frontend polls this so the timer can raise the pop-up in-app.
+    brief=1 skips the check-in question; the app-wide banner polls with it
+    so checking on every page doesn't call the AI.
     """
     only_patient(user, patient_id)
     now = datetime.utcnow()
 
     # Find a fired-but-unanswered reminder for one of this patient's active courses
-    due = (
+    q = (
         db.query(Reminder)
         .join(Prescription, Reminder.prescription_id == Prescription.id)
         .filter(
@@ -426,9 +441,11 @@ async def due_dose(patient_id: str, user: Principal = Depends(current_user), db:
             Reminder.scheduled_at <= now,
             Reminder.is_responded == False,        # noqa: E712
         )
-        .order_by(Reminder.scheduled_at.asc())
-        .first()
     )
+    if brief:
+        # The banner only nags about doses from the last few hours.
+        q = q.filter(Reminder.scheduled_at >= now - DUE_WINDOW)
+    due = q.order_by(Reminder.scheduled_at.asc()).first()
 
     if not due:
         return {"due": False}
@@ -453,7 +470,7 @@ async def due_dose(patient_id: str, user: Principal = Depends(current_user), db:
     is_evening = is_evening or is_final
 
     question = None
-    if is_evening:
+    if is_evening and not brief:
         patient = db.query(Patient).filter(Patient.id == patient_id).first()
         # Reminders are stored in UTC; greet by the patient's clock (Kenya).
         local_hour = (due.scheduled_at + timedelta(hours=3)).hour

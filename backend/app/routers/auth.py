@@ -454,3 +454,154 @@ async def set_password(data: SetPassword, user: Principal = Depends(current_doct
     doctor.password_set_at = datetime.utcnow()
     db.commit()
     return {"message": "Password saved.", "must_set_password": False}
+
+
+# ════════════════════════════════
+# FORGOT PIN / PASSWORD
+# ════════════════════════════════
+# A 6-digit code goes by SMS to the phone on the account. It's stored hashed,
+# lasts 10 minutes and works once. Wrong codes count towards the same
+# 5-tries lock as signing in. The "send" reply is the same whether or not the
+# details match, so the form can't be used to find out who has an account.
+
+RESET_MINUTES = 10
+RESET_SENT = "If those details match an account, we've sent a 6-digit code by SMS to its phone number. It expires in 10 minutes."
+BAD_CODE = "That code is wrong or has expired. Check the SMS, or ask for a new code."
+
+
+def _new_reset_code(account) -> str:
+    import secrets as _secrets
+    code = f"{_secrets.randbelow(1_000_000):06d}"
+    account.otp_code = hash_secret(code)
+    account.otp_expires_at = datetime.utcnow() + timedelta(minutes=RESET_MINUTES)
+    return code
+
+
+def _check_reset_code(account, code: str | None) -> bool:
+    return bool(
+        account and account.otp_code and account.otp_expires_at
+        and datetime.utcnow() <= account.otp_expires_at
+        and verify_secret((code or "").strip(), account.otp_code)
+    )
+
+
+async def _sms_reset_code(phone: str, code: str, what: str) -> None:
+    from app.services.africastalking import send_sms
+    await send_sms(
+        normalize_ke_phone(phone) or phone,
+        f"CivCare: your code to reset your {what} is {code}. "
+        f"It expires in {RESET_MINUTES} minutes. Don't share it; CivCare will never ask for it.",
+    )
+
+
+class PatientForgotPin(BaseModel):
+    phone_number:    str
+    identity_number: str
+
+
+class PatientResetPin(BaseModel):
+    phone_number:    str
+    identity_number: str
+    code:            str
+    pin:             str
+
+
+def _find_patient(db: Session, phone: str, identity_number: str):
+    return db.query(Patient).filter(
+        Patient.phone_number.in_(phone_variants(phone)),
+        Patient.identity_number == identity_number.strip(),
+        Patient.deleted_at.is_(None),
+    ).first()
+
+
+@router.post("/patient/forgot-pin")
+async def patient_forgot_pin(data: PatientForgotPin, db: Session = Depends(get_db)):
+    send_key = "send:p:" + (normalize_ke_phone(data.phone_number) or data.phone_number)
+    if is_locked(send_key):
+        raise HTTPException(status_code=429, detail="Too many codes asked for. Wait 15 minutes, then try again.")
+    record_failure(send_key)   # counts requests: at most 5 per 15 minutes
+
+    patient = _find_patient(db, data.phone_number, data.identity_number)
+    if patient:
+        code = _new_reset_code(patient)
+        db.commit()
+        await _sms_reset_code(patient.phone_number, code, "CivCare PIN")
+    return {"message": RESET_SENT}
+
+
+@router.post("/patient/reset-pin")
+async def patient_reset_pin(data: PatientResetPin, db: Session = Depends(get_db)):
+    key = "p:" + (normalize_ke_phone(data.phone_number) or data.phone_number)
+    if is_locked(key):
+        raise HTTPException(status_code=429, detail=LOCKED)
+    if not _valid_pin(data.pin):
+        raise HTTPException(status_code=400, detail="Choose a 4-digit PIN. Avoid easy ones like 1234 or 0000, and don't reuse your M-Pesa PIN.")
+
+    patient = _find_patient(db, data.phone_number, data.identity_number)
+    if not _check_reset_code(patient, data.code):
+        record_failure(key)
+        raise HTTPException(status_code=400, detail=BAD_CODE)
+
+    patient.pin_hash = hash_secret(data.pin)
+    patient.otp_code = None
+    patient.otp_expires_at = None
+    db.commit()
+    clear_failures(key)
+    log_access(db, Principal(id=patient.id, role="patient"), patient.id, "reset PIN by SMS code")
+
+    token = create_token({"sub": patient.id, "role": "patient"}, PATIENT_TOKEN_MINUTES)
+    return {"access_token": token, "token_type": "bearer", "patient": _patient_out(patient)}
+
+
+class DoctorForgotPassword(BaseModel):
+    kmpdb_license: str
+
+
+class DoctorResetPassword(BaseModel):
+    kmpdb_license: str
+    code:          str
+    password:      str
+
+
+def _find_doctor(db: Session, licence: str):
+    return db.query(Doctor).filter(Doctor.kmpdb_license == licence.strip()).first()
+
+
+@router.post("/doctor/forgot-password")
+async def doctor_forgot_password(data: DoctorForgotPassword, db: Session = Depends(get_db)):
+    send_key = "send:d:" + data.kmpdb_license.strip().upper()
+    if is_locked(send_key):
+        raise HTTPException(status_code=429, detail="Too many codes asked for. Wait 15 minutes, then try again.")
+    record_failure(send_key)
+
+    doctor = _find_doctor(db, data.kmpdb_license)
+    if doctor and doctor.is_active and doctor.phone_number:
+        code = _new_reset_code(doctor)
+        db.commit()
+        await _sms_reset_code(doctor.phone_number, code, "CivCare password")
+    return {"message": RESET_SENT}
+
+
+@router.post("/doctor/reset-password")
+async def doctor_reset_password(data: DoctorResetPassword, db: Session = Depends(get_db)):
+    key = "d:" + data.kmpdb_license.strip().upper()
+    if is_locked(key):
+        raise HTTPException(status_code=429, detail=LOCKED)
+    if not _valid_password(data.password):
+        raise HTTPException(status_code=400, detail="Choose a password of at least 8 characters that isn't only numbers.")
+
+    doctor = _find_doctor(db, data.kmpdb_license)
+    if not doctor or not doctor.is_active or not _check_reset_code(doctor, data.code):
+        record_failure(key)
+        raise HTTPException(status_code=400, detail=BAD_CODE)
+
+    doctor.password_hash = hash_secret(data.password)
+    doctor.password_set_at = datetime.utcnow()
+    doctor.otp_code = None
+    doctor.otp_expires_at = None
+    db.commit()
+    clear_failures(key)
+
+    hospital = db.query(Hospital).filter(Hospital.id == doctor.hospital_id).first()
+    token = create_token({"sub": doctor.id, "role": "doctor", "hospital_id": doctor.hospital_id}, DOCTOR_TOKEN_MINUTES)
+    return {"access_token": token, "token_type": "bearer", "doctor": _doctor_out(doctor, hospital.name if hospital else "Unknown")}

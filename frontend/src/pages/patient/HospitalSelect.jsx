@@ -227,6 +227,29 @@ function getDistance(hospital) {
     : 'Distance unavailable';
 }
 
+const SAVED_LOCATION_KEY = 'civcare_last_location';
+
+function readSavedLocation() {
+  try {
+    const v = JSON.parse(localStorage.getItem(SAVED_LOCATION_KEY) || 'null');
+    return Number.isFinite(v?.lat) && Number.isFinite(v?.lon) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+// " today" / " yesterday" / " on 12 Oct", for the "near where you were" note
+function savedWhen(at) {
+  if (!at) return '';
+  const d = new Date(at);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return ' earlier today';
+  if (d.toDateString() === yesterday.toDateString()) return ' yesterday';
+  return ` on ${d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' })}`;
+}
+
 /* ─────────────────────────────────────────────
    Page
 ───────────────────────────────────────────── */
@@ -247,20 +270,33 @@ export default function HospitalSelect() {
   const [selected, setSelected] = useState(null);
   const [routeCoords, setRouteCoords] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  // The last position this phone gave us. The first visit needs Location
+  // on; after that, if it's off, we search from where they last were.
+  const [saved, setSaved] = useState(readSavedLocation);
+  const fallback = locError && !coords ? saved : null;
+  // Where we search from: the live position, else the saved one.
+  const origin = coords || fallback;
+
+  useEffect(() => {
+    if (!coords) return;
+    const next = { lat: coords.lat, lon: coords.lon, at: Date.now() };
+    try { localStorage.setItem(SAVED_LOCATION_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+    setSaved(next);
+  }, [coords]);
 
   useEffect(() => {
     getLocation();
   }, []); // eslint-disable-line
 
   useEffect(() => {
-    if (!coords) return;
+    if (!origin) return;
 
     const load = async () => {
       setLoading(true);
       setError('');
 
       try {
-        const res = await getNearbyHospitals(coords.lat, coords.lon);
+        const res = await getNearbyHospitals(origin.lat, origin.lon);
         setHospitals(Array.isArray(res.data) ? res.data : []);
       } catch {
         setError('Could not load hospitals. Please try again.');
@@ -270,7 +306,7 @@ export default function HospitalSelect() {
     };
 
     load();
-  }, [coords]);
+  }, [origin]);
 
   const orderedHospitals = useMemo(() => {
     /*
@@ -285,9 +321,15 @@ export default function HospitalSelect() {
   }, [hospitals]);
 
   const handlePick = (hospital) => {
-    if (!coords) return;
+    if (!origin) return;
 
     setSelected(hospital);
+
+    // A saved position may be stale, so don't draw a route from it.
+    if (!coords) {
+      setRouteCoords(null);
+      return;
+    }
 
     setRouteCoords([
       [coords.lat, coords.lon],
@@ -360,15 +402,15 @@ export default function HospitalSelect() {
   const boundsPoints = useMemo(() => {
     if (selected && routeCoords) return routeCoords;
 
-    if (!coords) return [];
+    if (!origin) return [];
 
     return [
-      [coords.lat, coords.lon],
+      [origin.lat, origin.lon],
       ...orderedHospitals
         .filter((hospital) => hospital.lat && hospital.lon)
         .map((hospital) => [hospital.lat, hospital.lon]),
     ];
-  }, [selected, routeCoords, coords, orderedHospitals]);
+  }, [selected, routeCoords, origin, orderedHospitals]);
 
   return (
     <div className="hospital-page">
@@ -415,17 +457,17 @@ export default function HospitalSelect() {
             </span>
 
             <span>
-              {coords ? 'Your location' : 'Locating you…'}
+              {coords ? 'Your location' : fallback ? 'Last known location' : 'Locating you…'}
             </span>
           </div>
         </section>
 
         {/* ───────────── Map ───────────── */}
 
-        {coords && (
+        {origin && (
           <section className="map-card">
             <MapContainer
-              center={[coords.lat, coords.lon]}
+              center={[origin.lat, origin.lon]}
               zoom={13}
               style={{ width: '100%', height: '100%' }}
               scrollWheelZoom={false}
@@ -436,10 +478,12 @@ export default function HospitalSelect() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
-              <Marker
-                position={[coords.lat, coords.lon]}
-                icon={userIcon}
-              />
+              {coords && (
+                <Marker
+                  position={[coords.lat, coords.lon]}
+                  icon={userIcon}
+                />
+              )}
 
               {orderedHospitals.map((hospital) => (
                 <Marker
@@ -471,7 +515,7 @@ export default function HospitalSelect() {
             <div className="map-overlay-top">
               <div className="map-live">
                 <span></span>
-                Live location
+                {coords ? 'Live location' : 'Last known location'}
               </div>
 
               <div className="map-count">
@@ -508,19 +552,33 @@ export default function HospitalSelect() {
           </section>
         )}
 
-        {locError && !coords && (
+        {locError && !coords && !fallback && (
           <section className="error-card">
             <div className="error-icon">
               <Icon name="pin" size={20} />
             </div>
 
             <div>
-              <strong>Location unavailable</strong>
+              <strong>Turn on Location to find hospitals</strong>
               <p>{locError}</p>
             </div>
 
             <button onClick={getLocation}>
               <Icon name="refresh" size={16} />
+              Try again
+            </button>
+          </section>
+        )}
+
+        {fallback && (
+          <section className="fallback-note">
+            <Icon name="pin" size={16} />
+            <p>
+              Location is off, so these are hospitals near where you were
+              {savedWhen(fallback.at)}. Turn Location on for results from where you are now.
+            </p>
+            <button onClick={getLocation}>
+              <Icon name="refresh" size={14} />
               Try again
             </button>
           </section>
@@ -552,7 +610,7 @@ export default function HospitalSelect() {
             <div className="results-heading">
               <div>
                 <span className="section-kicker">AVAILABLE FACILITIES</span>
-                <h2>Hospitals near you</h2>
+                <h2>{fallback ? 'Hospitals near your last location' : 'Hospitals near you'}</h2>
               </div>
 
               <span className="result-count">
@@ -725,7 +783,7 @@ export default function HospitalSelect() {
         {/* ───────────── Empty state ───────────── */}
 
         {!loading &&
-          coords &&
+          origin &&
           orderedHospitals.length === 0 && (
             <section className="empty-card">
               <div className="empty-icon">
@@ -1506,6 +1564,38 @@ export default function HospitalSelect() {
           color: #a63d3d;
           font-size: 11px;
           font-weight: 650;
+        }
+
+        .fallback-note {
+          display: flex;
+          align-items: flex-start;
+          gap: 9px;
+          margin-top: 10px;
+          padding: 12px 14px;
+          border: 1px solid var(--hs-border);
+          border-radius: 14px;
+          background: var(--hs-surface);
+          color: var(--hs-text-soft);
+        }
+
+        .fallback-note p {
+          flex: 1;
+          margin: 0;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .fallback-note button {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          flex: 0 0 auto;
+          border: 0;
+          background: transparent;
+          color: inherit;
+          font-size: 11px;
+          font-weight: 750;
+          cursor: pointer;
         }
 
         .empty-card {

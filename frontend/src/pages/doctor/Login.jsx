@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { registerDoctor, loginDoctor } from '../../api/auth';
+import { registerDoctor, loginDoctor, forgotDoctorPassword, resetDoctorPassword } from '../../api/auth';
 import client from '../../api/client';
 import Icon from '../../components/Icons';
 
@@ -13,6 +13,9 @@ export default function DoctorLogin() {
 
   const [loginForm, setLoginForm] = useState({ kmpdb_license: '', password: '' });
   const [pwForm, setPwForm] = useState({ password: '', confirm: '' });
+  // Forgot password: a code by SMS to the phone on the account, then a new password.
+  const [resetForm, setResetForm] = useState({ kmpdb_license: '', code: '', password: '', confirm: '' });
+  const [resetSent, setResetSent] = useState('');
   const [regForm, setRegForm] = useState({
     full_name: '', phone_number: '', password: '', confirm: '', kmpdb_license: '',
     specialisation: '', hospital_name: '', consultation_fee: '',
@@ -106,10 +109,48 @@ export default function DoctorLogin() {
     finally { setLoading(false); }
   };
 
+  const startReset = () => {
+    setResetForm((f) => ({ ...f, kmpdb_license: f.kmpdb_license || loginForm.kmpdb_license }));
+    setResetSent('');
+    switchMode('reset');
+  };
+
+  const handleSendCode = async () => {
+    setError('');
+    if (!resetForm.kmpdb_license.trim()) { setError('Enter your KMPDB licence number.'); return; }
+    setLoading(true);
+    try {
+      const res = await forgotDoctorPassword({ kmpdb_license: resetForm.kmpdb_license.trim() });
+      setResetSent(res.data?.message || 'Code sent. Check your SMS.');
+    } catch (err) { setError(err.response?.data?.detail || 'Could not send the code. Try again.'); }
+    finally { setLoading(false); }
+  };
+
+  const handleResetPassword = async () => {
+    setError('');
+    if (!/^\d{6}$/.test(resetForm.code.trim())) { setError('Enter the 6-digit code from the SMS.'); return; }
+    if (resetForm.password.length < 8 || /^\d+$/.test(resetForm.password)) {
+      setError('Choose a password of at least 8 characters that isn\'t only numbers.');
+      return;
+    }
+    if (resetForm.password !== resetForm.confirm) { setError('The two passwords don\'t match.'); return; }
+    setLoading(true);
+    try {
+      const res = await resetDoctorPassword({
+        kmpdb_license: resetForm.kmpdb_license.trim(),
+        code: resetForm.code.trim(),
+        password: resetForm.password,
+      });
+      saveAndNavigate(res.data);
+    } catch (err) { setError(err.response?.data?.detail || 'Could not reset your password. Try again.'); }
+    finally { setLoading(false); }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (loading) return;
-    if (mode === 'setpw') handleSetPassword();
+    if (mode === 'reset') { if (resetSent) handleResetPassword(); else handleSendCode(); }
+    else if (mode === 'setpw') handleSetPassword();
     else if (mode === 'login') handleLogin();
     else handleRegister();
   };
@@ -153,16 +194,18 @@ export default function DoctorLogin() {
             <span>CivCare <small>Clinician portal</small></span>
           </div>
 
-          <h1 className="dl-title">{mode === 'setpw' ? 'Choose a password' : mode === 'login' ? 'Sign in' : 'Create your clinician account'}</h1>
+          <h1 className="dl-title">{mode === 'setpw' ? 'Choose a password' : mode === 'reset' ? 'Reset your password' : mode === 'login' ? 'Sign in' : 'Create your clinician account'}</h1>
           <p className="dl-sub">
-            {mode === 'setpw'
+            {mode === 'reset'
+              ? 'We\'ll send a code by SMS to the phone number on your account.'
+              : mode === 'setpw'
               ? 'Your National ID is no longer enough to protect patient records. Choose a password you\'ll use from now on.'
               : mode === 'login'
               ? 'Use your KMPDB licence number and password.'
               : 'You will sign in with your KMPDB licence number and a password.'}
           </p>
 
-          {mode !== 'setpw' && <div className="dl-tabs" role="tablist" aria-label="Account">
+          {mode !== 'setpw' && mode !== 'reset' && <div className="dl-tabs" role="tablist" aria-label="Account">
             {['login', 'register'].map((m) => (
               <button
                 key={m}
@@ -202,6 +245,9 @@ export default function DoctorLogin() {
                     {natIdToggle}
                   </div>
                   <p id="dl-pass-hint" className="dl-hint">First time since passwords were added? Enter your National ID; you'll then choose a password.</p>
+                  <p className="dl-hint">
+                    <button type="button" className="dl-link" onClick={startReset}>Forgot your password?</button>
+                  </p>
                 </div>
                 <button type="submit" className="btn btn--primary" disabled={loading}>
                   {loading && <span className="dl-spin" aria-hidden="true" />}
@@ -210,6 +256,55 @@ export default function DoctorLogin() {
                 <p className="dl-switch">
                   First time here?{' '}
                   <button type="button" className="dl-link" onClick={() => switchMode('register')}>Register your account</button>
+                </p>
+              </>
+            )}
+
+            {mode === 'reset' && (
+              <>
+                {resetSent && <div className="alert alert--info" role="status">{resetSent}</div>}
+                <div className="form-group">
+                  <label className="label" htmlFor="dl-rlicence">KMPDB licence number</label>
+                  <input id="dl-rlicence" className="input" placeholder="e.g. MED/001/2020"
+                    autoComplete="username" autoCapitalize="characters"
+                    value={resetForm.kmpdb_license} onChange={(e) => setResetForm({ ...resetForm, kmpdb_license: e.target.value })} />
+                </div>
+                {resetSent && (
+                  <>
+                    <div className="form-group">
+                      <label className="label" htmlFor="dl-code">Code from the SMS</label>
+                      <input id="dl-code" className="input" inputMode="numeric" autoComplete="one-time-code" placeholder="6 digits"
+                        value={resetForm.code} onChange={(e) => setResetForm({ ...resetForm, code: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label" htmlFor="dl-rpw">New password</label>
+                      <div className="dl-pw">
+                        <input id="dl-rpw" className="input" type={showNatId ? 'text' : 'password'} autoComplete="new-password"
+                          value={resetForm.password} onChange={(e) => setResetForm({ ...resetForm, password: e.target.value })} />
+                        {natIdToggle}
+                      </div>
+                      <p className="dl-hint">At least 8 characters, not only numbers.</p>
+                    </div>
+                    <div className="form-group">
+                      <label className="label" htmlFor="dl-rpw2">Repeat new password</label>
+                      <input id="dl-rpw2" className="input" type={showNatId ? 'text' : 'password'} autoComplete="new-password"
+                        value={resetForm.confirm} onChange={(e) => setResetForm({ ...resetForm, confirm: e.target.value })} />
+                    </div>
+                  </>
+                )}
+                <button type="submit" className="btn btn--primary" disabled={loading}>
+                  {loading && <span className="dl-spin" aria-hidden="true" />}
+                  {loading ? 'Please wait…' : resetSent ? 'Save new password and sign in' : 'Send me a code'}
+                </button>
+                <p className="dl-switch">
+                  {resetSent && (
+                    <>
+                      No SMS after a minute?{' '}
+                      <button type="button" className="dl-link" onClick={handleSendCode} disabled={loading}>Send a new code</button>
+                      {' · '}
+                    </>
+                  )}
+                  <button type="button" className="dl-link" onClick={() => switchMode('login')}>Back to sign in</button>
                 </p>
               </>
             )}

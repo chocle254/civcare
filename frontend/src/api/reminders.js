@@ -5,6 +5,7 @@ export const setReminders   = (data)      => client.post('/reminders/set', data)
 export const respondReminder = (data)     => client.post('/reminders/respond', data);
 
 // ── Carer loop ──
-export const getDueDose     = (patientId) => client.get(`/reminders/due?patient_id=${patientId}`);
+export const getDueDose     = (patientId, { brief = false } = {}) =>
+  client.get(`/reminders/due?patient_id=${patientId}${brief ? '&brief=1' : ''}`);
 export const submitCheckin  = (data)      => client.post('/reminders/checkin', data);
 export const getFollowup    = (courseId)  => client.get(`/reminders/followup/${courseId}`);
