@@ -16,6 +16,7 @@ export default function DoctorLogin() {
   // Forgot password: a code by SMS to the phone on the account, then a new password.
   const [resetForm, setResetForm] = useState({ kmpdb_license: '', code: '', password: '', confirm: '' });
   const [resetSent, setResetSent] = useState('');
+  const [resetCode, setResetCode] = useState('');
   const [regForm, setRegForm] = useState({
     full_name: '', phone_number: '', password: '', confirm: '', kmpdb_license: '',
     specialisation: '', hospital_name: '', consultation_fee: '',
@@ -122,6 +123,9 @@ export default function DoctorLogin() {
     try {
       const res = await forgotDoctorPassword({ kmpdb_license: resetForm.kmpdb_license.trim() });
       setResetSent(res.data?.message || 'Code sent. Check your SMS.');
+      // Test mode (no SMS connected): the server returns the code to show.
+      setResetCode(res.data?.test_code || '');
+      if (res.data?.test_code) setResetForm((f) => ({ ...f, code: res.data.test_code }));
     } catch (err) { setError(err.response?.data?.detail || 'Could not send the code. Try again.'); }
     finally { setLoading(false); }
   };
@@ -262,7 +266,14 @@ export default function DoctorLogin() {
 
             {mode === 'reset' && (
               <>
-                {resetSent && <div className="alert alert--info" role="status">{resetSent}</div>}
+                {resetSent && (
+                  <div className="alert alert--info" role="status">
+                    <span>
+                      {resetSent}
+                      {resetCode && <strong style={{ display: 'block', marginTop: 6, fontSize: 20, letterSpacing: '0.2em' }}>{resetCode}</strong>}
+                    </span>
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="label" htmlFor="dl-rlicence">KMPDB licence number</label>
                   <input id="dl-rlicence" className="input" placeholder="e.g. MED/001/2020"

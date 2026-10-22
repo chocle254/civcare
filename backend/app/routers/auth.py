@@ -466,6 +466,15 @@ async def set_password(data: SetPassword, user: Principal = Depends(current_doct
 
 RESET_MINUTES = 10
 RESET_SENT = "If those details match an account, we've sent a 6-digit code by SMS to its phone number. It expires in 10 minutes."
+# While no SMS sender is connected (testing), the code is returned to the
+# screen instead. This stops by itself once real Africa's Talking keys are set.
+RESET_TEST = "Test mode: SMS isn't connected yet, so your code is shown here instead. It expires in 10 minutes."
+
+
+def _reset_reply(code: str | None) -> dict:
+    if code and not settings.sms_live:
+        return {"message": RESET_TEST, "test_code": code}
+    return {"message": RESET_SENT}
 BAD_CODE = "That code is wrong or has expired. Check the SMS, or ask for a new code."
 
 
@@ -522,11 +531,13 @@ async def patient_forgot_pin(data: PatientForgotPin, db: Session = Depends(get_d
     record_failure(send_key)   # counts requests: at most 5 per 15 minutes
 
     patient = _find_patient(db, data.phone_number, data.identity_number)
+    code = None
     if patient:
         code = _new_reset_code(patient)
         db.commit()
-        await _sms_reset_code(patient.phone_number, code, "CivCare PIN")
-    return {"message": RESET_SENT}
+        if settings.sms_live:
+            await _sms_reset_code(patient.phone_number, code, "CivCare PIN")
+    return _reset_reply(code)
 
 
 @router.post("/patient/reset-pin")
@@ -575,11 +586,13 @@ async def doctor_forgot_password(data: DoctorForgotPassword, db: Session = Depen
     record_failure(send_key)
 
     doctor = _find_doctor(db, data.kmpdb_license)
-    if doctor and doctor.is_active and doctor.phone_number:
+    code = None
+    if doctor and doctor.is_active and (doctor.phone_number or not settings.sms_live):
         code = _new_reset_code(doctor)
         db.commit()
-        await _sms_reset_code(doctor.phone_number, code, "CivCare password")
-    return {"message": RESET_SENT}
+        if settings.sms_live:
+            await _sms_reset_code(doctor.phone_number, code, "CivCare password")
+    return _reset_reply(code)
 
 
 @router.post("/doctor/reset-password")

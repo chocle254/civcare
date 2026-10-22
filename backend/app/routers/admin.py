@@ -326,6 +326,8 @@ async def overview(days: int = 30, user: Principal = Depends(current_admin), db:
         alerts.append({"level": "warning", "text": f"{follow_up['feeling_worse']} check-in{'s' if follow_up['feeling_worse'] != 1 else ''} where the patient felt worse or had side effects", "tab": "overview"})
     if money["mode"] == "test":
         alerts.append({"level": "info", "text": "Payments are in test mode (M-Pesa sandbox); no real money moves", "tab": "overview"})
+    if not settings.sms_live:
+        alerts.append({"level": "info", "text": "SMS isn't connected: PIN and password reset codes are shown on screen, and no SMS reminders go out", "tab": "overview"})
     if os.environ.get("KNH_TEST_ROUTING", "1") != "0":
         alerts.append({"level": "info", "text": "Test routing is on: every Kenyatta National Hospital visit goes to the test doctor", "tab": "overview"})
 

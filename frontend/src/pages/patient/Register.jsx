@@ -179,6 +179,7 @@ export default function Register() {
     phone_number: '', identity_number: '', code: '', pin: '', pin_confirm: '',
   });
   const [resetSent, setResetSent] = useState('');
+  const [resetCode, setResetCode] = useState('');
   const regAge = ageFrom(regForm.date_of_birth);
   const isChild = (regAge !== null && regAge < 18) || regForm.identity_type === 'birth_cert';
 
@@ -225,6 +226,9 @@ export default function Register() {
         identity_number: resetForm.identity_number,
       });
       setResetSent(res.data?.message || 'Code sent. Check your SMS.');
+      // Test mode (no SMS connected): the server returns the code to show.
+      setResetCode(res.data?.test_code || '');
+      if (res.data?.test_code) setResetForm((f) => ({ ...f, code: res.data.test_code }));
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not send the code. Try again.');
     } finally {
@@ -795,6 +799,13 @@ export default function Register() {
           font-weight: 600;
         }
 
+        .cc-test-code {
+          display: block;
+          margin-top: 6px;
+          font-size: 20px;
+          letter-spacing: 0.2em;
+        }
+
         .cc-switch-text {
           margin: 18px 0 0;
           text-align: center;
@@ -1260,7 +1271,10 @@ export default function Register() {
                   }}
                 >
                   {resetSent && (
-                    <div className="cc-info" role="status">{resetSent}</div>
+                    <div className="cc-info" role="status">
+                      {resetSent}
+                      {resetCode && <strong className="cc-test-code">{resetCode}</strong>}
+                    </div>
                   )}
 
                   <Field

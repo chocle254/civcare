@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     AT_USERNAME: str = "sandbox"
     AT_API_KEY: str = ""
     AT_SENDER_ID: str = "CivTech"
+
+    @property
+    def sms_live(self) -> bool:
+        """True once real Africa's Talking keys are set (not the sandbox)."""
+        return bool(self.AT_API_KEY) and (self.AT_USERNAME or "").lower() != "sandbox"
     AT_USSD_CODE: str = ""
 
     # ── APP ──
